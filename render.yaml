@@ -20,8 +20,8 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    # Use && so a single-line paste in Render Settings still works (newlines get flattened to spaces)
-    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/web build
+    # --prod=false: Render sets NODE_ENV=production which would skip Tailwind/TS (devDependencies)
+    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile --prod=false && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/web build
     startCommand: pnpm --filter @vendors/web start
     healthCheckPath: /
     envVars:
@@ -44,7 +44,7 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
+    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile --prod=false && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
     startCommand: pnpm --filter @vendors/api start
     healthCheckPath: /health
     envVars:
@@ -114,7 +114,7 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
+    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile --prod=false && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
     startCommand: node apps/api/dist/worker.js
     envVars:
       - key: NODE_VERSION
