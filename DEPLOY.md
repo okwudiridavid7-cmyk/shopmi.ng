@@ -63,12 +63,18 @@ Open **shopmi-api** → Shell (or one-off job) and run schema + seed:
 
 ```bash
 cd /opt/render/project/src   # or the service root Render shows
-npm install -g corepack@latest
-corepack enable
-corepack prepare pnpm@9.15.0 --activate
+npm install -g pnpm@9.15.0
 pnpm --filter @vendors/api exec prisma db push
 pnpm --filter @vendors/api exec tsx prisma/seed.ts
 ```
+
+### If deploys still fail with Corepack `keyid`
+
+Existing Blueprint services often keep the **old** build command. For each of `shopmi-web`, `shopmi-api`, `shopmi-worker`:
+
+1. Settings → Environment → set `NODE_VERSION` = `20.19.0`
+2. Settings → Build & Deploy → replace **Build Command** with the matching block from [`render.yaml`](./render.yaml) (starts with `npm install -g pnpm@9.15.0`)
+3. Manual Deploy → Deploy latest commit
 
 Use a strong `SUPER_ADMIN_PASSWORD` in env before seeding.
 

@@ -8,6 +8,9 @@
 #   2. Secrets in the Render dashboard (JWT, Paystack, Resend, Turnstile, …)
 #   3. Cloudflare DNS pointing shopmi.ng / api.shopmi.ng / *.shopmi.ng
 # See DEPLOY.md for the full checklist.
+#
+# If services already exist, Blueprint sync may NOT update buildCommand.
+# Paste the build commands from this file into each service → Settings → Build.
 # =============================================================================
 
 services:
@@ -17,17 +20,15 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
+    # Install pnpm via npm (avoids Corepack signing-key failures on older Node)
     buildCommand: |
-      npm install -g corepack@latest
-      corepack enable
-      corepack prepare pnpm@9.15.0 --activate
+      npm install -g pnpm@9.15.0
       pnpm install --frozen-lockfile
       pnpm --filter @vendors/shared-types build
       pnpm --filter @vendors/web build
     startCommand: pnpm --filter @vendors/web start
     healthCheckPath: /
     envVars:
-      # 20.19+ ships Corepack with npm signing keys; also refresh corepack in buildCommand
       - key: NODE_VERSION
         value: "20.19.0"
       - key: NODE_ENV
@@ -48,9 +49,7 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: |
-      npm install -g corepack@latest
-      corepack enable
-      corepack prepare pnpm@9.15.0 --activate
+      npm install -g pnpm@9.15.0
       pnpm install --frozen-lockfile
       pnpm --filter @vendors/shared-types build
       pnpm --filter @vendors/api exec prisma generate
@@ -125,9 +124,7 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: |
-      npm install -g corepack@latest
-      corepack enable
-      corepack prepare pnpm@9.15.0 --activate
+      npm install -g pnpm@9.15.0
       pnpm install --frozen-lockfile
       pnpm --filter @vendors/shared-types build
       pnpm --filter @vendors/api exec prisma generate
