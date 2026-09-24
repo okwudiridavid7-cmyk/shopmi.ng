@@ -75,7 +75,7 @@ export function SiteHeader({
 }: {
   onOpenFilters?: () => void;
 }) {
-  const { user, displayName, initials, logout } = useAuth();
+  const { user, firstName, initials, logout } = useAuth();
   const show = useAuthTransition((s) => s.show);
   const { setTheme } = useTheme();
   const pathname = usePathname();
@@ -190,7 +190,7 @@ export function SiteHeader({
                     {initials}
                   </span>
                   <span className="hidden max-w-[8rem] truncate text-foreground sm:inline">
-                    {displayName}
+                    {firstName}
                   </span>
                 </span>
               }

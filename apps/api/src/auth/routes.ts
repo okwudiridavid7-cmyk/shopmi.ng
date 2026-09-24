@@ -45,6 +45,7 @@ const authLimiter = rateLimit({
 const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(128),
+  name: z.string().trim().min(1).max(120),
   role: z.enum(["buyer", "seller"]).default("buyer"),
   phone: z.string().min(5).max(32).optional(),
 });
@@ -87,6 +88,7 @@ authRouter.post("/signup", async (req, res, next) => {
         email: body.email.toLowerCase(),
         passwordHash: await hashPassword(body.password),
         role: body.role,
+        name: body.name,
         phone: body.phone,
       },
     });
@@ -328,11 +330,19 @@ authRouter.get("/google/callback", async (req, res, next) => {
       },
     });
 
+    const googleName =
+      typeof payload.name === "string" && payload.name.trim()
+        ? payload.name.trim().slice(0, 120)
+        : null;
+
     if (user) {
-      if (!user.googleId) {
+      const linkData: { googleId?: string; name?: string } = {};
+      if (!user.googleId) linkData.googleId = payload.sub;
+      if (!user.name && googleName) linkData.name = googleName;
+      if (Object.keys(linkData).length > 0) {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: { googleId: payload.sub },
+          data: linkData,
         });
       }
     } else {
@@ -353,6 +363,7 @@ authRouter.get("/google/callback", async (req, res, next) => {
           email,
           googleId: payload.sub,
           role: intendedRole,
+          name: googleName,
           passwordHash: null,
         },
       });

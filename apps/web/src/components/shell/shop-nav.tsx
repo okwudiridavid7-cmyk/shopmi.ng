@@ -39,7 +39,7 @@ export function ShopNav({
     parseHexColor(theme.primaryColor) ?? parseHexColor(theme.accentColor);
   const textColor = brandButtonTextColor(primary);
   const name = tenant?.name ?? slug;
-  const { user } = useAuth();
+  const { user, initials } = useAuth();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -142,7 +142,7 @@ export function ShopNav({
               href="/buyer"
               className="flex h-8 w-8 items-center justify-center rounded-md bg-black/20 text-xs font-semibold"
             >
-              {user.email.slice(0, 1).toUpperCase()}
+              {initials ?? "U"}
             </Link>
           ) : (
             <Link href={`/login?next=/shops/${slug}`} aria-label="Sign in" className="p-2">

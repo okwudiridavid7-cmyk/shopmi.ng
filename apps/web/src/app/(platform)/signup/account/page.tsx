@@ -32,6 +32,7 @@ function SignupAccountForm() {
       await apiFetch<AuthTokensResponse>("/api/auth/signup", {
         method: "POST",
         body: JSON.stringify({
+          name: form.get("name"),
           email: form.get("email"),
           password: form.get("password"),
           role,
@@ -57,6 +58,16 @@ function SignupAccountForm() {
       subtitle="Nigeria is selected by default — change it if you sell or shop elsewhere."
     >
       <form onSubmit={onSubmit} className="space-y-token-4">
+        <Label>
+          <span>Full name</span>
+          <Input
+            name="name"
+            type="text"
+            required
+            autoComplete="name"
+            placeholder="Ada Okonkwo"
+          />
+        </Label>
         <Label>
           <span>Email</span>
           <Input name="email" type="email" required autoComplete="email" />

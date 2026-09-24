@@ -174,18 +174,33 @@ async function main() {
 
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
 
+  const rawAdminName =
+    process.env.SUPER_ADMIN_NAME?.trim() ||
+    email.split("@")[0]?.split(/[._-]/)[0] ||
+    "Admin";
+  const adminDisplayName =
+    rawAdminName.charAt(0).toUpperCase() + rawAdminName.slice(1);
+
   const admin = await prisma.user.upsert({
     where: { email: email.toLowerCase() },
     create: {
       email: email.toLowerCase(),
       passwordHash,
       role: "super_admin",
+      name: adminDisplayName,
     },
     update: {
       passwordHash,
       role: "super_admin",
     },
   });
+
+  if (!admin.name) {
+    await prisma.user.update({
+      where: { id: admin.id },
+      data: { name: adminDisplayName },
+    });
+  }
 
   const brandingKeys = new Set(["app_name", "web_url"]);
   for (const setting of DEFAULT_SETTINGS) {
