@@ -1,0 +1,56 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: ["class"],
+  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  theme: {
+    extend: {
+      colors: {
+        background: "var(--color-background)",
+        foreground: "var(--color-foreground)",
+        muted: "var(--color-muted)",
+        "muted-foreground": "var(--color-muted-foreground)",
+        border: "var(--color-border)",
+        accent: "var(--color-accent)",
+        "accent-foreground": "var(--color-accent-foreground)",
+        "accent-soft": "var(--color-accent-soft)",
+        "accent-deep": "var(--color-accent-deep)",
+        card: "var(--color-card)",
+        "card-foreground": "var(--color-card-foreground)",
+        ring: "var(--color-ring)",
+        warning: "var(--color-warning)",
+        "warning-foreground": "var(--color-warning-foreground)",
+        "warning-muted": "var(--color-warning-muted)",
+        danger: "var(--color-danger)",
+        "danger-foreground": "var(--color-danger-foreground)",
+        success: "var(--color-success)",
+        "success-foreground": "var(--color-success-foreground)",
+        "shell-accent": "var(--shell-accent)",
+        "shell-accent-foreground": "var(--shell-accent-foreground)",
+      },
+      borderRadius: {
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+      },
+      boxShadow: {
+        sm: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+      },
+      spacing: {
+        "token-1": "var(--space-1)",
+        "token-2": "var(--space-2)",
+        "token-3": "var(--space-3)",
+        "token-4": "var(--space-4)",
+        "token-5": "var(--space-5)",
+        "token-6": "var(--space-6)",
+        "token-8": "var(--space-8)",
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
+      },
+    },
+  },
+  plugins: [],
+};

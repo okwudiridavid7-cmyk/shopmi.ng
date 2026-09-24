@@ -1,0 +1,17 @@
+node_modules
+.turbo
+dist
+.next
+out
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+coverage
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+apps/api/uploads
+.cursor
+agent-transcripts
+*.canvas.tsx

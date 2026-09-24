@@ -1,0 +1,21 @@
+{
+  "name": "vendors",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "db:generate": "pnpm --filter @vendors/api exec prisma generate",
+    "db:migrate": "pnpm --filter @vendors/api exec prisma migrate dev",
+    "db:push": "pnpm --filter @vendors/api exec prisma db push",
+    "db:seed": "pnpm --filter @vendors/api exec tsx prisma/seed.ts",
+    "db:seed:demo": "pnpm --filter @vendors/api exec tsx prisma/seed-demo.ts",
+    "db:studio": "pnpm --filter @vendors/api exec prisma studio",
+    "worker": "pnpm --filter @vendors/api worker"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

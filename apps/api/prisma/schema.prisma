@@ -1,0 +1,555 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  buyer
+  seller
+  tenant_admin
+  super_admin
+}
+
+enum TenantStatus {
+  pending_verification
+  active
+  suspended
+}
+
+enum TenantAdminRole {
+  owner
+  manager
+  staff
+}
+
+enum ProductStatus {
+  draft
+  active
+  archived
+}
+
+enum OrderStatus {
+  pending_payment
+  paid
+  fulfilled
+  cancelled
+  failed
+}
+
+model Plan {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  price         Decimal  @db.Decimal(12, 2)
+  currency      String   @default("NGN")
+  productLimit  Int?     @map("product_limit")
+  featureFlags  Json     @default("{}") @map("feature_flags")
+  trialDays     Int      @default(3) @map("trial_days")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+model Tenant {
+  id               String       @id @default(cuid())
+  ownerUserId      String       @map("owner_user_id")
+  name             String
+  slug             String       @unique
+  customDomain     String?      @unique @map("custom_domain")
+  status           TenantStatus @default(pending_verification)
+  verifiedBadge    Boolean      @default(false) @map("verified_badge")
+  themeSettings    Json?        @map("theme_settings")
+  notificationSettings Json?    @map("notification_settings")
+  location         String?
+  /// Structured location (ISO country) — used with states cascade.
+  countryCode      String?      @map("country_code")
+  stateCode        String?      @map("state_code")
+  address          String?      @db.Text
+  phone            String?
+  email            String?
+  /// { instagram?, twitter?, facebook?, tiktok?, whatsapp?, youtube? }
+  socialLinks      Json?        @map("social_links")
+  /// [{ question: string, answer: string }]
+  faqContent       Json?        @map("faq_content")
+  termsText        String?      @map("terms_text") @db.LongText
+  privacyText      String?      @map("privacy_text") @db.LongText
+  onboardingAnswers Json?       @map("onboarding_answers")
+  trialEndsAt      DateTime?    @map("trial_ends_at")
+  planId           String?      @map("plan_id")
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  owner        User          @relation("TenantOwner", fields: [ownerUserId], references: [id])
+  plan         Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  tenantAdmins TenantAdmin[]
+  products     Product[]
+  carts        Cart[]
+  orders       Order[]
+  verificationRequests VerificationRequest[]
+  campaigns    Campaign[]
+  aiJobs       AiJob[]
+  shopCategories ShopCategory[]
+  shopBanners  ShopBanner[]
+  contactInquiries ContactInquiry[]
+
+  @@index([planId])
+  @@index([countryCode])
+  @@map("tenants")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String?  @map("password_hash")
+  googleId       String?  @unique @map("google_id")
+  role           UserRole @default(buyer)
+  name           String?
+  phone          String?
+  whatsappNumber String?  @map("whatsapp_number")
+  /// Buyer prefs e.g. { orderEmails: true, whatsappOrders: false }
+  notificationPrefs Json? @map("notification_prefs")
+  passwordResetToken   String?   @unique @map("password_reset_token")
+  passwordResetExpires DateTime? @map("password_reset_expires")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  ownedTenants  Tenant[]       @relation("TenantOwner")
+  tenantAdmins  TenantAdmin[]
+  refreshTokens RefreshToken[]
+  carts         Cart[]
+  orders        Order[]        @relation("BuyerOrders")
+  favorites     Favorite[]
+  reviews       Review[]
+  reviewedVerifications VerificationRequest[] @relation("VerificationReviewer")
+
+  @@map("users")
+}
+
+/// Join table — multirole admin per shop. tenant_id is required (tenant-scoped).
+model TenantAdmin {
+  id          String          @id @default(cuid())
+  tenantId    String          @map("tenant_id")
+  userId      String          @map("user_id")
+  role        TenantAdminRole @default(owner)
+  permissions Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_admins")
+}
+
+/// Super-admin editable sitewide settings (app name, feature toggles, etc.).
+/// This is NOT for secrets. API keys, JWT secrets, OAuth secrets, DB URLs stay in .env
+/// and require a redeploy to change — never put them here.
+model PlatformSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String @db.Text
+
+  @@map("platform_settings")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  /// Self-referencing parent for unlimited nesting depth.
+  parentId  String?    @map("parent_id")
+  sortOrder Int        @default(0) @map("sort_order")
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId])
+  @@index([sortOrder])
+  @@map("categories")
+}
+
+/// Legacy platform brand taxonomy — prefer Product.brandName (free-text). Kept for backfill.
+model Brand {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now()) @map("created_at")
+  products  Product[]
+
+  @@map("brands")
+}
+
+/// Seller-defined categories (tenant-scoped), separate from platform Category.
+model ShopCategory {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  slug      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("shop_categories")
+}
+
+model Product {
+  id                      String        @id @default(cuid())
+  tenantId                String        @map("tenant_id")
+  title                   String
+  description             String        @db.Text
+  aiGeneratedDescription  Boolean       @default(false) @map("ai_generated_description")
+  price                   Decimal       @db.Decimal(12, 2)
+  /// Former / compare-at price for strikethrough display when set.
+  compareAtPrice          Decimal?      @map("compare_at_price") @db.Decimal(12, 2)
+  currency                String        @default("NGN")
+  stockQty                Int           @default(0) @map("stock_qty")
+  categoryId              String?       @map("category_id")
+  shopCategoryId          String?       @map("shop_category_id")
+  /// Free-text brand typed by seller (preferred over Brand FK).
+  brandName               String?       @map("brand_name")
+  brandId                 String?       @map("brand_id")
+  location                String?
+  countryCode             String?       @map("country_code")
+  stateCode               String?       @map("state_code")
+  images                  Json
+  watermarkEnabled        Boolean       @default(false) @map("watermark_enabled")
+  status                  ProductStatus @default(draft)
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  shopCategory ShopCategory? @relation(fields: [shopCategoryId], references: [id], onDelete: SetNull)
+  brand        Brand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  favorites    Favorite[]
+  reviews      Review[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([categoryId])
+  @@index([shopCategoryId])
+  @@index([brandId])
+  @@index([brandName])
+  @@index([location])
+  @@map("products")
+}
+
+model ShopBanner {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  imageUrl     String   @map("image_url")
+  title        String?
+  subtitle     String?
+  ctaText      String?  @map("cta_text")
+  ctaUrl       String?  @map("cta_url")
+  scrollSpeed  Int      @default(5) @map("scroll_speed")
+  displayOrder Int      @default(0) @map("display_order")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, active, displayOrder])
+  @@map("shop_banners")
+}
+
+model Country {
+  id        String   @id @default(cuid())
+  name      String
+  iso2      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  states    State[]
+
+  @@index([name])
+  @@map("countries")
+}
+
+model State {
+  id          String   @id @default(cuid())
+  name        String
+  iso2        String?
+  countryId   String   @map("country_id")
+  countryIso2 String   @map("country_iso2")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([countryIso2, iso2])
+  @@index([countryId])
+  @@index([countryIso2])
+  @@map("states")
+}
+
+model Cart {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  /// Set for authenticated buyers; null for guest session carts.
+  userId    String?  @map("user_id")
+  /// Guest cart key (httpOnly cookie). Null when userId is set.
+  sessionId String?  @map("session_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items  CartItem[]
+
+  @@unique([tenantId, userId])
+  @@unique([tenantId, sessionId])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([sessionId])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String @id @default(cuid())
+  cartId    String @map("cart_id")
+  productId String @map("product_id")
+  qty       Int
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model Order {
+  id                 String      @id @default(cuid())
+  tenantId           String      @map("tenant_id")
+  buyerId            String      @map("buyer_id")
+  status             OrderStatus @default(pending_payment)
+  subtotal           Decimal     @db.Decimal(12, 2)
+  total              Decimal     @db.Decimal(12, 2)
+  currency           String      @default("NGN")
+  paystackReference  String?     @unique @map("paystack_reference")
+  invoiceUrl         String?     @map("invoice_url")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  buyer  User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  items  OrderItem[]
+
+  @@index([tenantId])
+  @@index([buyerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String  @map("order_id")
+  productId String  @map("product_id")
+  qty       Int
+  unitPrice Decimal @map("unit_price") @db.Decimal(12, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  productId String   @map("product_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("favorites")
+}
+
+enum VerificationRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+enum CampaignType {
+  popup
+}
+
+model VerificationRequest {
+  id            String                     @id @default(cuid())
+  tenantId      String                     @map("tenant_id")
+  status        VerificationRequestStatus  @default(pending)
+  submittedDocs Json                       @map("submitted_docs")
+  reviewedById  String?                    @map("reviewed_by")
+  reviewedAt    DateTime?                  @map("reviewed_at")
+  note          String?                    @db.Text
+  createdAt     DateTime                   @default(now()) @map("created_at")
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reviewedBy User?  @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("verification_requests")
+}
+
+model Campaign {
+  id          String       @id @default(cuid())
+  tenantId    String       @map("tenant_id")
+  type        CampaignType @default(popup)
+  content     Json
+  active      Boolean      @default(true)
+  triggerRule Json         @map("trigger_rule")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([active])
+  @@map("campaigns")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String   @map("product_id")
+  buyerId   String   @map("buyer_id")
+  rating    Int
+  comment   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer   User    @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, buyerId])
+  @@index([productId])
+  @@index([buyerId])
+  @@map("reviews")
+}
+
+enum AiJobType {
+  description
+  watermark
+}
+
+enum AiJobStatus {
+  queued
+  processing
+  completed
+  failed
+}
+
+model AiJob {
+  id          String      @id @default(cuid())
+  tenantId    String      @map("tenant_id")
+  userId      String      @map("user_id")
+  type        AiJobType
+  status      AiJobStatus @default(queued)
+  input       Json
+  result      Json?
+  error       String?     @db.Text
+  productId   String?     @map("product_id")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  completedAt DateTime?   @map("completed_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("ai_jobs")
+}
+
+enum ContactInquiryScope {
+  platform
+  shop
+}
+
+enum ContactInquiryStatus {
+  received
+  awaiting_confirm
+  queued
+  sent
+  failed
+}
+
+/// Persisted contact-form submissions (platform + shop) for delivery integrity.
+model ContactInquiry {
+  id                String               @id @default(cuid())
+  scope             ContactInquiryScope
+  tenantId          String?              @map("tenant_id")
+  slug              String?
+  name              String               @db.VarChar(120)
+  email             String               @db.VarChar(255)
+  phone             String?              @db.VarChar(40)
+  subject           String               @db.VarChar(160)
+  message           String               @db.Text
+  ipHash            String?              @map("ip_hash") @db.VarChar(64)
+  userAgent         String?              @map("user_agent") @db.VarChar(512)
+  idempotencyKey    String?              @unique @map("idempotency_key") @db.VarChar(128)
+  status            ContactInquiryStatus @default(received)
+  providerMessageId String?              @map("provider_message_id") @db.VarChar(128)
+  error             String?              @db.Text
+  /// Intended notify recipient (shop/support) captured at submit (REM-17).
+  recipientEmail    String?              @map("recipient_email") @db.VarChar(255)
+  /// SHA-256 of magic-link token while status=awaiting_confirm (REM-17).
+  confirmTokenHash  String?              @unique @map("confirm_token_hash") @db.VarChar(64)
+  confirmTokenExpires DateTime?          @map("confirm_token_expires")
+  /// Soft retention deadline (REM-16). Null on legacy rows → purge uses createdAt + retention.
+  expiresAt         DateTime?            @map("expires_at")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+  @@index([expiresAt])
+  @@index([email])
+  @@map("contact_inquiries")
+}
+
+/// Audit trail for contact-inquiry purges / DSAR deletes (REM-16).
+model ContactInquiryPurgeLog {
+  id           String   @id @default(cuid())
+  reason       String   @db.VarChar(40)
+  deletedCount Int      @map("deleted_count")
+  actorUserId  String?  @map("actor_user_id")
+  detail       String?  @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("contact_inquiry_purge_logs")
+}

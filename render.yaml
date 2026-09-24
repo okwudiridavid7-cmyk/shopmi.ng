@@ -1,0 +1,168 @@
+# =============================================================================
+# Render Blueprint — shopmi.ng
+# https://render.com/docs/blueprint-spec
+#
+# After connecting the GitHub repo, create a Blueprint from this file.
+# You still need:
+#   1. External MySQL (Render does not manage MySQL) — set DATABASE_URL
+#   2. Secrets in the Render dashboard (JWT, Paystack, Resend, Turnstile, …)
+#   3. Cloudflare DNS pointing shopmi.ng / api.shopmi.ng / *.shopmi.ng
+# See DEPLOY.md for the full checklist.
+# =============================================================================
+
+services:
+  # ---- Next.js marketplace + dashboards ----
+  - type: web
+    name: shopmi-web
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: |
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @vendors/shared-types build
+      pnpm --filter @vendors/web build
+    startCommand: pnpm --filter @vendors/web start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.1"
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_APP_NAME
+        value: Shopmi.ng
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_WEB_URL
+        value: https://shopmi.ng
+      - key: NEXT_PUBLIC_SHOP_BASE_DOMAIN
+        value: shopmi.ng
+
+  # ---- Express API ----
+  - type: web
+    name: shopmi-api
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: |
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @vendors/shared-types build
+      pnpm --filter @vendors/api exec prisma generate
+      pnpm --filter @vendors/api build
+    startCommand: pnpm --filter @vendors/api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.1"
+      - key: NODE_ENV
+        value: production
+      - key: APP_NAME
+        value: Shopmi.ng
+      - key: WEB_URL
+        value: https://shopmi.ng
+      - key: SHOP_BASE_DOMAIN
+        value: shopmi.ng
+      - key: COOKIE_DOMAIN
+        value: .shopmi.ng
+      - key: CONTACT_CAPTCHA_BYPASS
+        value: "false"
+      - key: SHOP_CONTACT_CONFIRM_REQUIRED
+        value: "false"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: shopmi-redis
+          property: connectionString
+      - key: API_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://shopmi.ng,https://www.shopmi.ng
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
+
+  # ---- BullMQ worker (contact mail, AI, watermark, purge) ----
+  - type: worker
+    name: shopmi-worker
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: |
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @vendors/shared-types build
+      pnpm --filter @vendors/api exec prisma generate
+      pnpm --filter @vendors/api build
+    startCommand: node apps/api/dist/worker.js
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.1"
+      - key: NODE_ENV
+        value: production
+      - key: APP_NAME
+        value: Shopmi.ng
+      - key: WEB_URL
+        value: https://shopmi.ng
+      - key: SHOP_BASE_DOMAIN
+        value: shopmi.ng
+      - key: COOKIE_DOMAIN
+        value: .shopmi.ng
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: shopmi-redis
+          property: connectionString
+      - key: API_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  # Redis-compatible Key Value — BullMQ + rate limits + stats cache
+  - type: keyvalue
+    name: shopmi-redis
+    plan: starter
+    region: frankfurt
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
