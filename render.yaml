@@ -18,15 +18,18 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: |
+      npm install -g corepack@latest
       corepack enable
+      corepack prepare pnpm@9.15.0 --activate
       pnpm install --frozen-lockfile
       pnpm --filter @vendors/shared-types build
       pnpm --filter @vendors/web build
     startCommand: pnpm --filter @vendors/web start
     healthCheckPath: /
     envVars:
+      # 20.19+ ships Corepack with npm signing keys; also refresh corepack in buildCommand
       - key: NODE_VERSION
-        value: "20.18.1"
+        value: "20.19.0"
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_APP_NAME
@@ -45,7 +48,9 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: |
+      npm install -g corepack@latest
       corepack enable
+      corepack prepare pnpm@9.15.0 --activate
       pnpm install --frozen-lockfile
       pnpm --filter @vendors/shared-types build
       pnpm --filter @vendors/api exec prisma generate
@@ -54,7 +59,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
-        value: "20.18.1"
+        value: "20.19.0"
       - key: NODE_ENV
         value: production
       - key: APP_NAME
@@ -120,7 +125,9 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: |
+      npm install -g corepack@latest
       corepack enable
+      corepack prepare pnpm@9.15.0 --activate
       pnpm install --frozen-lockfile
       pnpm --filter @vendors/shared-types build
       pnpm --filter @vendors/api exec prisma generate
@@ -128,7 +135,7 @@ services:
     startCommand: node apps/api/dist/worker.js
     envVars:
       - key: NODE_VERSION
-        value: "20.18.1"
+        value: "20.19.0"
       - key: NODE_ENV
         value: production
       - key: APP_NAME

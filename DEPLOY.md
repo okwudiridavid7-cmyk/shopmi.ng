@@ -63,7 +63,9 @@ Open **shopmi-api** → Shell (or one-off job) and run schema + seed:
 
 ```bash
 cd /opt/render/project/src   # or the service root Render shows
+npm install -g corepack@latest
 corepack enable
+corepack prepare pnpm@9.15.0 --activate
 pnpm --filter @vendors/api exec prisma db push
 pnpm --filter @vendors/api exec tsx prisma/seed.ts
 ```
