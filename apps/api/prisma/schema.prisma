@@ -3,8 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  /// Neon: use the non-pooler connection here for migrations (`prisma db push`).
+  /// Local Docker: set to the same value as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -78,8 +81,8 @@ model Tenant {
   socialLinks      Json?        @map("social_links")
   /// [{ question: string, answer: string }]
   faqContent       Json?        @map("faq_content")
-  termsText        String?      @map("terms_text") @db.LongText
-  privacyText      String?      @map("privacy_text") @db.LongText
+  termsText        String?      @map("terms_text") @db.Text
+  privacyText      String?      @map("privacy_text") @db.Text
   onboardingAnswers Json?       @map("onboarding_answers")
   trialEndsAt      DateTime?    @map("trial_ends_at")
   planId           String?      @map("plan_id")

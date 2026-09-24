@@ -4,7 +4,7 @@
 #
 # After connecting the GitHub repo, create a Blueprint from this file.
 # You still need:
-#   1. External MySQL (Render does not manage MySQL) — set DATABASE_URL
+#   1. Neon (or other) Postgres — set DATABASE_URL (pooled) + DIRECT_URL (direct)
 #   2. Secrets in the Render dashboard (JWT, Paystack, Resend, Turnstile, …)
 #   3. Cloudflare DNS pointing shopmi.ng / api.shopmi.ng / *.shopmi.ng
 # See DEPLOY.md for the full checklist.
@@ -70,6 +70,8 @@ services:
       - key: SHOP_CONTACT_CONFIRM_REQUIRED
         value: "false"
       - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
         sync: false
       - key: REDIS_URL
         fromService:
@@ -138,6 +140,8 @@ services:
       - key: COOKIE_DOMAIN
         value: .shopmi.ng
       - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
         sync: false
       - key: REDIS_URL
         fromService:

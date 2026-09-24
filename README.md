@@ -11,8 +11,8 @@ Live deploy (GitHub → Render → Cloudflare `shopmi.ng`): see **[DEPLOY.md](./
 | Monorepo | pnpm workspaces + Turborepo |
 | Web | Next.js 14 (App Router), TypeScript, Tailwind, next-themes |
 | API | Node.js + Express, TypeScript |
-| DB | MySQL 8 + **Prisma** |
-| Queue | BullMQ + Redis (AI description jobs) |
+| DB | PostgreSQL + **Prisma** (Neon / Docker) |
+| Queue | BullMQ + Redis (AI description + contact mail jobs) |
 | Auth | Email/password (argon2id), Google OAuth2, JWT access + refresh in httpOnly cookies |
 | Payments | Paystack (platform collects full amount; webhook HMAC verified) |
 | Email | Resend (HTML order confirmation) |
@@ -21,7 +21,7 @@ Live deploy (GitHub → Render → Cloudflare `shopmi.ng`): see **[DEPLOY.md](./
 
 ### Why Prisma
 
-Prisma gives typed queries, first-class MySQL migrations, and a clear schema file that matches the spec’s shared-schema / `tenant_id` model.
+Prisma gives typed queries, first-class PostgreSQL migrations, and a clear schema file that matches the spec’s shared-schema / `tenant_id` model.
 
 ## Repo layout
 
@@ -35,7 +35,7 @@ packages/shared-types Shared TypeScript types
 
 - Node 20+ (22 OK)
 - pnpm 9 (`corepack enable && corepack prepare pnpm@9.15.0 --activate`)
-- Docker (for MySQL + Redis)
+- Docker (for PostgreSQL + Redis)
 
 ## Quick start
 

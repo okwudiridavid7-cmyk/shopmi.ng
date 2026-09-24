@@ -9,7 +9,7 @@ Target stack:
 | API | Render `shopmi-api` → `https://api.shopmi.ng` |
 | Worker | Render `shopmi-worker` (background) |
 | Redis | Render Redis / Key Value |
-| MySQL | **External** (Render does not host MySQL) |
+| Postgres | **Neon** (or any Postgres) — set `DATABASE_URL` + `DIRECT_URL` |
 | DNS / TLS | Cloudflare on `shopmi.ng` |
 
 Blueprint file: [`render.yaml`](./render.yaml)
@@ -19,7 +19,10 @@ Blueprint file: [`render.yaml`](./render.yaml)
 ## 0. Before you click Deploy
 
 1. Hostile review still has **High** findings (confirm auto-POST, worker ops, XFF). Ship platform contact only with Turnstile keys + worker always on; keep `SHOP_CONTACT_CONFIRM_REQUIRED=false` until confirm UX is fixed.
-2. Provision **MySQL 8** somewhere durable (Aiven, DigitalOcean, PlanetScale Vitess MySQL, RDS, etc.). Create DB `vendors` (or `shopmi`) and a user with full rights. Copy the connection string as `DATABASE_URL`.
+2. Provision **PostgreSQL** (Neon recommended). In Neon, copy:
+   - **Pooled** connection string → `DATABASE_URL`
+   - **Direct** (non-pooler) connection string → `DIRECT_URL`  
+   Rotate any password that was shared in chat before using it in production.
 3. Have accounts ready: Render, Cloudflare (domain already linked), Resend, Paystack, Cloudflare Turnstile, optional Google OAuth.
 
 ---
@@ -120,7 +123,8 @@ Rebuild web after changing any `NEXT_PUBLIC_*` value.
 | Key | Example / notes |
 |---|---|
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | MySQL URL from provider |
+| `DATABASE_URL` | Neon **pooled** Postgres URL |
+| `DIRECT_URL` | Neon **direct** (non-pooler) URL — required for `prisma db push` |
 | `REDIS_URL` | From Render Redis (`rediss://…`) |
 | `API_URL` | `https://api.shopmi.ng` |
 | `WEB_URL` | `https://shopmi.ng` |
@@ -167,7 +171,7 @@ Worker must share `DATABASE_URL`, `REDIS_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, a
 ## 7. Local → prod checklist
 
 - [ ] Code on GitHub `main`  
-- [ ] MySQL provisioned + `prisma db push` + seed  
+- [ ] Neon Postgres provisioned (`DATABASE_URL` + `DIRECT_URL`) + `prisma db push` + seed  
 - [ ] Redis linked to API + worker  
 - [ ] Worker service **running** (contact mail will not send without it)  
 - [ ] Cloudflare DNS + Full strict SSL  
