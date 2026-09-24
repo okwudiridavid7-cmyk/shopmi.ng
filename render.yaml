@@ -31,8 +31,9 @@ services:
         value: production
       - key: NEXT_PUBLIC_APP_NAME
         value: Shopmi.ng
+      # Baked into the Next bundle at build time — change requires a web rebuild
       - key: NEXT_PUBLIC_API_URL
-        sync: false
+        value: https://api.shopmi.ng
       - key: NEXT_PUBLIC_WEB_URL
         value: https://shopmi.ng
       - key: NEXT_PUBLIC_SHOP_BASE_DOMAIN
@@ -74,7 +75,7 @@ services:
           name: shopmi-redis
           property: connectionString
       - key: API_URL
-        sync: false
+        value: https://api.shopmi.ng
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -102,7 +103,7 @@ services:
       - key: GOOGLE_CALLBACK_URL
         sync: false
       - key: ALLOWED_ORIGINS
-        value: https://shopmi.ng,https://www.shopmi.ng
+        value: https://shopmi.ng,https://www.shopmi.ng,https://shopmi-web.onrender.com
       - key: SUPER_ADMIN_EMAIL
         sync: false
       - key: SUPER_ADMIN_PASSWORD
@@ -139,7 +140,7 @@ services:
           name: shopmi-redis
           property: connectionString
       - key: API_URL
-        sync: false
+        value: https://api.shopmi.ng
       - key: JWT_ACCESS_SECRET
         sync: false
       - key: JWT_REFRESH_SECRET
