@@ -20,12 +20,8 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    # Install pnpm via npm (avoids Corepack signing-key failures on older Node)
-    buildCommand: |
-      npm install -g pnpm@9.15.0
-      pnpm install --frozen-lockfile
-      pnpm --filter @vendors/shared-types build
-      pnpm --filter @vendors/web build
+    # Use && so a single-line paste in Render Settings still works (newlines get flattened to spaces)
+    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/web build
     startCommand: pnpm --filter @vendors/web start
     healthCheckPath: /
     envVars:
@@ -48,12 +44,7 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    buildCommand: |
-      npm install -g pnpm@9.15.0
-      pnpm install --frozen-lockfile
-      pnpm --filter @vendors/shared-types build
-      pnpm --filter @vendors/api exec prisma generate
-      pnpm --filter @vendors/api build
+    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
     startCommand: pnpm --filter @vendors/api start
     healthCheckPath: /health
     envVars:
@@ -123,12 +114,7 @@ services:
     runtime: node
     plan: starter
     region: frankfurt
-    buildCommand: |
-      npm install -g pnpm@9.15.0
-      pnpm install --frozen-lockfile
-      pnpm --filter @vendors/shared-types build
-      pnpm --filter @vendors/api exec prisma generate
-      pnpm --filter @vendors/api build
+    buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
     startCommand: node apps/api/dist/worker.js
     envVars:
       - key: NODE_VERSION

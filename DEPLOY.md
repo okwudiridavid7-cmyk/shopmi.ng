@@ -68,12 +68,12 @@ pnpm --filter @vendors/api exec prisma db push
 pnpm --filter @vendors/api exec tsx prisma/seed.ts
 ```
 
-### If deploys still fail with Corepack `keyid`
+### If deploys still fail with Corepack `keyid` or npm 404 `@vendors/…`
 
 Existing Blueprint services often keep the **old** build command. For each of `shopmi-web`, `shopmi-api`, `shopmi-worker`:
 
 1. Settings → Environment → set `NODE_VERSION` = `20.19.0`
-2. Settings → Build & Deploy → replace **Build Command** with the matching block from [`render.yaml`](./render.yaml) (starts with `npm install -g pnpm@9.15.0`)
+2. Settings → Build & Deploy → paste the **single-line** `buildCommand` from [`render.yaml`](./render.yaml) (must include `&&` between steps — plain newlines get flattened and npm treats workspace packages as registry packages)
 3. Manual Deploy → Deploy latest commit
 
 Use a strong `SUPER_ADMIN_PASSWORD` in env before seeding.
