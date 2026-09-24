@@ -34,8 +34,15 @@ healthRouter.get("/hello", requireAuth, async (req, res, next) => {
       // No membership yet — still a valid authenticated hello.
     }
 
+    const greetAs =
+      user.name?.trim().split(/\s+/)[0] ||
+      user.email.split("@")[0]?.split(/[._-]/)[0] ||
+      "there";
+    const firstName =
+      greetAs.charAt(0).toUpperCase() + greetAs.slice(1).toLowerCase();
+
     const body: HelloResponse = {
-      message: `Hello, ${user.email}`,
+      message: `Hello, ${firstName}`,
       user: toUserPublic(user),
       tenant: tenantPayload,
     };
