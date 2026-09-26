@@ -31,6 +31,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
   const isAuth = AUTH_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`)
   );
+  const isExplore = pathname === "/explore";
   const isHome = pathname === "/";
   const isMarketing =
     isHome ||
@@ -39,7 +40,8 @@ export function PlatformShell({ children }: { children: ReactNode }) {
     pathname === "/privacy" ||
     pathname === "/terms" ||
     pathname === "/faq" ||
-    pathname === "/support";
+    pathname === "/support" ||
+    pathname === "/pricing";
   const branding = usePlatformBranding().data;
   const ticker = branding?.ticker;
 
@@ -55,10 +57,14 @@ export function PlatformShell({ children }: { children: ReactNode }) {
   return (
     <div
       data-shell={mode ?? "platform"}
-      className="flex min-h-screen flex-col"
+      className={
+        isDashboard
+          ? "flex h-dvh flex-col overflow-hidden"
+          : "flex min-h-screen flex-col"
+      }
     >
       <FaviconSync />
-      {ticker?.enabled && ticker.text && (
+      {ticker?.enabled && ticker.text && !isDashboard && (
         <SiteTicker
           text={ticker.text}
           speed={ticker.speed}
@@ -68,15 +74,15 @@ export function PlatformShell({ children }: { children: ReactNode }) {
         />
       )}
       <SiteHeader />
-      {isHome && <MobileMarketplaceSearch />}
+      {isExplore && <MobileMarketplaceSearch />}
       {isDashboard ? (
-        children
-      ) : isMarketing ? (
+        <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+      ) : isMarketing || isExplore ? (
         <main className="w-full flex-1 motion-safe:animate-page-enter">
           {children}
         </main>
       ) : (
-        <main className="mx-auto w-full max-w-6xl flex-1 px-token-6 py-token-8 motion-safe:animate-page-enter">
+        <main className="mx-auto w-full flex-1 max-w-6xl px-token-6 py-token-8 motion-safe:animate-page-enter">
           {children}
         </main>
       )}

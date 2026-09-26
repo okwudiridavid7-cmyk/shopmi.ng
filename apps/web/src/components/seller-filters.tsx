@@ -1,7 +1,10 @@
 "use client";
 
+import { Package, Search, Tag, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
+import { Select } from "@/components/ui/select";
 import { FilterDrawer } from "@/components/marketplace-filters";
 
 export type SellerProductFilters = {
@@ -63,10 +66,11 @@ export function SellerProductFilterPanel({
 }) {
   const flat = flattenCategories(categories);
   return (
-    <div className="space-y-token-4">
+    <div className="space-y-4">
       <Label>
         <span>Search</span>
-        <Input
+        <InputWithIcon
+          icon={<Search />}
           value={filters.q}
           onChange={(e) => setFilter("q", e.target.value)}
           placeholder="Title or brand"
@@ -74,25 +78,25 @@ export function SellerProductFilterPanel({
       </Label>
       <Label>
         <span>Status</span>
-        <select
+        <Select
+          icon={<Package />}
           value={filters.status}
           onChange={(e) =>
             setFilter("status", e.target.value as SellerProductFilters["status"])
           }
-          className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
         >
           <option value="">All</option>
           <option value="active">Active</option>
           <option value="draft">Draft</option>
           <option value="archived">Archived</option>
-        </select>
+        </Select>
       </Label>
       <Label>
         <span>Category</span>
-        <select
+        <Select
+          icon={<Tag />}
           value={filters.categoryId}
           onChange={(e) => setFilter("categoryId", e.target.value)}
-          className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
         >
           <option value="">All</option>
           {flat.map((c) => (
@@ -100,22 +104,22 @@ export function SellerProductFilterPanel({
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Label>
       <Label>
         <span>Stock</span>
-        <select
+        <Select
+          icon={<Warehouse />}
           value={filters.stock}
           onChange={(e) =>
             setFilter("stock", e.target.value as SellerProductFilters["stock"])
           }
-          className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
         >
           <option value="">All</option>
           <option value="in_stock">In stock (5+)</option>
           <option value="low">Low (1–4)</option>
           <option value="out">Out of stock</option>
-        </select>
+        </Select>
       </Label>
       <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
         Clear filters
@@ -137,13 +141,13 @@ export function SellerOrderFilterPanel({
   clearFilters: () => void;
 }) {
   return (
-    <div className="space-y-token-4">
+    <div className="space-y-4">
       <Label>
         <span>Status</span>
-        <select
+        <Select
+          icon={<Package />}
           value={filters.status}
           onChange={(e) => setFilter("status", e.target.value)}
-          className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
         >
           <option value="">All</option>
           <option value="pending_payment">Pending payment</option>
@@ -151,7 +155,7 @@ export function SellerOrderFilterPanel({
           <option value="fulfilled">Fulfilled</option>
           <option value="cancelled">Cancelled</option>
           <option value="failed">Failed</option>
-        </select>
+        </Select>
       </Label>
       <Label>
         <span>From date</span>

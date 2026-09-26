@@ -41,6 +41,10 @@ const onboardingSchema = z.object({
       categoryFocus: z.string().optional(),
       sellingExperience: z.string().optional(),
       fulfillmentMethod: z.string().optional(),
+      weeklyOrders: z.string().optional(),
+      currencies: z.array(z.string()).optional(),
+      staffCount: z.string().optional(),
+      physicalStores: z.string().optional(),
     })
     .default({}),
   firstProduct: z
@@ -137,9 +141,11 @@ onboardingRouter.post(
           });
         }
 
-        const freePlan = await tx.plan.findUnique({ where: { slug: "free" } });
+        const trialPlan =
+          (await tx.plan.findUnique({ where: { slug: "yomi" } })) ??
+          (await tx.plan.findUnique({ where: { slug: "free" } }));
         const { getPlatformTrialDays } = await import("../lib/platformSettings");
-        const trialDays = await getPlatformTrialDays(freePlan?.trialDays ?? 3);
+        const trialDays = await getPlatformTrialDays(trialPlan?.trialDays ?? 3);
         const trialEndsAt = new Date(
           Date.now() + trialDays * 24 * 60 * 60 * 1000
         );
@@ -155,7 +161,7 @@ onboardingRouter.post(
             stateCode: body.stateCode ?? null,
             onboardingAnswers: body.answers,
             themeSettings: body.logoUrl ? { logoUrl: body.logoUrl } : undefined,
-            planId: freePlan?.id ?? null,
+            planId: trialPlan?.id ?? null,
             trialEndsAt,
             notificationSettings: { whatsappOrdersEnabled: false },
           },

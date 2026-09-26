@@ -46,6 +46,9 @@ export function toUserPublic(user: User): UserPublic {
     whatsappNumber: user.whatsappNumber,
     hasPassword: !!user.passwordHash,
     googleLinked: !!user.googleId,
+    emailVerifiedAt: user.emailVerifiedAt
+      ? user.emailVerifiedAt.toISOString()
+      : null,
     notificationPrefs: {
       orderEmails: prefs.orderEmails !== false,
       whatsappOrders: !!prefs.whatsappOrders,

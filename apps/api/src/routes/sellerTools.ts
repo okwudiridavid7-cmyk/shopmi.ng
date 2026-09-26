@@ -1,8 +1,12 @@
 import { Router } from "express";
+import fs from "fs";
+import multer from "multer";
+import path from "path";
 import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { requireAuth } from "../auth/middleware";
 import { requireTenantFromMembership } from "../tenant/middleware";
+import { env } from "../config/env";
 import {
   isAiFeaturesEnabled,
   isWatermarkDefaultOn,
@@ -186,8 +190,30 @@ sellerToolsRouter.post("/logo/generate", async (req, res, next) => {
   }
 });
 
-/** Public logo helpers for onboarding (no auth — generates initials PNG only). */
+/** Public logo helpers for onboarding (no auth — generate / upload mark only). */
 export const logoPublicRouter = Router();
+
+fs.mkdirSync(path.join(env.uploadsDir, "logos"), { recursive: true });
+
+const logoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) =>
+      cb(null, path.join(env.uploadsDir, "logos")),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || ".png";
+      const safe = `.${ext.replace(/^\./, "").replace(/[^a-z0-9]/gi, "") || "png"}`;
+      cb(null, `onboard-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${safe}`);
+    },
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) {
+      cb(new Error("Image only"));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 logoPublicRouter.get("/presets", (_req, res) => {
   return res.json({ presets: logoPresets() });
@@ -204,4 +230,19 @@ logoPublicRouter.post("/generate", async (req, res, next) => {
     }
     return next(err);
   }
+});
+
+logoPublicRouter.post("/upload", (req, res, next) => {
+  logoUpload.single("file")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        error: err instanceof Error ? err.message : "Upload failed",
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    const url = `${env.apiUrl}/uploads/logos/${req.file.filename}`;
+    return res.status(201).json({ url });
+  });
 });

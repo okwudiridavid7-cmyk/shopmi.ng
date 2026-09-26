@@ -1,9 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { MapPin, Search, Tag } from "lucide-react";
 import type { BrandPublic, CategoryPublic, ShopCategoryPublic } from "@vendors/shared-types";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
+import { Select } from "@/components/ui/select";
+import { RadioCardGroup } from "@/components/ui/radio-card";
 import { CountryStateSelect } from "@/components/country-state-select";
 import { CategoryTree } from "@/components/category-tree";
 import type { MarketplaceFilters } from "@/stores/ui";
@@ -91,7 +95,8 @@ export function FilterPanel({
       {!hideSearch && (
         <Label>
           <span>Search</span>
-          <Input
+          <InputWithIcon
+            icon={<Search />}
             value={filters.q}
             onChange={(e) => setFilter("q", e.target.value)}
             placeholder="Search products"
@@ -102,10 +107,10 @@ export function FilterPanel({
       {shopCategories && shopCategories.length > 0 && (
         <Label>
           <span>Shop category</span>
-          <select
+          <Select
+            icon={<Tag />}
             value={filters.shopCategory}
             onChange={(e) => setFilter("shopCategory", e.target.value)}
-            className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
           >
             <option value="">All</option>
             {shopCategories.map((c) => (
@@ -113,7 +118,7 @@ export function FilterPanel({
                 {c.name}
               </option>
             ))}
-          </select>
+          </Select>
         </Label>
       )}
 
@@ -130,23 +135,16 @@ export function FilterPanel({
 
       <div className="space-y-token-2">
         <p className="text-sm font-medium">Price</p>
-        <div className="space-y-token-1" role="radiogroup" aria-label="Price range">
-          {PRICE_PRESETS.map((p) => (
-            <label
-              key={p.id}
-              className="flex cursor-pointer items-center gap-token-2 text-sm"
-            >
-              <input
-                type="radio"
-                name="price-preset"
-                checked={presetId === p.id}
-                onChange={() => applyPreset(p.id)}
-                className="accent-[var(--color-accent)]"
-              />
-              <span>{p.label}</span>
-            </label>
-          ))}
-        </div>
+        <RadioCardGroup
+          name="price-preset"
+          value={presetId === "custom" ? "" : presetId}
+          onChange={(id) => applyPreset(id)}
+          layout="vertical"
+          options={PRICE_PRESETS.map((p) => ({
+            value: p.id,
+            title: p.label,
+          }))}
+        />
         <div className="grid grid-cols-2 gap-token-2 pt-token-1">
           <Label>
             <span className="text-xs text-muted-foreground">Min</span>
@@ -173,7 +171,8 @@ export function FilterPanel({
 
       <div className="space-y-token-2">
         <p className="text-sm font-medium">Brand</p>
-        <Input
+        <InputWithIcon
+          icon={<Search />}
           value={brandQuery}
           onChange={(e) => setBrandQuery(e.target.value)}
           placeholder="Search brands"
@@ -215,10 +214,10 @@ export function FilterPanel({
         {locations.length > 0 && (
           <Label>
             <span className="text-xs text-muted-foreground">Or pick listed</span>
-            <select
+            <Select
+              icon={<MapPin />}
               value={filters.location}
               onChange={(e) => setFilter("location", e.target.value)}
-              className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
             >
               <option value="">All listed</option>
               {locations.map((loc) => (
@@ -226,7 +225,7 @@ export function FilterPanel({
                   {loc}
                 </option>
               ))}
-            </select>
+            </Select>
           </Label>
         )}
       </div>

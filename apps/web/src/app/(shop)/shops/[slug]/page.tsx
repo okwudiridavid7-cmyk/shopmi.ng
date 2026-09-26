@@ -33,7 +33,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/api";
 import {
-  DEFAULT_SHOP_BANNER,
+  shopDefaultSlides,
   toBannerSlides,
 } from "@/lib/default-banners";
 import { parseHexColor, parseThemeSettings } from "@/lib/theme";
@@ -172,14 +172,7 @@ export default function ShopPage() {
   const bannerSlides = useMemo(() => {
     const active = (bannersQ.data ?? []).filter((b) => b.active);
     if (active.length === 0) {
-      return toBannerSlides([
-        {
-          id: "default",
-          ...DEFAULT_SHOP_BANNER,
-          title: tenant ? `${tenant.name}` : DEFAULT_SHOP_BANNER.title,
-          ctaUrl: "#products",
-        },
-      ]);
+      return shopDefaultSlides(tenant?.name);
     }
     return toBannerSlides(active);
   }, [bannersQ.data, tenant]);
@@ -268,7 +261,7 @@ export default function ShopPage() {
             : "This shop may be unavailable."
         }
         actionLabel="Browse marketplace"
-        actionHref="/"
+        actionHref="/explore"
       />
     );
   }

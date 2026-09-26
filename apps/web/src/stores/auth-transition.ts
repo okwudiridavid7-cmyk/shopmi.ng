@@ -6,6 +6,7 @@ export type AuthTransitionKind =
   | "session-expired"
   | "sign-out"
   | "welcome"
+  | "signing-in"
   | null;
 
 type AuthTransitionState = {

@@ -36,6 +36,14 @@ export async function assertCanCreateProduct(tenantId: string): Promise<void> {
   }
 }
 
-export async function getDefaultFreePlan() {
+export async function getDefaultTrialPlan() {
+  const yomi = await prisma.plan.findUnique({ where: { slug: "yomi" } });
+  if (yomi) return yomi;
+  // Legacy fallback while DBs migrate off the old free tier.
   return prisma.plan.findUnique({ where: { slug: "free" } });
+}
+
+/** @deprecated Use getDefaultTrialPlan — new shops start on Yomi with trialDays. */
+export async function getDefaultFreePlan() {
+  return getDefaultTrialPlan();
 }

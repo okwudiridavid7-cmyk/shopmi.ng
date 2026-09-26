@@ -1,20 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
-import { ShoppingCart, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Heart, Minus, Plus, ShoppingCart, X } from "lucide-react";
 import type { CartPublic } from "@vendors/shared-types";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
-import { formatMoney, productImageUrl } from "@/lib/api";
+import { formatMoney, productImageUrl, apiFetch } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { useCartSummary, useRemoveCartItem } from "@/hooks/use-cart";
+import {
+  invalidateCartQueries,
+  useCartSummary,
+  useRemoveCartItem,
+} from "@/hooks/use-cart";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/ui";
 
 /**
- * Shared cart icon + drawer for marketplace, shop, and buyer shells.
- * Works for guests (session cart) and logged-in buyers.
+ * Cart Overview dropdown — header, subtotal + CTAs, scrollable lines with qty.
  */
 export function CartNav() {
   const { data: summary, isLoading } = useCartSummary();
@@ -22,6 +26,13 @@ export function CartNav() {
   const setOpen = useUiStore((s) => s.setCartDrawerOpen);
   const toggle = useUiStore((s) => s.toggleCartDrawer);
   const count = summary?.itemCount ?? 0;
+
+  const grandSubtotal = useMemo(() => {
+    if (!summary?.carts.length) return null;
+    const currency = summary.carts[0]?.currency ?? "NGN";
+    const total = summary.carts.reduce((s, c) => s + c.subtotal, 0);
+    return { total, currency };
+  }, [summary]);
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +55,7 @@ export function CartNav() {
       >
         <ShoppingCart className="h-5 w-5" aria-hidden />
         {count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-foreground">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-semibold text-white">
             {count > 99 ? "99+" : count}
           </span>
         )}
@@ -60,36 +71,80 @@ export function CartNav() {
           />
           <div
             role="dialog"
-            aria-label="Shopping cart"
-            className="absolute right-0 top-full z-50 mt-token-2 w-[min(100vw-1.5rem,22rem)] overflow-hidden rounded-lg border border-border bg-card shadow-lg"
+            aria-label="Cart Overview"
+            className="absolute right-0 top-full z-50 mt-2 w-[min(100vw-1rem,24rem)] overflow-hidden rounded-2xl border border-border bg-card shadow-lg"
           >
-            <div className="flex items-center justify-between border-b border-border px-token-4 py-token-3">
-              <p className="text-sm font-medium text-foreground">Your cart</p>
+            <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
+              <p className="text-base font-bold text-foreground">
+                Cart Overview
+              </p>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                aria-label="Close cart"
               >
-                Close
+                <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto">
-              {isLoading ? (
-                <div className="p-token-4">
-                  <SkeletonLines count={2} />
+            {isLoading ? (
+              <div className="p-4">
+                <SkeletonLines count={2} />
+              </div>
+            ) : !summary || summary.carts.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  title="Cart is empty"
+                  description="Browse the marketplace and add items from any shop."
+                  actionLabel="Browse marketplace"
+                  actionHref="/explore"
+                />
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 border-b border-border px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <span className="relative text-emerald-600 dark:text-emerald-400">
+                        <ShoppingCart className="h-5 w-5" aria-hidden />
+                        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white">
+                          {count}
+                        </span>
+                      </span>
+                      Cart
+                    </div>
+                    {grandSubtotal ? (
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Subtotal</p>
+                        <p className="text-lg font-bold text-foreground">
+                          {formatMoney(
+                            grandSubtotal.total,
+                            grandSubtotal.currency
+                          )}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Link
+                      href="/cart"
+                      onClick={() => setOpen(false)}
+                      className="inline-flex h-11 items-center justify-center rounded-full border-2 border-accent text-sm font-semibold text-accent transition hover:bg-accent/5 dark:text-accent-on-dark"
+                    >
+                      Go to Cart
+                    </Link>
+                    <Link
+                      href="/cart"
+                      onClick={() => setOpen(false)}
+                      className="inline-flex h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white transition hover:bg-accent-deep"
+                    >
+                      Checkout ({count})
+                    </Link>
+                  </div>
                 </div>
-              ) : !summary || summary.carts.length === 0 ? (
-                <div className="p-token-4">
-                  <EmptyState
-                    title="Cart is empty"
-                    description="Browse the marketplace and add items from any shop. Carts are per shop."
-                    actionLabel="Browse marketplace"
-                    actionHref="/"
-                  />
-                </div>
-              ) : (
-                <div className="divide-y divide-border">
+
+                <div className="max-h-[min(50vh,22rem)] overflow-y-auto">
                   {summary.carts.map((cart) => (
                     <CartShopSection
                       key={cart.tenantId}
@@ -98,8 +153,14 @@ export function CartNav() {
                     />
                   ))}
                 </div>
-              )}
-            </div>
+
+                <p className="border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
+                  {summary.carts.length > 1
+                    ? "Checkout settles each shop separately via Paystack — we chain payments for you."
+                    : "Review items on the cart page, then pay securely with Paystack."}
+                </p>
+              </>
+            )}
           </div>
         </>
       )}
@@ -116,21 +177,41 @@ function CartShopSection({
 }) {
   const { isAuthenticated } = useAuth();
   const removeItem = useRemoveCartItem();
+  const qc = useQueryClient();
   const slug = cart.shopSlug ?? "";
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function updateQty(itemId: string, qty: number) {
+    if (!slug) return;
+    setBusyId(itemId);
+    try {
+      if (qty <= 0) {
+        await removeItem.mutateAsync({ shopSlug: slug, itemId });
+      } else {
+        await apiFetch(`/api/carts/${slug}/items/${itemId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ qty }),
+        });
+        invalidateCartQueries(qc);
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
-    <section className="space-y-token-3 p-token-4">
-      {cart.shopName && (
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <section className="divide-y divide-border">
+      {cart.shopName ? (
+        <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {cart.shopName}
         </p>
-      )}
-      <ul className="space-y-token-3">
-        {cart.items.map((item) => {
-          const img = productImageUrl(item.product.images);
-          return (
-            <li key={item.id} className="flex gap-token-3 text-sm">
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
+      ) : null}
+      {cart.items.map((item) => {
+        const img = productImageUrl(item.product.images);
+        return (
+          <div key={item.id} className="space-y-3 px-4 py-3.5">
+            <div className="flex gap-3">
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -140,56 +221,79 @@ function CartShopSection({
                   />
                 ) : null}
               </div>
-              <div className="min-w-0 flex-1 space-y-token-1">
-                <p className="line-clamp-2 font-medium text-foreground">
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-sm font-medium text-foreground">
                   {item.product.title}
                 </p>
-                <p className="text-muted-foreground">
-                  {formatMoney(item.product.price, item.product.currency)} · Qty{" "}
-                  {item.qty}
+                <p className="mt-0.5 text-base font-bold text-foreground">
+                  {formatMoney(item.product.price, item.product.currency)}
                 </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center rounded-lg border border-border">
                 <button
                   type="button"
-                  disabled={removeItem.isPending || !slug}
-                  onClick={() =>
-                    removeItem.mutate({ shopSlug: slug, itemId: item.id })
-                  }
-                  aria-label={`Remove ${item.product.title} from cart`}
-                  className="inline-flex items-center gap-1 rounded-md p-1 text-danger transition hover:bg-danger/10 disabled:opacity-50 motion-safe:active:scale-95"
+                  disabled={busyId === item.id}
+                  className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  aria-label="Decrease"
+                  onClick={() => void updateQty(item.id, item.qty - 1)}
                 >
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                  <span className="sr-only">Remove</span>
+                  <Minus className="h-3.5 w-3.5" />
+                </button>
+                <span className="min-w-[1.5rem] text-center text-sm font-medium tabular-nums">
+                  {item.qty}
+                </span>
+                <button
+                  type="button"
+                  disabled={busyId === item.id}
+                  className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  aria-label="Increase"
+                  onClick={() => void updateQty(item.id, item.qty + 1)}
+                >
+                  <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
-            </li>
-          );
-        })}
-      </ul>
-      <p className="text-sm font-medium text-foreground">
-        Subtotal {formatMoney(cart.subtotal, cart.currency)}
-      </p>
-      <div className="flex flex-wrap gap-token-2">
-        {slug && (
-          <Link href={`/cart?shop=${slug}`} onClick={onClose}>
-            <Button variant="outline" size="sm">
-              View Cart
-            </Button>
-          </Link>
-        )}
-        {slug && (
-          <Link
-            href={
-              isAuthenticated
-                ? `/cart?shop=${slug}`
-                : `/login?next=${encodeURIComponent(`/cart?shop=${slug}`)}`
-            }
-            onClick={onClose}
-          >
-            <Button variant="primary" size="sm">
-              Checkout
-            </Button>
-          </Link>
-        )}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+                onClick={onClose}
+              >
+                <Heart className="h-3.5 w-3.5" />
+                Save for Later
+              </button>
+              <button
+                type="button"
+                disabled={removeItem.isPending || !slug}
+                onClick={() =>
+                  removeItem.mutate({ shopSlug: slug, itemId: item.id })
+                }
+                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-danger/40 hover:text-danger disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap gap-2 px-4 py-3">
+        <Link href="/cart" onClick={onClose}>
+          <Button variant="outline" size="sm">
+            View cart
+          </Button>
+        </Link>
+        <Link
+          href={
+            isAuthenticated
+              ? "/cart"
+              : `/login?next=${encodeURIComponent("/cart")}`
+          }
+          onClick={onClose}
+        >
+          <Button variant="primary" size="sm">
+            Checkout
+          </Button>
+        </Link>
       </div>
     </section>
   );

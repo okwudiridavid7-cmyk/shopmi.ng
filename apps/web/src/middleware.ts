@@ -29,7 +29,7 @@ async function resolveShopFromHost(host: string): Promise<string | null> {
 
 /**
  * Subdomain / custom-domain → slug shop routes.
- * Tenant lookup uses GET /api/shops/resolve-host (same resolver as UI-5).
+ * Tenant lookup uses GET /api/shops/resolve-host (same host resolver).
  *
  * Order matters:
  * 1. Apex platform host → pass through ( /login, /signup, marketplace, etc. )

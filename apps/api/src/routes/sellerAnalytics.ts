@@ -25,18 +25,41 @@ function periodStart(period: Period): { since: Date; days: number } {
   return { since, days: 30 };
 }
 
+function dayBounds(day: string): { since: Date; until: Date; days: number } {
+  return {
+    since: new Date(`${day}T00:00:00.000`),
+    until: new Date(`${day}T23:59:59.999`),
+    days: 1,
+  };
+}
+
 sellerAnalyticsRouter.get("/", async (req, res, next) => {
   try {
     const raw = String(req.query.period ?? "month");
     const period: Period =
       raw === "today" || raw === "week" || raw === "month" ? raw : "month";
-    const { since, days } = periodStart(period);
+    const day = String(req.query.day ?? "").trim();
     const tenantId = req.tenant!.tenantId;
+
+    let since: Date;
+    let until: Date | undefined;
+    let days: number;
+    if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      const bounds = dayBounds(day);
+      since = bounds.since;
+      until = bounds.until;
+      days = bounds.days;
+    } else {
+      const bounds = periodStart(period);
+      since = bounds.since;
+      until = undefined;
+      days = bounds.days;
+    }
 
     const orders = await prisma.order.findMany({
       where: {
         tenantId,
-        createdAt: { gte: since },
+        createdAt: until ? { gte: since, lte: until } : { gte: since },
       },
       include: {
         items: { include: { product: { select: { id: true, title: true } } } },
@@ -98,7 +121,8 @@ sellerAnalyticsRouter.get("/", async (req, res, next) => {
 
     return res.json({
       analytics: {
-        period,
+        period: day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? "today" : period,
+        day: day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
         periodDays: days,
         currency,
         totals: {
@@ -106,6 +130,8 @@ sellerAnalyticsRouter.get("/", async (req, res, next) => {
           orderCount: paid.length,
           productCount,
           conversionRate,
+          pendingOrderCount: pending.length,
+          allOrderCount: orders.length,
         },
         salesOverTime,
         topProducts,

@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { SkeletonLines } from "@/components/skeleton";
 import { ProductGallery } from "@/components/product-gallery";
-import { apiFetch, formatMoney, productImageUrls } from "@/lib/api";
+import { apiFetch, formatMoney, isAuthError, productImageUrls } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { useUiStore } from "@/stores/ui";
 import { useAuth } from "@/hooks/use-auth";
@@ -155,6 +155,7 @@ export function ProductDetailClient({
         setCartDrawerOpen(true);
       }
     } catch (err) {
+      if (isAuthError(err)) return;
       setError(err instanceof Error ? err.message : "Could not add to cart");
       throw err;
     } finally {
@@ -391,7 +392,7 @@ export function ProductDetailClient({
                   </p>
                   <Link
                     href={`/shops/${slug}`}
-                    className="text-sm font-medium text-accent hover:underline"
+                    className="text-sm font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark"
                   >
                     View Store
                   </Link>
@@ -411,7 +412,7 @@ export function ProductDetailClient({
                     <div className="flex flex-wrap items-center gap-token-2">
                       <Link
                         href={`/shops/${slug}`}
-                        className="font-medium text-foreground hover:underline"
+                        className="font-medium text-foreground transition hover:text-accent"
                       >
                         {trustCard?.shopName ?? tenant?.name}
                       </Link>

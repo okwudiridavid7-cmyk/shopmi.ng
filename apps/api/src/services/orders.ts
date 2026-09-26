@@ -2,10 +2,11 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
-import { Resend } from "resend";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { decimalToNumber } from "../lib/serialize";
+import { escapeHtml } from "../lib/htmlEscape";
+import { enqueueTransactionalMail } from "../queue/transactionalMail";
 
 const invoicesDir = path.join(env.uploadsDir, "invoices");
 fs.mkdirSync(invoicesDir, { recursive: true });
@@ -78,65 +79,71 @@ export function getInvoiceFilePath(orderId: string): string {
 }
 
 export async function sendOrderConfirmationEmail(orderId: string): Promise<void> {
-  if (!env.resendApiKey) {
-    console.warn("[email] RESEND_API_KEY not set — skipping order email");
-    return;
-  }
-
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
       items: { include: { product: true } },
       buyer: true,
-      tenant: true,
+      tenant: { include: { owner: true } },
     },
   });
   if (!order) return;
 
-  const resend = new Resend(env.resendApiKey);
-  const appName =
-    (
-      await prisma.platformSetting.findUnique({ where: { key: "app_name" } })
-    )?.value ?? "Vendors";
+  const prefs =
+    (order.buyer.notificationPrefs as { orderEmails?: boolean } | null) ?? {};
+  if (prefs.orderEmails === false) return;
 
-  const rows = order.items
-    .map(
-      (item) =>
-        `<tr>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${item.product.title}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${item.qty}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${order.currency} ${decimalToNumber(item.unitPrice).toFixed(2)}</td>
-        </tr>`
-    )
-    .join("");
+  const itemsHtml = `<table style="width:100%;border-collapse:collapse;font-size:14px;">
+    <thead><tr>
+      <th align="left" style="padding:6px 0;border-bottom:1px solid #e5e7eb;">Item</th>
+      <th align="left" style="padding:6px 0;border-bottom:1px solid #e5e7eb;">Qty</th>
+      <th align="right" style="padding:6px 0;border-bottom:1px solid #e5e7eb;">Price</th>
+    </tr></thead>
+    <tbody>${order.items
+      .map((item) => {
+        const title = escapeHtml(item.product.title);
+        const price = decimalToNumber(item.unitPrice).toFixed(2);
+        return `<tr>
+          <td style="padding:6px 0;border-bottom:1px solid #f3f4f6;">${title}</td>
+          <td style="padding:6px 0;border-bottom:1px solid #f3f4f6;">${item.qty}</td>
+          <td align="right" style="padding:6px 0;border-bottom:1px solid #f3f4f6;">${escapeHtml(order.currency)} ${price}</td>
+        </tr>`;
+      })
+      .join("")}</tbody></table>`;
 
-  const invoiceLink = `${env.webUrl}/buyer?order=${order.id}`;
-  const html = `
-    <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;color:#14201a;">
-      <h1 style="font-size:24px;margin-bottom:8px;">${appName}</h1>
-      <p style="color:#5c6b63;">Payment received for your order from <strong>${order.tenant.name}</strong>.</p>
-      <p>Order <code>${order.id}</code> is confirmed. Keep this email for your records.</p>
-      <table style="width:100%;border-collapse:collapse;margin:24px 0;">
-        <thead>
-          <tr>
-            <th align="left" style="padding:8px;border-bottom:2px solid #14201a;">Item</th>
-            <th align="left" style="padding:8px;border-bottom:2px solid #14201a;">Qty</th>
-            <th align="left" style="padding:8px;border-bottom:2px solid #14201a;">Price</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <p style="font-size:16px;"><strong>Total: ${order.currency} ${decimalToNumber(order.total).toFixed(2)}</strong></p>
-      <p><a href="${invoiceLink}" style="color:#1f6b4a;">Open order &amp; download invoice</a></p>
-    </div>
-  `;
+  const totalLabel = `${order.currency} ${decimalToNumber(order.total).toFixed(2)}`;
+  const orderUrl = `${env.webUrl}/buyer/orders/${order.id}`;
 
-  await resend.emails.send({
-    from: env.emailFrom,
+  await enqueueTransactionalMail({
+    kind: "order_buyer",
     to: order.buyer.email,
-    subject: `You’re all set — order from ${order.tenant.name}`,
-    html,
+    data: {
+      name: order.buyer.name,
+      shopName: order.tenant.name,
+      totalLabel,
+      reference: order.paystackReference,
+      orderId: order.id,
+      itemsHtml,
+      orderUrl,
+    },
+    idempotencyKey: `order-buyer:${order.id}`,
   });
+
+  const sellerEmail = order.tenant.owner.email;
+  if (sellerEmail) {
+    await enqueueTransactionalMail({
+      kind: "order_seller",
+      to: sellerEmail,
+      data: {
+        name: order.tenant.owner.name,
+        totalLabel,
+        buyerEmail: order.buyer.email,
+        itemsHtml,
+        ordersUrl: `${env.webUrl}/seller/orders/${order.id}`,
+      },
+      idempotencyKey: `order-seller:${order.id}`,
+    });
+  }
 }
 
 /** Mark order paid (idempotent), decrement stock, invoice + email. */

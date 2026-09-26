@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { CountryPublic, StatePublic } from "@vendors/shared-types";
+import { MapPin } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 export type LocationValue = {
   countryCode: string;
@@ -19,8 +21,14 @@ type Props = {
   required?: boolean;
   idPrefix?: string;
   className?: string;
+  /** Lock country to Nigeria — only ask for state/region. */
+  nigeriaOnly?: boolean;
 };
 
+/**
+ * Country + state selectors. With `nigeriaOnly`, country is fixed to NG
+ * and only the state/region field is shown.
+ */
 export function CountryStateSelect({
   countryCode = "",
   stateCode = "",
@@ -28,40 +36,55 @@ export function CountryStateSelect({
   required,
   idPrefix = "geo",
   className,
+  nigeriaOnly = false,
 }: Props) {
+  const lockedCountry = nigeriaOnly ? "NG" : countryCode;
   const [countries, setCountries] = useState<CountryPublic[]>([]);
   const [states, setStates] = useState<StatePublic[]>([]);
-  const [country, setCountry] = useState(countryCode);
+  const [country, setCountry] = useState(lockedCountry || countryCode);
   const [state, setState] = useState(stateCode);
 
   useEffect(() => {
+    if (nigeriaOnly) {
+      setCountry("NG");
+      return;
+    }
     setCountry(countryCode);
-  }, [countryCode]);
+  }, [countryCode, nigeriaOnly]);
 
   useEffect(() => {
     setState(stateCode);
   }, [stateCode]);
 
   useEffect(() => {
+    if (nigeriaOnly) return;
     apiFetch<{ countries: CountryPublic[] }>("/api/geo/countries")
       .then((r) => setCountries(r.countries))
       .catch(() => setCountries([]));
-  }, []);
+  }, [nigeriaOnly]);
 
   useEffect(() => {
-    if (!country) {
+    const code = nigeriaOnly ? "NG" : country;
+    if (!code) {
       setStates([]);
       return;
     }
     apiFetch<{ states: StatePublic[] }>(
-      `/api/geo/countries/${encodeURIComponent(country)}/states`
+      `/api/geo/countries/${encodeURIComponent(code)}/states`
     )
       .then((r) => setStates(r.states))
       .catch(() => setStates([]));
-  }, [country]);
+  }, [country, nigeriaOnly]);
+
+  useEffect(() => {
+    if (!nigeriaOnly) return;
+    setCountry("NG");
+  }, [nigeriaOnly]);
 
   function emit(nextCountry: string, nextState: string) {
-    const c = countries.find((x) => x.iso2 === nextCountry);
+    const c = nigeriaOnly
+      ? { name: "Nigeria" }
+      : countries.find((x) => x.iso2 === nextCountry);
     const s = states.find((x) => (x.iso2 || x.name) === nextState);
     const label = [s?.name, c?.name].filter(Boolean).join(", ");
     onChange({
@@ -71,14 +94,48 @@ export function CountryStateSelect({
     });
   }
 
+  if (nigeriaOnly) {
+    return (
+      <div className={className ?? "grid gap-3"}>
+        <Label>
+          <span>State / region</span>
+          <Select
+            id={`${idPrefix}-state`}
+            required={required}
+            disabled={states.length === 0}
+            icon={<MapPin />}
+            value={state}
+            onChange={(e) => {
+              const next = e.target.value;
+              setState(next);
+              emit("NG", next);
+            }}
+          >
+            <option value="">
+              {states.length === 0 ? "Loading states…" : "Select state"}
+            </option>
+            {states.map((s) => (
+              <option key={s.id} value={s.iso2 || s.name}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          We’re focused on Nigeria for now — country is set automatically.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className={className ?? "grid gap-token-3 sm:grid-cols-2"}>
+    <div className={className ?? "grid gap-3 sm:grid-cols-2"}>
       <Label>
         <span>Country</span>
-        <select
+        <Select
           id={`${idPrefix}-country`}
           required={required}
-          className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          icon={<MapPin />}
           value={country}
           onChange={(e) => {
             const next = e.target.value;
@@ -93,15 +150,15 @@ export function CountryStateSelect({
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Label>
       <Label>
         <span>State / region</span>
-        <select
+        <Select
           id={`${idPrefix}-state`}
           required={required && states.length > 0}
           disabled={!country || states.length === 0}
-          className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          icon={<MapPin />}
           value={state}
           onChange={(e) => {
             const next = e.target.value;
@@ -121,7 +178,7 @@ export function CountryStateSelect({
               {s.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Label>
     </div>
   );

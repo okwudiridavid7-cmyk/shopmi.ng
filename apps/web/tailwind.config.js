@@ -24,8 +24,15 @@ module.exports = {
         "danger-foreground": "var(--color-danger-foreground)",
         success: "var(--color-success)",
         "success-foreground": "var(--color-success-foreground)",
+        "success-muted": "var(--color-success-muted)",
+        "danger-muted": "var(--color-danger-muted)",
+        info: "var(--color-info)",
+        "info-muted": "var(--color-info-muted)",
         "shell-accent": "var(--shell-accent)",
         "shell-accent-foreground": "var(--shell-accent-foreground)",
+        "shell-nav-hover": "var(--shell-nav-hover)",
+        "shell-search": "var(--shell-search-bg)",
+        "accent-on-dark": "var(--color-accent-on-dark)",
       },
       borderRadius: {
         sm: "var(--radius-sm)",
@@ -48,7 +55,41 @@ module.exports = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "Georgia", "serif"],
+        display: ["var(--font-sans)", "system-ui", "sans-serif"],
+      },
+      keyframes: {
+        marquee: {
+          from: { transform: "translateX(0)" },
+          to: {
+            transform: "translateX(calc(-100% - var(--gap, 1rem)))",
+          },
+        },
+        "marquee-vertical": {
+          from: { transform: "translateY(0)" },
+          to: {
+            transform: "translateY(calc(-100% - var(--gap, 1rem)))",
+          },
+        },
+        "border-beam": {
+          "100%": { offsetDistance: "100%" },
+        },
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+      },
+      animation: {
+        marquee: "marquee var(--duration, 20s) linear infinite",
+        "marquee-vertical":
+          "marquee-vertical var(--duration, 20s) linear infinite",
+        "border-beam":
+          "border-beam calc(var(--duration) * 1s) infinite linear",
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
       },
     },
   },

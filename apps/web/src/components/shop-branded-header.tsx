@@ -16,7 +16,7 @@ import {
 
 /**
  * Shop page header — brand color on the bar only.
- * Page background / body text stay on platform neutrals (UI-3 rules).
+ * Page background and body text use platform neutrals.
  */
 export function ShopBrandedHeader({
   tenant,

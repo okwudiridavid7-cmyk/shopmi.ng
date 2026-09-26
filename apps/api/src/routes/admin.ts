@@ -66,12 +66,28 @@ function periodStart(period: Period): Date {
   return since;
 }
 
+function periodBounds(
+  period: Period,
+  day?: string
+): { since: Date; until?: Date } {
+  if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    const since = new Date(`${day}T00:00:00.000`);
+    const until = new Date(`${day}T23:59:59.999`);
+    return { since, until };
+  }
+  return { since: periodStart(period) };
+}
+
 adminRouter.get("/overview", async (req, res, next) => {
   try {
     const raw = String(req.query.period ?? "month");
     const period: Period =
       raw === "today" || raw === "week" || raw === "month" ? raw : "month";
-    const since = periodStart(period);
+    const day = String(req.query.day ?? "").trim() || undefined;
+    const { since, until } = periodBounds(period, day);
+    const createdAt = until
+      ? { gte: since, lte: until }
+      : { gte: since };
 
     const [
       tenantCount,
@@ -90,7 +106,7 @@ adminRouter.get("/overview", async (req, res, next) => {
       prisma.order.findMany({
         where: {
           status: { in: ["paid", "fulfilled"] },
-          createdAt: { gte: since },
+          createdAt,
         },
         select: { total: true, currency: true },
       }),
@@ -108,7 +124,7 @@ adminRouter.get("/overview", async (req, res, next) => {
         },
       }),
       prisma.tenant.findMany({
-        where: { createdAt: { gte: since } },
+        where: { createdAt },
         select: { createdAt: true },
         orderBy: { createdAt: "asc" },
       }),
@@ -128,7 +144,8 @@ adminRouter.get("/overview", async (req, res, next) => {
 
     return res.json({
       overview: {
-        period,
+        period: day ? "today" : period,
+        day: day ?? null,
         tenantCount,
         pendingVerifications,
         orderCount: orderCountAll,
@@ -324,6 +341,29 @@ adminRouter.patch("/tenants/:id", async (req, res, next) => {
         _count: { select: { products: true, orders: true } },
       },
     });
+
+    if (body.verifiedBadge === true && !existing.verifiedBadge) {
+      try {
+        const { ensurePaystackSubaccount } = await import(
+          "../services/paystackSubaccount"
+        );
+        await ensurePaystackSubaccount(tenant.id);
+      } catch (subErr) {
+        console.warn("[paystack] subaccount on admin verify failed", subErr);
+      }
+      try {
+        const { sendVerificationApprovedEmail } = await import(
+          "../services/verificationEmail"
+        );
+        await sendVerificationApprovedEmail({
+          to: tenant.owner.email,
+          shopName: tenant.name,
+          name: tenant.owner.name,
+        });
+      } catch (emailErr) {
+        console.warn("[email] admin verification approved failed", emailErr);
+      }
+    }
 
     return res.json({
       tenant: {

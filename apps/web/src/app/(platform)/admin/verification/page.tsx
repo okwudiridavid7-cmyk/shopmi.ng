@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import type { VerificationRequestPublic } from "@vendors/shared-types";
-import { EmptyState } from "@/components/empty-state";
+import { Filter, ShieldCheck } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import { Label, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import {
   useAdminVerification,
@@ -15,7 +18,8 @@ import {
 
 export default function AdminVerificationPage() {
   const [status, setStatus] = useState("pending");
-  const { data: requests = [], isLoading, error } = useAdminVerification(status);
+  const { data: requests = [], isLoading, error, refetch } =
+    useAdminVerification(status);
   const review = useReviewVerification();
   const { toast } = useToast();
 
@@ -26,36 +30,40 @@ export default function AdminVerificationPage() {
     useState<VerificationRequestPublic | null>(null);
 
   return (
-    <div className="space-y-token-4">
-      <div className="flex flex-wrap items-end justify-between gap-token-3">
-        <div>
-          <h1 className="font-display text-2xl text-foreground">
-            Verification queue
-          </h1>
-          <p className="mt-token-1 text-sm text-muted-foreground">
-            Review shop documents. Approve flips verified badge + active status.
-          </p>
-        </div>
-        <select
-          className="rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="">All</option>
-        </select>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Verification queue"
+        description="Review shop documents. Approve flips verified badge + active status."
+        icon={ShieldCheck}
+        actions={
+          <div className="w-full min-w-[12rem] max-w-[14rem]">
+            <Select
+              icon={<Filter />}
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="">All</option>
+            </Select>
+          </div>
+        }
+      />
 
       {error ? (
-        <p className="text-sm text-muted-foreground">
-          {error instanceof Error ? error.message : "Failed to load"}
-        </p>
+        <QueryErrorState
+          error={error}
+          onRetry={() => {
+            void refetch();
+          }}
+          sellerHomeHref="/admin"
+        />
       ) : isLoading ? (
         <SkeletonLines count={4} />
       ) : requests.length === 0 ? (
         <EmptyState
+          kind="empty"
           title="Queue is empty"
           description={
             status === "pending"
@@ -64,14 +72,11 @@ export default function AdminVerificationPage() {
           }
         />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+        <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           {requests.map((r) => (
-            <li
-              key={r.id}
-              className="space-y-token-3 px-token-4 py-token-4 text-sm"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-token-3">
-                <div className="space-y-token-1">
+            <li key={r.id} className="space-y-3 px-4 py-4 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
                   <p className="font-medium text-foreground">
                     {r.tenant?.name ?? "Shop"}
                   </p>
@@ -81,7 +86,7 @@ export default function AdminVerificationPage() {
                   </p>
                 </div>
                 {r.status === "pending" && (
-                  <div className="flex gap-token-2">
+                  <div className="flex gap-2">
                     <Button
                       variant="primary"
                       size="sm"
@@ -102,14 +107,14 @@ export default function AdminVerificationPage() {
                   </div>
                 )}
               </div>
-              <ul className="flex flex-wrap gap-token-3">
+              <ul className="flex flex-wrap gap-3">
                 {r.submittedDocs.map((d) => (
                   <li key={d.url}>
                     <a
                       href={d.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-accent underline"
+                      className="font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark"
                     >
                       {d.name}
                     </a>
@@ -188,7 +193,8 @@ export default function AdminVerificationPage() {
                       setRejectTarget(null);
                       toast({
                         title: "Request rejected",
-                        description: "Seller notified by email when configured.",
+                        description:
+                          "Seller notified by email when configured.",
                         tone: "default",
                       });
                     },
@@ -201,7 +207,7 @@ export default function AdminVerificationPage() {
           </>
         }
       >
-        <div className="space-y-token-3">
+        <div className="space-y-3">
           <p>
             Reject “{rejectTarget?.tenant?.name}”? A reason is required and will
             be emailed to the seller.

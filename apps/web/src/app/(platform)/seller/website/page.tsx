@@ -1,19 +1,22 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FaqItem, SocialLinks } from "@vendors/shared-types";
+import { Globe, Link2, Mail, MessageCircle, Phone } from "lucide-react";
 import { LogoBuilder, type LogoBuilderValue } from "@/components/logo-builder";
 import { BannerManager } from "@/components/banner-manager";
 import { BrandPreview } from "@/components/brand-preview";
 import { CountryStateSelect } from "@/components/country-state-select";
-import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
+import { TextLink } from "@/components/ui/text-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { apiFetch } from "@/lib/api";
 import {
   useSellerBranding,
@@ -227,39 +230,38 @@ export default function SellerWebsitePage() {
 
   if (shopQ.error && !shopQ.data) {
     return (
-      <EmptyState
-        title="Could not load shop"
-        description={
-          shopQ.error instanceof Error ? shopQ.error.message : "Try again"
-        }
-        actionLabel="Overview"
-        actionHref="/seller"
+      <QueryErrorState
+        error={shopQ.error}
+        onRetry={() => {
+          void shopQ.refetch();
+        }}
       />
     );
   }
 
   return (
-    <div className="space-y-token-6">
-      <div>
-        <h1 className="font-display text-2xl text-foreground">Website</h1>
-        <p className="mt-token-1 text-sm text-muted-foreground">
-          Set up your shop&apos;s identity, legal pages, and contact details —
-          everything buyers see on your storefront.
-        </p>
-        {shopQ.data?.slug && (
-          <p className="mt-token-2 text-xs text-muted-foreground">
-            Storefront:{" "}
-            <Link
-              href={`/shops/${shopQ.data.slug}`}
-              className="text-accent underline"
-            >
-              /shops/{shopQ.data.slug}
-            </Link>
-          </p>
-        )}
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Website"
+        description={
+          <>
+            Set up your shop&apos;s identity, legal pages, and contact details —
+            everything buyers see on your storefront.
+            {shopQ.data?.slug ? (
+              <>
+                {" "}
+                Storefront:{" "}
+                <TextLink href={`/shops/${shopQ.data.slug}`}>
+                  /shops/{shopQ.data.slug}
+                </TextLink>
+              </>
+            ) : null}
+          </>
+        }
+        icon={Globe}
+      />
 
-      <nav className="flex flex-wrap gap-token-2 border-b border-border pb-token-2">
+      <nav className="flex flex-wrap gap-2 border-b border-border pb-2">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -269,7 +271,7 @@ export default function SellerWebsitePage() {
               setMsg(null);
               setErr(null);
             }}
-            className={`rounded-md px-token-3 py-token-2 text-sm font-medium transition ${
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
               tab === t.id
                 ? "bg-accent/15 text-accent"
                 : "text-muted-foreground hover:text-foreground"
@@ -291,9 +293,7 @@ export default function SellerWebsitePage() {
             <h2 className="font-display text-lg">Logo builder</h2>
             <p className="text-sm text-muted-foreground">
               Pick an icon, color, and font — or upload your own logo on the{" "}
-              <Link href="/seller/branding" className="text-accent underline">
-                Branding
-              </Link>{" "}
+              <TextLink href="/seller/branding">Branding</TextLink>{" "}
               page.
             </p>
             <LogoBuilder
@@ -308,9 +308,11 @@ export default function SellerWebsitePage() {
           </section>
 
           <section className="grid gap-token-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <p className="text-sm font-medium">Brand colors</p>
+            <Card className="overflow-hidden rounded-2xl">
+              <CardHeader className="bg-muted/30">
+                <p className="text-sm font-semibold text-foreground">
+                  Brand colors
+                </p>
               </CardHeader>
               <CardBody>
                 <form onSubmit={saveColors} className="space-y-token-4">
@@ -433,7 +435,7 @@ export default function SellerWebsitePage() {
       )}
 
       {tab === "contact" && (
-        <form onSubmit={saveContact} className="max-w-lg space-y-token-4">
+        <form onSubmit={saveContact} className="max-w-2xl space-y-6">
           <CountryStateSelect
             countryCode={countryCode}
             stateCode={stateCode}
@@ -451,23 +453,31 @@ export default function SellerWebsitePage() {
               onChange={(e) => setAddress(e.target.value)}
             />
           </Label>
-          <Label>
-            <span>Phone</span>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </Label>
-          <Label>
-            <span>Email</span>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </Label>
-          <Label className="flex items-center gap-token-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Label>
+              <span>Phone</span>
+              <InputWithIcon
+                icon={<Phone />}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </Label>
+            <Label>
+              <span>Email</span>
+              <InputWithIcon
+                icon={<Mail />}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Label>
+          </div>
+          <Label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={contactFormEnabled}
               onChange={(e) => setContactFormEnabled(e.target.checked)}
+              className="h-4 w-4 accent-[var(--color-accent)]"
             />
             <span className="text-sm">
               Accept messages from the public contact form
@@ -477,49 +487,58 @@ export default function SellerWebsitePage() {
             Requires a valid shop email above. Without an email, the form
             returns an error instead of forwarding to platform support.
           </p>
-          {(
-            [
-              "instagram",
-              "twitter",
-              "facebook",
-              "tiktok",
-              "whatsapp",
-              "youtube",
-            ] as const
-          ).map((key) => (
-            <Label key={key}>
-              <span className="capitalize">{key}</span>
-              <Input
-                value={social[key] ?? ""}
-                onChange={(e) =>
-                  setSocial({ ...social, [key]: e.target.value })
-                }
-                placeholder="URL or handle"
-              />
-            </Label>
-          ))}
-          <div className="rounded-lg border border-border bg-card/50 p-token-4">
-            <p className="text-sm font-medium">Product image watermarking</p>
-            <p className="mt-token-1 text-xs text-muted-foreground">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(
+              [
+                "instagram",
+                "twitter",
+                "facebook",
+                "tiktok",
+                "whatsapp",
+                "youtube",
+              ] as const
+            ).map((key) => (
+              <Label key={key}>
+                <span className="capitalize">{key}</span>
+                <InputWithIcon
+                  icon={<Link2 />}
+                  value={social[key] ?? ""}
+                  onChange={(e) =>
+                    setSocial({ ...social, [key]: e.target.value })
+                  }
+                  placeholder="URL or handle"
+                />
+              </Label>
+            ))}
+          </div>
+          <div className="rounded-2xl border border-border bg-card/50 p-4">
+            <p className="text-sm font-semibold text-foreground">
+              Product image watermarking
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
               Platform default:{" "}
               {shopQ.data?.watermarkPlatformDefault ? "On" : "Off"}. Override
               for your shop below.
             </p>
-            <Label className="mt-token-3 flex items-center gap-token-2">
+            <Label className="mt-3 flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={watermarkDefaultOn ?? false}
                 onChange={(e) => setWatermarkDefaultOn(e.target.checked)}
+                className="h-4 w-4 accent-[var(--color-accent)]"
               />
-              <span className="text-sm">Watermark new product images by default</span>
+              <span className="text-sm">
+                Watermark new product images by default
+              </span>
             </Label>
-            <label className="mt-token-2 flex items-center gap-token-2 text-sm text-muted-foreground">
+            <label className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
                 checked={watermarkDefaultOn === null}
                 onChange={(e) =>
                   setWatermarkDefaultOn(e.target.checked ? null : false)
                 }
+                className="h-4 w-4 accent-[var(--color-accent)]"
               />
               Use platform default
             </label>
@@ -537,10 +556,12 @@ export default function SellerWebsitePage() {
             shopName={shopName}
           />
 
-          <Card>
-            <CardHeader>
-              <p className="text-sm font-medium">Storefront sections</p>
-              <p className="mt-token-1 text-xs text-muted-foreground">
+          <Card className="overflow-hidden rounded-2xl">
+            <CardHeader className="bg-muted/30">
+              <p className="text-sm font-semibold text-foreground">
+                Storefront sections
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 Toggle Promo Products and New Arrivals on your live shop page.
                 Both are off by default.
               </p>
@@ -637,7 +658,8 @@ export default function SellerWebsitePage() {
           </div>
           <Label>
             <span>WhatsApp (wa.me or number)</span>
-            <Input
+            <InputWithIcon
+              icon={<MessageCircle />}
               value={whatsappUrl}
               onChange={(e) => setWhatsappUrl(e.target.value)}
             />

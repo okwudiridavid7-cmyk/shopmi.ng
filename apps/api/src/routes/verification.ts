@@ -231,6 +231,29 @@ adminVerificationRouter.post("/:id/review", async (req, res, next) => {
       return request;
     });
 
+    if (body.decision === "approve") {
+      try {
+        const { ensurePaystackSubaccount } = await import(
+          "../services/paystackSubaccount"
+        );
+        await ensurePaystackSubaccount(existing.tenantId);
+      } catch (subErr) {
+        console.warn("[paystack] subaccount on verify failed", subErr);
+      }
+      try {
+        const { sendVerificationApprovedEmail } = await import(
+          "../services/verificationEmail"
+        );
+        await sendVerificationApprovedEmail({
+          to: existing.tenant.owner.email,
+          shopName: existing.tenant.name,
+          name: existing.tenant.owner.name,
+        });
+      } catch (emailErr) {
+        console.warn("[email] verification approved failed", emailErr);
+      }
+    }
+
     if (body.decision === "reject") {
       const { sendVerificationRejectedEmail } = await import(
         "../services/verificationEmail"
@@ -240,6 +263,7 @@ adminVerificationRouter.post("/:id/review", async (req, res, next) => {
           to: existing.tenant.owner.email,
           shopName: existing.tenant.name,
           reason: body.note!.trim(),
+          name: existing.tenant.owner.name,
         });
       } catch (emailErr) {
         console.warn("[email] verification rejection failed", emailErr);

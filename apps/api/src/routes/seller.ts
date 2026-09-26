@@ -443,6 +443,9 @@ sellerRouter.get("/shop", async (req, res, next) => {
         contactFormEnabled: theme.contactFormEnabled !== false,
         watermarkDefaultOn: wm.shopOverride,
         watermarkPlatformDefault: wm.platformDefault,
+        settlementBankCode: tenant.settlementBankCode,
+        settlementAccountNumber: tenant.settlementAccountNumber,
+        paystackSubaccountCode: tenant.paystackSubaccountCode,
       },
     });
   } catch (err) {
@@ -486,6 +489,8 @@ sellerRouter.patch("/shop", async (req, res, next) => {
         tickerColor: z.string().max(20).nullable().optional(),
         whatsappUrl: z.string().max(500).nullable().optional(),
         chatbotHtml: z.string().max(20_000).nullable().optional(),
+        settlementBankCode: z.string().min(2).max(20).nullable().optional(),
+        settlementAccountNumber: z.string().min(5).max(20).nullable().optional(),
       })
       .parse(req.body);
 
@@ -565,6 +570,12 @@ sellerRouter.patch("/shop", async (req, res, next) => {
         ...(body.privacyText !== undefined
           ? { privacyText: body.privacyText }
           : {}),
+        ...(body.settlementBankCode !== undefined
+          ? { settlementBankCode: body.settlementBankCode }
+          : {}),
+        ...(body.settlementAccountNumber !== undefined
+          ? { settlementAccountNumber: body.settlementAccountNumber }
+          : {}),
         themeSettings: theme as Prisma.InputJsonValue,
         ...(body.watermarkDefaultOn !== undefined
           ? { notificationSettings: notifPrev as Prisma.InputJsonValue }
@@ -572,18 +583,42 @@ sellerRouter.patch("/shop", async (req, res, next) => {
       },
     });
 
-    const nextTheme = themeFromJson(updated.themeSettings);
-    const publicTenant = toTenantPublic(updated);
-    const wm = await getWatermarkPrefs(updated.id);
+    if (
+      updated.verifiedBadge &&
+      !updated.paystackSubaccountCode &&
+      (updated.settlementBankCode || body.settlementBankCode) &&
+      (updated.settlementAccountNumber || body.settlementAccountNumber)
+    ) {
+      const { ensurePaystackSubaccount } = await import(
+        "../services/paystackSubaccount"
+      );
+      await ensurePaystackSubaccount(updated.id, {
+        bankCode: body.settlementBankCode ?? undefined,
+        accountNumber: body.settlementAccountNumber ?? undefined,
+      });
+    }
+
+    const refreshed = await prisma.tenant.findUnique({
+      where: { id: updated.id },
+    });
+    const finalTenant = refreshed ?? updated;
+    const nextTheme = themeFromJson(finalTenant.themeSettings);
+    const publicTenant = toTenantPublic(finalTenant);
+    const wm = await getWatermarkPrefs(finalTenant.id);
     return res.json({
       shop: {
         ...publicTenant,
         description: (nextTheme.shopDescription as string) ?? null,
-        contactEmail: publicTenant.email ?? (nextTheme.contactEmail as string) ?? null,
-        contactPhone: publicTenant.phone ?? (nextTheme.contactPhone as string) ?? null,
+        contactEmail:
+          publicTenant.email ?? (nextTheme.contactEmail as string) ?? null,
+        contactPhone:
+          publicTenant.phone ?? (nextTheme.contactPhone as string) ?? null,
         contactFormEnabled: nextTheme.contactFormEnabled !== false,
         watermarkDefaultOn: wm.shopOverride,
         watermarkPlatformDefault: wm.platformDefault,
+        settlementBankCode: finalTenant.settlementBankCode,
+        settlementAccountNumber: finalTenant.settlementAccountNumber,
+        paystackSubaccountCode: finalTenant.paystackSubaccountCode,
       },
     });
   } catch (err) {

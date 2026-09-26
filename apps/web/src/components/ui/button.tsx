@@ -11,7 +11,7 @@ type Size = "sm" | "md" | "lg";
 
 const variantClass: Record<Variant, string> = {
   primary:
-    "bg-accent text-accent-foreground shadow-sm hover:bg-accent-deep focus-visible:ring-2 focus-visible:ring-ring",
+    "bg-accent text-white shadow-sm hover:bg-accent-deep focus-visible:ring-2 focus-visible:ring-ring",
   secondary:
     "bg-muted text-foreground shadow-sm hover:bg-border/60 focus-visible:ring-2 focus-visible:ring-ring",
   outline:

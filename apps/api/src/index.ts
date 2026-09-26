@@ -33,6 +33,7 @@ import { sellerToolsRouter, logoPublicRouter } from "./routes/sellerTools";
 import { sellerAnalyticsRouter } from "./routes/sellerAnalytics";
 import { adminRouter } from "./routes/admin";
 import { contactRouter } from "./routes/contact";
+import { plansRouter } from "./routes/plans";
 import {
   sellerTeamRouter,
   sellerDomainRouter,
@@ -84,6 +85,7 @@ app.use("/api/shops/:slug/campaigns", shopCampaignsRouter);
 app.use("/api/shops/:slug/products/:productId/reviews", productReviewsRouter);
 app.use("/api/platform-settings", platformSettingsRouter);
 app.use("/api/catalog", catalogRouter);
+app.use("/api/plans", plansRouter);
 app.use("/api/seller", sellerRouter);
 app.use("/api/seller/verification", sellerVerificationRouter);
 app.use("/api/seller/campaigns", sellerCampaignsRouter);

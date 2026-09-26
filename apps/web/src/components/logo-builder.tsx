@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -184,8 +185,8 @@ export function LogoBuilder({
 
         <Label>
           <span>Font pairing</span>
-          <select
-            className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
+          <Select
+            icon={<BookOpen />}
             value={value.fontPairId}
             onChange={(e) =>
               onChange({ ...value, fontPairId: e.target.value })
@@ -198,7 +199,7 @@ export function LogoBuilder({
                 </option>
               )
             )}
-          </select>
+          </Select>
         </Label>
 
         <div className="flex flex-wrap gap-token-2">

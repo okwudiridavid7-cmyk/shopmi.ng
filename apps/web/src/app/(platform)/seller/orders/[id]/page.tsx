@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { EmptyState } from "@/components/empty-state";
+import { ShoppingBag } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -16,22 +18,31 @@ function statusLabel(status: string) {
 export default function SellerOrderDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
-  const { data: order, error, isLoading } = useSellerOrder(id);
+  const { data: order, error, isLoading, refetch } = useSellerOrder(id);
   const updateStatus = useUpdateOrderStatus();
 
   if (isLoading) {
     return <SkeletonLines count={4} />;
   }
 
-  if (error || !order) {
+  if (error) {
+    return (
+      <QueryErrorState
+        error={error}
+        onRetry={() => {
+          void refetch();
+        }}
+        sellerHomeHref="/seller/orders"
+      />
+    );
+  }
+
+  if (!order) {
     return (
       <EmptyState
+        kind="not_found"
         title="Order not found"
-        description={
-          error instanceof Error
-            ? error.message
-            : "This order may have been removed."
-        }
+        description="This order may have been removed."
         actionLabel="Back to orders"
         actionHref="/seller/orders"
       />
@@ -52,32 +63,31 @@ export default function SellerOrderDetailPage() {
   }
 
   return (
-    <div className="space-y-token-6">
-      <div className="flex flex-wrap items-start justify-between gap-token-3">
-        <div className="space-y-token-2">
-          <Link
-            href="/seller/orders"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            ← Orders
-          </Link>
-          <h1 className="font-display text-2xl text-foreground">
-            Order details
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {buyer} · {new Date(order.createdAt).toLocaleString()}
-          </p>
-        </div>
-        <span className="rounded-sm bg-muted px-token-3 py-token-1 text-xs capitalize text-foreground">
-          {statusLabel(order.status)}
-        </span>
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <Link
+          href="/seller/orders"
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          ← Orders
+        </Link>
+        <PageHeader
+          title="Order details"
+          description={`${buyer} · ${new Date(order.createdAt).toLocaleString()}`}
+          icon={ShoppingBag}
+          actions={
+            <span className="rounded-lg bg-muted px-3 py-1.5 text-xs capitalize text-foreground">
+              {statusLabel(order.status)}
+            </span>
+          }
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <p className="text-sm font-medium">Line items</p>
+      <Card className="overflow-hidden rounded-2xl">
+        <CardHeader className="bg-muted/30">
+          <p className="text-sm font-semibold text-foreground">Line items</p>
         </CardHeader>
-        <CardBody className="space-y-token-4">
+        <CardBody className="space-y-4">
           <ul className="divide-y divide-border">
             {order.items.map((item) => {
               const img = item.product
@@ -86,7 +96,7 @@ export default function SellerOrderDetailPage() {
               return (
                 <li
                   key={item.id}
-                  className="flex gap-token-3 py-token-3 first:pt-0 last:pb-0"
+                  className="flex gap-3 py-3 first:pt-0 last:pb-0"
                 >
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
                     {img ? (
@@ -111,18 +121,20 @@ export default function SellerOrderDetailPage() {
               );
             })}
           </ul>
-          <p className="border-t border-border pt-token-4 text-sm font-medium">
+          <p className="border-t border-border pt-4 text-sm font-medium">
             Total {formatMoney(order.total, order.currency)}
           </p>
         </CardBody>
       </Card>
 
       {nextActions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <p className="text-sm font-medium">Update status</p>
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="bg-muted/30">
+            <p className="text-sm font-semibold text-foreground">
+              Update status
+            </p>
           </CardHeader>
-          <CardBody className="flex flex-wrap gap-token-2">
+          <CardBody className="flex flex-wrap gap-2">
             {nextActions.map((a) => (
               <Button
                 key={a.status}

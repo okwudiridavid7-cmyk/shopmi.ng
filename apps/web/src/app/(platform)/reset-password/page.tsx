@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Button, Input, Label } from "@/components/ui";
+import { Button, Label } from "@/components/ui";
+import { PasswordInput } from "@/components/ui/password-input";
+import { TextLink } from "@/components/ui/text-link";
 import { AuthSplitLayout } from "@/components/auth-split";
 
 function ResetForm() {
@@ -34,7 +35,7 @@ function ResetForm() {
         body: JSON.stringify({ token, password }),
       });
       await refresh();
-      router.push("/");
+      router.push("/explore");
     } catch (error) {
       setErr(error instanceof Error ? error.message : "Reset failed.");
     } finally {
@@ -44,10 +45,11 @@ function ResetForm() {
 
   if (!token) {
     return (
-      <AuthSplitLayout title="Invalid link" subtitle="This reset URL is missing a token.">
-        <Link href="/forgot-password" className="text-accent hover:underline">
-          Request a new link
-        </Link>
+      <AuthSplitLayout
+        title="Invalid link"
+        subtitle="This reset URL is missing a token."
+      >
+        <TextLink href="/forgot-password">Request a new link</TextLink>
       </AuthSplitLayout>
     );
   }
@@ -57,17 +59,27 @@ function ResetForm() {
       title="Choose a new password"
       subtitle="Use at least 8 characters. You’ll be signed in afterward."
     >
-      <form onSubmit={onSubmit} className="space-y-token-4">
+      <form onSubmit={onSubmit} className="space-y-5">
         <Label>
-          <span>New password</span>
-          <Input name="password" type="password" required minLength={8} autoComplete="new-password" />
+          <span className="text-sm font-medium">New password</span>
+          <PasswordInput
+            name="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+          />
         </Label>
         <Label>
-          <span>Confirm password</span>
-          <Input name="confirm" type="password" required minLength={8} autoComplete="new-password" />
+          <span className="text-sm font-medium">Confirm password</span>
+          <PasswordInput
+            name="confirm"
+            required
+            minLength={8}
+            autoComplete="new-password"
+          />
         </Label>
         {err && <p className="text-sm text-danger">{err}</p>}
-        <Button type="submit" disabled={loading} className="w-full" size="lg">
+        <Button type="submit" disabled={loading} className="h-12 w-full" size="lg">
           {loading ? "Saving…" : "Update password"}
         </Button>
       </form>
@@ -77,7 +89,13 @@ function ResetForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="p-10 text-sm">Loading…</div>}>
+    <Suspense
+      fallback={
+        <div className="p-10 text-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      }
+    >
       <ResetForm />
     </Suspense>
   );

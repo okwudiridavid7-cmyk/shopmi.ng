@@ -1,15 +1,17 @@
 "use client";
 
+import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import type { SocialLinks } from "@vendors/shared-types";
-import { useAppName } from "@/hooks/use-branding";
+import { useAppName, usePlatformBranding } from "@/hooks/use-branding";
 import { BrandMark } from "@/components/brand-mark";
 import { ShopLogoFallback } from "@/components/shop-logo-fallback";
+import { useToast } from "@/components/ui/toast";
 
 export type ShopFooterProps = {
   shopName: string;
   slug: string;
-  /** CSS color for shop branding (from themeSettings). */
   accentColor?: string | null;
   logoUrl?: string | null;
   verified?: boolean;
@@ -92,30 +94,36 @@ const SOCIAL_META: { key: SocialKey; label: string }[] = [
   { key: "youtube", label: "YouTube" },
 ];
 
-const PLATFORM_USEFUL = [
-  { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
+const PLATFORM_PRODUCT = [
+  { href: "/explore", label: "Marketplace" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/signup", label: "Create account" },
+  { href: "/onboarding", label: "Start selling" },
+  { href: "/cart", label: "Cart" },
+  { href: "/buyer/favorites", label: "Favorites" },
+] as const;
+
+const PLATFORM_RESOURCES = [
   { href: "/faq", label: "FAQs" },
   { href: "/support", label: "Support" },
-] as const;
-
-const PLATFORM_BUYING = [
-  { href: "/buyer/orders", label: "Your orders" },
-  { href: "/buyer/favorites", label: "Favorites" },
-  { href: "/cart", label: "Cart" },
-  { href: "/faq", label: "Buying help" },
-] as const;
-
-const PLATFORM_LEGAL = [
+  { href: "/contact", label: "Contact" },
   { href: "/privacy", label: "Privacy Policy" },
-  { href: "/terms", label: "Terms of Service" },
 ] as const;
+
+const PLATFORM_COMPANY = [
+  { href: "/about", label: "About" },
+  { href: "/terms", label: "Terms of Service" },
+  { href: "/buyer/orders", label: "Your orders" },
+  { href: "/login", label: "Sign in" },
+] as const;
+
+/** Always-dark footer shell — independent of page theme. */
+const FOOTER_SHELL =
+  "mt-auto border-t border-white/10 bg-[#0a0a0b] text-zinc-100";
 
 function FooterHeading({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-wide text-foreground">
-      {children}
-    </p>
+    <p className="text-sm font-semibold text-white">{children}</p>
   );
 }
 
@@ -125,12 +133,12 @@ function FooterNav({
   links: readonly { href: string; label: string }[];
 }) {
   return (
-    <nav className="mt-token-3 flex flex-col gap-token-2 text-sm text-muted-foreground">
+    <nav className="mt-4 flex flex-col gap-2.5 text-sm text-zinc-400">
       {links.map((l) => (
         <Link
           key={l.href + l.label}
           href={l.href}
-          className="transition hover:text-foreground"
+          className="transition hover:text-white"
         >
           {l.label}
         </Link>
@@ -139,61 +147,168 @@ function FooterNav({
   );
 }
 
-/** Marketplace / platform pages footer — multi-column, token surfaces. */
+function NewsletterBlock({ appName }: { appName: string }) {
+  const { toast } = useToast();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setBusy(true);
+    window.setTimeout(() => {
+      setBusy(false);
+      setEmail("");
+      toast({
+        title: "You're on the list",
+        description: "We'll send product updates — no spam.",
+        tone: "success",
+      });
+    }, 400);
+  }
+
+  return (
+    <div className="space-y-4 sm:col-span-2 lg:col-span-2">
+      <BrandMark inverted className="brightness-110" />
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+          Ship faster with our newsletter
+        </h2>
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-400">
+          Product updates, new seller tools, and marketplace notes from{" "}
+          {appName}. One email a week, no spam.
+        </p>
+      </div>
+      <form
+        onSubmit={onSubmit}
+        noValidate
+        className="grid w-full max-w-md grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]"
+      >
+        <label className="sr-only" htmlFor="footer-newsletter-email">
+          Email for newsletter
+        </label>
+        <input
+          id="footer-newsletter-email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@email.com"
+          autoComplete="email"
+          inputMode="email"
+          className="box-border h-11 w-full min-w-0 rounded-lg border border-white/20 bg-white/10 px-3.5 text-base text-white placeholder:text-zinc-400 outline-none transition focus:border-white/40 focus:ring-2 focus:ring-white/15 sm:text-sm"
+        />
+        <button
+          type="submit"
+          disabled={busy}
+          className="box-border inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-5 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 disabled:opacity-60 sm:w-auto sm:min-w-[7.5rem]"
+        >
+          {busy ? "…" : "Subscribe"}
+          <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+        </button>
+      </form>
+      <p className="text-xs text-zinc-500">
+        By subscribing you agree to our{" "}
+        <Link href="/privacy" className="text-zinc-300 transition hover:text-white">
+          Privacy Policy
+        </Link>
+        .
+      </p>
+    </div>
+  );
+}
+
+function SocialSquare({
+  href,
+  label,
+  children,
+}: {
+  href: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={label}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 text-zinc-400 transition hover:border-white/30 hover:text-white"
+    >
+      {children}
+    </a>
+  );
+}
+
+/** Marketplace / platform pages footer. */
 export function PlatformFooter() {
   const appName = useAppName();
   const year = new Date().getFullYear();
+  const branding = usePlatformBranding().data;
+  const billingEnabled = branding?.billingEnabled !== false;
+
+  const productLinks = PLATFORM_PRODUCT.filter(
+    (l) => billingEnabled || l.href !== "/pricing"
+  );
 
   return (
-    <footer className="mt-token-8 border-t border-border bg-muted/40">
-      <div className="mx-auto w-full max-w-6xl px-token-6 py-token-8 sm:py-token-10">
-        <div className="grid gap-token-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-token-10">
-          <div className="space-y-token-4 sm:col-span-2 lg:col-span-1">
-            <BrandMark />
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {appName} is a marketplace for independent shops — branded
-              storefronts, real checkout, and tools sized for small teams.
-            </p>
+    <footer className={FOOTER_SHELL}>
+      <div className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-14">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5 lg:gap-12">
+          <NewsletterBlock appName={appName} />
+
+          <div>
+            <FooterHeading>Product</FooterHeading>
+            <FooterNav links={productLinks} />
           </div>
 
           <div>
-            <FooterHeading>Useful links</FooterHeading>
-            <FooterNav links={PLATFORM_USEFUL} />
+            <FooterHeading>Resources</FooterHeading>
+            <FooterNav links={PLATFORM_RESOURCES} />
           </div>
 
           <div>
-            <FooterHeading>Buying help</FooterHeading>
-            <FooterNav links={PLATFORM_BUYING} />
-          </div>
-
-          <div className="space-y-token-6">
-            <div>
-              <FooterHeading>Payments</FooterHeading>
-              <p className="mt-token-3 text-sm text-muted-foreground">
-                Secure checkout at each shop. Cards and local payment methods
-                where available.
-              </p>
-            </div>
-            <div>
-              <FooterHeading>Legal</FooterHeading>
-              <FooterNav links={PLATFORM_LEGAL} />
-            </div>
+            <FooterHeading>Company</FooterHeading>
+            <FooterNav links={PLATFORM_COMPANY} />
           </div>
         </div>
 
-        <p className="mt-token-8 border-t border-border pt-token-6 text-sm text-muted-foreground">
-          © {year} {appName}. All rights reserved.
-        </p>
+        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
+          <p className="text-sm text-zinc-500">
+            © {year} {appName}. All rights reserved.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <SocialSquare href="https://github.com" label="GitHub">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 2C6.477 2 2 6.486 2 12.021c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.866-.014-1.7-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.467-1.11-1.467-.908-.62.069-.608.069-.608 1.003.071 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.56 9.56 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.021C22 6.486 17.523 2 12 2z" />
+              </svg>
+            </SocialSquare>
+            <SocialSquare href="https://x.com" label="X">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z" />
+              </svg>
+            </SocialSquare>
+            <SocialSquare href="https://linkedin.com" label="LinkedIn">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+              </svg>
+            </SocialSquare>
+            <SocialSquare href="https://youtube.com" label="YouTube">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31.5 31.5 0 0 0 0 12a31.5 31.5 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31.5 31.5 0 0 0 24 12a31.5 31.5 0 0 0-.5-5.8zM9.75 15.5v-7l6.5 3.5-6.5 3.5z" />
+              </svg>
+            </SocialSquare>
+          </div>
+        </div>
       </div>
     </footer>
   );
 }
 
-/** Individual shop storefront footer — branding accents only, token surfaces. */
+/** Individual shop storefront footer — always dark, shop-branded. */
 export function ShopFooter({
   shopName,
   slug,
-  accentColor,
   logoUrl,
   phone,
   email,
@@ -202,7 +317,6 @@ export function ShopFooter({
   platformName = "Marketplace",
   aboutText,
 }: ShopFooterProps) {
-  const accent = accentColor || undefined;
   const year = new Date().getFullYear();
   const base = `/shops/${slug}`;
 
@@ -228,39 +342,43 @@ export function ShopFooter({
   });
 
   return (
-    <footer
-      className="mt-token-8 border-t border-border bg-muted/40"
-      style={accent ? { borderTopColor: accent } : undefined}
-    >
-      <div className="mx-auto w-full max-w-6xl px-token-6 py-token-8 sm:py-token-10">
-        <div className="grid gap-token-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-token-10">
-          <div className="space-y-token-4 sm:col-span-2 lg:col-span-1">
-            <div className="flex items-center gap-token-3">
+    <footer className={FOOTER_SHELL}>
+      <div className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-14">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12">
+          <div className="space-y-4 sm:col-span-2 lg:col-span-1">
+            <div className="flex items-center gap-3">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={logoUrl}
                   alt=""
-                  className="h-10 w-10 rounded-md border border-border object-cover"
+                  className="h-10 w-10 rounded-lg border border-white/15 object-cover"
                 />
               ) : (
-                <ShopLogoFallback />
+                <span className="rounded-lg border border-white/15 p-1.5">
+                  <ShopLogoFallback />
+                </span>
               )}
-              <p className="font-display text-lg text-foreground">{shopName}</p>
+              <p className="font-display text-lg text-white">{shopName}</p>
             </div>
-            {aboutText?.trim() && (
-              <p className="text-sm leading-relaxed text-muted-foreground">
+            {aboutText?.trim() ? (
+              <p className="text-sm leading-relaxed text-zinc-400">
                 {aboutText.trim()}
+              </p>
+            ) : (
+              <p className="text-sm leading-relaxed text-zinc-400">
+                Independent shop on {platformName}. Secure checkout, clear
+                policies, and real fulfillment.
               </p>
             )}
             {(address || phone || email) && (
-              <ul className="space-y-token-2 text-sm text-muted-foreground">
+              <ul className="space-y-2 text-sm text-zinc-400">
                 {address && <li className="whitespace-pre-line">{address}</li>}
                 {email && (
                   <li>
                     <a
                       href={`mailto:${email}`}
-                      className="transition hover:text-foreground"
+                      className="transition hover:text-white"
                     >
                       {email}
                     </a>
@@ -270,7 +388,7 @@ export function ShopFooter({
                   <li>
                     <a
                       href={`tel:${phone}`}
-                      className="transition hover:text-foreground"
+                      className="transition hover:text-white"
                     >
                       {phone}
                     </a>
@@ -285,48 +403,42 @@ export function ShopFooter({
             <FooterNav links={storeLinks} />
           </div>
 
-          <div className="space-y-token-6">
-            <div>
-              <FooterHeading>Buying help</FooterHeading>
-              <FooterNav links={helpLinks} />
-            </div>
-            <div>
-              <FooterHeading>Payments</FooterHeading>
-              <p className="mt-token-3 text-sm leading-relaxed text-muted-foreground">
-                Pay securely at checkout. Accepted methods depend on this shop’s
-                settings.
-              </p>
-            </div>
+          <div>
+            <FooterHeading>Buying help</FooterHeading>
+            <FooterNav links={helpLinks} />
           </div>
 
           <div>
             <FooterHeading>Social</FooterHeading>
             {socials.length > 0 ? (
-              <div className="mt-token-3 flex flex-wrap gap-token-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {socials.map(({ key, label }) => (
-                  <a
+                  <SocialSquare
                     key={key}
                     href={socialHref(key, socialLinks![key]!.trim())}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={label}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:border-foreground/20 hover:text-foreground"
+                    label={label}
                   >
                     <SocialGlyph name={key} />
-                  </a>
+                  </SocialSquare>
                 ))}
               </div>
             ) : (
-              <p className="mt-token-3 text-sm text-muted-foreground">
-                Follow links will appear here when the shop adds them.
+              <p className="mt-4 text-sm text-zinc-500">
+                Social links appear when this shop adds them.
               </p>
             )}
+            <p className="mt-6 text-sm text-zinc-500">
+              Pay securely at checkout. Accepted methods depend on this shop’s
+              settings.
+            </p>
           </div>
         </div>
 
-        <p className="mt-token-8 border-t border-border pt-token-6 text-sm text-muted-foreground">
-          {shopName} © {year}. Powered by {platformName}.
-        </p>
+        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
+          <p className="text-sm text-zinc-500">
+            {shopName} © {year}. Powered by {platformName}.
+          </p>
+        </div>
       </div>
     </footer>
   );

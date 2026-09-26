@@ -2,19 +2,29 @@
 
 import { useMemo, useState } from "react";
 import {
+  CreditCard,
   ExternalLink,
   Package,
   Palette,
   Settings,
   ShoppingBag,
+  Store,
 } from "lucide-react";
-import { GreetingCard } from "@/components/dashboard/greeting-card";
+import {
+  AdminHero,
+  AdminHeroMetric,
+} from "@/components/dashboard/admin/admin-hero";
+import { AdminMetricCard } from "@/components/dashboard/admin/admin-metric-card";
+import {
+  AdminPeriodToggle,
+  type AdminPeriod,
+} from "@/components/dashboard/admin/admin-period-toggle";
 import { OverviewChart } from "@/components/dashboard/overview-chart";
 import { QuickActions } from "@/components/dashboard/quick-actions";
-import { StatCard } from "@/components/stat-card";
-import { EmptyState } from "@/components/empty-state";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { SellerPlanBanner } from "@/components/seller-plan-banner";
+import { TextLink } from "@/components/ui/text-link";
 import { formatMoney } from "@/lib/api";
 import { firstNameFromUser } from "@/lib/auth-redirect";
 import { buildPublicShopUrl, shopPathUrl } from "@/lib/shop-url";
@@ -25,12 +35,11 @@ import {
   useSellerStats,
 } from "@/hooks/use-seller";
 
-type Period = "today" | "week" | "month";
-
 export default function SellerOverviewPage() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<Period>("month");
-  const analytics = useSellerAnalytics(period);
+  const [period, setPeriod] = useState<AdminPeriod>("month");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const analytics = useSellerAnalytics(period, selectedDay);
   const todayAnalytics = useSellerAnalytics("today");
   const plan = useSellerPlan();
   const stats = useSellerStats();
@@ -49,40 +58,90 @@ export default function SellerOverviewPage() {
     [a?.salesOverTime]
   );
 
+  const revenueSpark = useMemo(
+    () => chartData.map((row) => ({ value: row.value })),
+    [chartData]
+  );
+
   const planHint = plan.data
     ? plan.data.trialActive
       ? `Trial · ${plan.data.trialDaysLeft}d left`
       : plan.data.plan?.name ?? "Plan"
     : "—";
 
+  if (analytics.isError && !a) {
+    return (
+      <QueryErrorState
+        error={analytics.error}
+        onRetry={() => {
+          void analytics.refetch();
+        }}
+      />
+    );
+  }
+
   if (loading && !a) {
     return <SkeletonLines count={5} />;
   }
 
+  const currency = today?.currency ?? a?.currency ?? "NGN";
+  const productCount =
+    a?.totals.productCount ?? stats.data?.productCount ?? 0;
+
   return (
-    <div className="space-y-token-8">
-      <GreetingCard
+    <div className="space-y-6">
+      <AdminHero
         firstName={firstName}
-        stats={[
+        subtitle="Here's what's happening in your shop today."
+        badges={[
           {
-            label: "Today's revenue",
-            value: formatMoney(
-              today?.totals.revenue ?? 0,
-              today?.currency ?? a?.currency ?? "NGN"
-            ),
+            icon: <Store className="h-3.5 w-3.5" aria-hidden />,
+            label: plan.data?.tenant?.name ?? "Seller",
           },
-          {
-            label: "Today's orders",
-            value: String(today?.totals.orderCount ?? 0),
-          },
-          {
-            label: "Products",
-            value: String(
-              a?.totals.productCount ?? stats.data?.productCount ?? 0
-            ),
-          },
-          { label: "Plan", value: planHint },
         ]}
+        selectedDay={selectedDay}
+        onSelectedDayChange={setSelectedDay}
+        trailing={
+          selectedDay ? null : (
+            <AdminPeriodToggle value={period} onChange={setPeriod} />
+          )
+        }
+        metrics={
+          <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+            <AdminHeroMetric
+              label="Today's revenue"
+              value={formatMoney(today?.totals.revenue ?? 0, currency)}
+              hint="Paid sales today"
+              icon={<ShoppingBag className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-success-muted text-success"
+            />
+            <AdminHeroMetric
+              label="Today's orders"
+              value={String(today?.totals.orderCount ?? 0)}
+              hint="Paid today"
+              icon={<Package className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-info-muted text-info"
+            />
+            <AdminHeroMetric
+              label="Live products"
+              value={String(productCount)}
+              hint="In your catalogue"
+              icon={<Package className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-accent-soft text-accent dark:text-accent-on-dark"
+            />
+            <AdminHeroMetric
+              label="Plan"
+              value={planHint}
+              hint={
+                plan.data?.plan?.productLimit != null
+                  ? `${plan.data.productCount}/${plan.data.plan.productLimit} listings`
+                  : "Your subscription"
+              }
+              icon={<CreditCard className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-warning-muted text-warning"
+            />
+          </div>
+        }
       />
 
       {plan.data && (
@@ -94,61 +153,37 @@ export default function SellerOverviewPage() {
         />
       )}
 
-      <section className="space-y-token-3">
-        <div className="flex flex-wrap items-center justify-between gap-token-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Stats
-          </h2>
-          <div className="flex gap-token-1 rounded-md border border-border p-token-1">
-            {(
-              [
-                ["today", "Today"],
-                ["week", "Week"],
-                ["month", "Month"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setPeriod(value)}
-                className={`rounded-sm px-token-3 py-token-1 text-xs font-medium transition ${
-                  period === value
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid gap-token-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label={`Revenue (${period})`}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Period insights
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <AdminMetricCard
+            label={`Revenue (${selectedDay ?? period})`}
             value={formatMoney(a?.totals.revenue ?? 0, a?.currency ?? "NGN")}
             type="revenue"
+            sparkline={revenueSpark.length >= 2 ? revenueSpark : undefined}
+            help="Paid sales in the selected window"
           />
-          <StatCard
-            label="Orders"
+          <AdminMetricCard
+            label="Paid orders"
             value={String(a?.totals.orderCount ?? 0)}
             type="orders"
+            hint={`${a?.totals.allOrderCount ?? a?.totals.orderCount ?? 0} total created`}
+            help="Paid/fulfilled orders in this window"
           />
-          <StatCard
-            label="Products"
-            value={String(
-              a?.totals.productCount ?? stats.data?.productCount ?? 0
-            )}
-            type="products"
+          <AdminMetricCard
+            label="Conversion"
+            value={`${a?.totals.conversionRate ?? 0}%`}
+            type="pending"
+            hint="Paid ÷ checkout attempts"
+            help="Share of checkouts that completed payment"
           />
-          <StatCard
-            label="Plan status"
-            value={planHint}
-            type={plan.data?.trialActive ? "pending" : "generic"}
-            hint={
-              plan.data?.plan?.productLimit != null
-                ? `${plan.data.productCount}/${plan.data.plan.productLimit} listings`
-                : undefined
-            }
+          <AdminMetricCard
+            label="Awaiting payment"
+            value={String(a?.totals.pendingOrderCount ?? 0)}
+            type="plan"
+            help="Orders still pending payment"
           />
         </div>
       </section>
@@ -175,7 +210,7 @@ export default function SellerOverviewPage() {
         ]}
       />
 
-      <section className="space-y-token-3">
+      <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Insights
         </h2>
@@ -191,6 +226,7 @@ export default function SellerOverviewPage() {
 
       {!loading && a && a.totals.orderCount === 0 && (
         <EmptyState
+          kind="orders"
           title="No sales in this period"
           description="When buyers check out, revenue and charts will show here."
           actionLabel="Add a product"
@@ -202,14 +238,13 @@ export default function SellerOverviewPage() {
       {plan.data?.tenant?.slug && (
         <p className="text-sm text-muted-foreground">
           Public shop:{" "}
-          <a
+          <TextLink
             href={buildPublicShopUrl(plan.data.tenant.slug)}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-accent underline"
           >
             {shopPathUrl(plan.data.tenant.slug)}
-          </a>
+          </TextLink>
         </p>
       )}
     </div>

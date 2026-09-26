@@ -217,7 +217,7 @@ contactRouter.post("/", platformContactIpLimiter, async (req, res, next) => {
     );
     const to = await getPlatformSetting(
       "support_email",
-      "support@vendors.local"
+      "support@shopmi.ng"
     );
     const appName = await getPlatformSetting("app_name", env.appName);
 

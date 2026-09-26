@@ -5,6 +5,8 @@ import { requireAuth } from "../auth/middleware";
 import { requireTenantFromSlugParam } from "../tenant/middleware";
 import { decimalToNumber, toOrderPublic } from "../lib/serialize";
 import { fulfillPaidOrder } from "../services/orders";
+import { getCommissionPercent, getPlatformSetting } from "../lib/platformSettings";
+import { ensurePaystackSubaccount } from "../services/paystackSubaccount";
 
 export const checkoutRouter = Router();
 
@@ -18,6 +20,23 @@ checkoutRouter.post(
         return res.status(503).json({
           error: "Paystack is not configured. Set PAYSTACK_SECRET_KEY in .env",
         });
+      }
+
+      const emailVerificationRequired =
+        (await getPlatformSetting("email_verification_required", "false")) ===
+        "true";
+      if (emailVerificationRequired) {
+        const buyer = await prisma.user.findUnique({
+          where: { id: req.user!.id },
+          select: { emailVerifiedAt: true },
+        });
+        if (!buyer?.emailVerifiedAt) {
+          return res.status(403).json({
+            error:
+              "Verify your email before checkout. Check your inbox or resend from account settings.",
+            code: "EMAIL_UNVERIFIED",
+          });
+        }
       }
 
       const tenant = await prisma.tenant.findUnique({
@@ -108,6 +127,62 @@ checkoutRouter.post(
       const amountKobo = Math.round(subtotal * 100);
       const callbackUrl = `${env.webUrl}/checkout/callback?reference=${reference}&shop=${req.tenant!.slug}`;
 
+      const commissionPercent = await getCommissionPercent(5);
+      const serviceFeeKobo = Math.max(
+        0,
+        Math.round(amountKobo * (commissionPercent / 100))
+      );
+
+      // Verified sellers: ensure/use Paystack subaccount + Shopmi Service Fee split.
+      // See apps/api/docs/PAYSTACK_SPLITS.md
+      let subaccountCode: string | null = tenant.paystackSubaccountCode;
+      if (tenant.verifiedBadge && !subaccountCode) {
+        subaccountCode = await ensurePaystackSubaccount(tenant.id);
+      }
+
+      const customFields: {
+        display_name: string;
+        variable_name: string;
+        value: string;
+      }[] = [
+        {
+          display_name: "Order ID",
+          variable_name: "order_id",
+          value: order.id,
+        },
+      ];
+
+      const initPayload: Record<string, unknown> = {
+        email: req.user!.email,
+        amount: amountKobo,
+        currency,
+        reference,
+        callback_url: callbackUrl,
+        metadata: {
+          orderId: order.id,
+          tenantId: req.tenant!.tenantId,
+          shopmi_service_fee_kobo: serviceFeeKobo,
+          commission_percent: commissionPercent,
+          custom_fields: customFields,
+        },
+      };
+
+      if (tenant.verifiedBadge && subaccountCode && serviceFeeKobo > 0) {
+        customFields.push({
+          display_name: "Shopmi Service Fee",
+          variable_name: "shopmi_service_fee",
+          value: `₦${(serviceFeeKobo / 100).toLocaleString("en-NG", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} (${commissionPercent}%)`,
+        });
+        initPayload.subaccount = subaccountCode;
+        // Flat fee (kobo) settled to main Paystack balance as Shopmi Service Fee;
+        // seller subaccount gets the remainder.
+        initPayload.transaction_charge = serviceFeeKobo;
+        initPayload.bearer = "account";
+      }
+
       const paystackRes = await fetch(
         "https://api.paystack.co/transaction/initialize",
         {
@@ -116,24 +191,7 @@ checkoutRouter.post(
             Authorization: `Bearer ${env.paystackSecretKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            email: req.user!.email,
-            amount: amountKobo,
-            currency,
-            reference,
-            callback_url: callbackUrl,
-            metadata: {
-              orderId: order.id,
-              tenantId: req.tenant!.tenantId,
-              custom_fields: [
-                {
-                  display_name: "Order ID",
-                  variable_name: "order_id",
-                  value: order.id,
-                },
-              ],
-            },
-          }),
+          body: JSON.stringify(initPayload),
         }
       );
 

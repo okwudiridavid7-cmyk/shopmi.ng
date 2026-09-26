@@ -1703,13 +1703,16 @@ async function main() {
     }
   }
 
-  let plan = await prisma.plan.findUnique({ where: { slug: "starter" } });
+    let plan = await prisma.plan.findUnique({ where: { slug: "yomi" } });
+  if (!plan) {
+    plan = await prisma.plan.findUnique({ where: { slug: "lemi" } });
+  }
   if (!plan) {
     plan = await prisma.plan.findUnique({ where: { slug: "free" } });
   }
   if (!plan) {
     throw new Error(
-      'Missing plan "starter" or "free". Run db:seed first.'
+      'Missing plan "yomi" (or lemi/free). Run db:seed first.'
     );
   }
 

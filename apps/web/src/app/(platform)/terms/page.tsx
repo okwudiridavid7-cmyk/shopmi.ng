@@ -13,7 +13,7 @@ export default function TermsPage() {
       body={platformTermsOfService(
         appName,
         b?.webUrl ?? "",
-        b?.supportEmail ?? "support@vendors.local"
+        b?.supportEmail ?? "support@shopmi.ng"
       )}
     />
   );

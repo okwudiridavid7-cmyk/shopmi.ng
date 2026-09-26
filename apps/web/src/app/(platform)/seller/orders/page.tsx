@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { ShoppingBag } from "lucide-react";
 import type { OrderPublic } from "@vendors/shared-types";
-import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,23 +64,22 @@ export default function SellerOrdersPage() {
   }
 
   return (
-    <div className="space-y-token-4">
-      <div className="flex flex-wrap items-center justify-between gap-token-3">
-        <div>
-          <h1 className="font-display text-2xl text-foreground">Orders</h1>
-          <p className="mt-token-1 text-sm text-muted-foreground">
-            Orders for this shop — update fulfillment status from the detail view.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="lg:hidden"
-          onClick={() => setDrawerOpen(true)}
-        >
-          Filters
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Orders"
+        description="Orders for this shop — update fulfillment status from the detail view."
+        icon={ShoppingBag}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="lg:hidden"
+            onClick={() => setDrawerOpen(true)}
+          >
+            Filters
+          </Button>
+        }
+      />
 
       <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <SellerOrderFilterPanel
@@ -88,9 +89,9 @@ export default function SellerOrdersPage() {
         />
       </FilterDrawer>
 
-      <div className="grid gap-token-6 lg:grid-cols-[220px_1fr]">
-        <aside className="hidden rounded-lg border border-border bg-card p-token-4 lg:block">
-          <h2 className="mb-token-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+        <aside className="hidden rounded-2xl border border-border bg-card p-4 lg:block">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Filters
           </h2>
           <SellerOrderFilterPanel
@@ -102,41 +103,36 @@ export default function SellerOrdersPage() {
 
         <div className="min-w-0">
           {error ? (
-            <p className="text-sm text-muted-foreground">
-              {error instanceof Error
-                ? error.message
-                : "Couldn’t load orders. Refresh and try again."}
-            </p>
+            <QueryErrorState
+              error={error}
+              onRetry={() => window.location.reload()}
+            />
           ) : isLoading ? (
             <SkeletonLines count={4} />
           ) : orders.length === 0 ? (
-            <EmptyState
-              title="No orders yet"
-              description="When buyers purchase from your shop, orders will appear here for fulfillment."
-              actionLabel="View products"
-              actionHref="/seller/products"
-            />
+            <EmptyState kind="orders" />
           ) : filtered.length === 0 ? (
             <EmptyState
+              kind="empty_filtered"
               title="No orders match these filters"
               description="Try a wider date range or clear the status filter."
               actionLabel="Clear filters"
               onAction={() => setFilters(emptyOrderFilters)}
             />
           ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+            <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
               {filtered.map((o) => (
                 <li
                   key={o.id}
-                  className="flex flex-wrap items-center justify-between gap-token-3 px-token-4 py-token-3 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
                 >
-                  <div className="min-w-0 space-y-token-1">
-                    <div className="flex flex-wrap items-center gap-token-2">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-foreground">
                         {buyerLabel(o)}
                       </span>
                       <span
-                        className={`rounded-sm px-token-2 py-0.5 text-xs capitalize ${statusClass(o.status)}`}
+                        className={`rounded-sm px-2 py-0.5 text-xs capitalize ${statusClass(o.status)}`}
                       >
                         {statusLabel(o.status)}
                       </span>

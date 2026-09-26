@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { ShoppingBag } from "lucide-react";
 import type { OrderPublic } from "@vendors/shared-types";
-import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { TrustBadge } from "@/components/shell/trust-badge";
 import { Button } from "@/components/ui/button";
@@ -26,37 +27,38 @@ function statusClass(status: string) {
 }
 
 export default function BuyerOrdersListPage() {
-  const { data: orders = [], error, isLoading } = useBuyerOrders();
+  const { data: orders = [], error, isLoading, refetch } = useBuyerOrders();
   const appName = useAppName();
 
   return (
-    <div className="space-y-token-4">
-      <div>
-        <h1 className="font-display text-2xl text-foreground">Orders</h1>
-        <p className="mt-token-1 text-sm text-muted-foreground">
-          Every purchase across shops{appName ? ` on ${appName}` : ""}.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Orders"
+        description={`Every purchase across shops${appName ? ` on ${appName}` : ""}.`}
+        icon={ShoppingBag}
+      />
 
       {error ? (
-        <p className="text-sm text-muted-foreground">
-          {error instanceof Error ? error.message : "Failed to load"}{" "}
-          <Link href="/login" className="text-accent underline">
-            Log in
-          </Link>
-        </p>
+        <QueryErrorState
+          error={error}
+          onRetry={() => {
+            void refetch();
+          }}
+          sellerHomeHref="/buyer"
+        />
       ) : isLoading ? (
         <SkeletonLines count={4} />
       ) : orders.length === 0 ? (
         <EmptyState
+          kind="orders"
           title="No orders yet"
           description="Your order history will live here once you complete a checkout. Explore shops and find something you love."
           actionLabel="Browse marketplace"
-          actionHref="/"
+          actionHref="/explore"
           icon={ShoppingBag}
         />
       ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+        <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
           {orders.map((o) => (
             <OrderRow key={o.id} order={o} />
           ))}
@@ -68,13 +70,13 @@ export default function BuyerOrdersListPage() {
 
 function OrderRow({ order }: { order: OrderPublic }) {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-token-3 px-token-4 py-token-3 text-sm">
-      <div className="min-w-0 space-y-token-1">
-        <div className="flex flex-wrap items-center gap-token-2">
+    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+      <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
           {order.tenant ? (
             <Link
               href={`/shops/${order.tenant.slug}`}
-              className="font-medium hover:underline"
+              className="font-medium hover:text-accent"
             >
               {order.tenant.name}
             </Link>
@@ -85,7 +87,7 @@ function OrderRow({ order }: { order: OrderPublic }) {
             <TrustBadge verified={!!order.tenant.verifiedBadge} />
           )}
           <span
-            className={`rounded-sm px-token-2 py-0.5 text-xs capitalize ${statusClass(order.status)}`}
+            className={`rounded-sm px-2 py-0.5 text-xs capitalize ${statusClass(order.status)}`}
           >
             {statusLabel(order.status)}
           </span>

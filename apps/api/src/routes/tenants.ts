@@ -23,7 +23,13 @@ const createTenantSchema = z.object({
 
 export const tenantsRouter = Router();
 
-import { isVerificationRequired, getPlatformTrialDays, getPlatformSetting } from "../lib/platformSettings";
+import {
+  isVerificationRequired,
+  getPlatformTrialDays,
+  getPlatformSetting,
+  isBillingEnabled,
+  getCommissionPercent,
+} from "../lib/platformSettings";
 
 function parseTicker(raw: string | null): {
   enabled: boolean;
@@ -56,6 +62,8 @@ tenantsRouter.get("/config", async (_req, res, next) => {
     const [
       verificationRequired,
       trialDays,
+      billingEnabled,
+      commissionPercent,
       appName,
       supportEmail,
       logoUrl,
@@ -67,8 +75,10 @@ tenantsRouter.get("/config", async (_req, res, next) => {
     ] = await Promise.all([
       isVerificationRequired(),
       getPlatformTrialDays(3),
+      isBillingEnabled(),
+      getCommissionPercent(5),
       getPlatformSetting("app_name", env.appName),
-      getPlatformSetting("support_email", "support@vendors.local"),
+      getPlatformSetting("support_email", "support@shopmi.ng"),
       getPlatformSetting("platform_logo_url", ""),
       getPlatformSetting("platform_logo_square_url", ""),
       getPlatformSetting("homepage_ticker", ""),
@@ -80,6 +90,8 @@ tenantsRouter.get("/config", async (_req, res, next) => {
       shopBaseDomain: env.shopBaseDomain,
       verificationRequired,
       trialDays,
+      billingEnabled,
+      commissionPercent,
       branding: {
         appName: appName || env.appName,
         webUrl: webUrlSetting || env.webUrl,
@@ -91,6 +103,8 @@ tenantsRouter.get("/config", async (_req, res, next) => {
         chatbotHtml: chatbotHtml || null,
         turnstileSiteKey: env.turnstileSiteKey || null,
         shopContactConfirmRequired: env.shopContactConfirmRequired,
+        billingEnabled,
+        commissionPercent,
       },
     });
   } catch (err) {
@@ -149,10 +163,11 @@ tenantsRouter.post("/", requireAuth, async (req, res, next) => {
       });
     }
 
-    const freePlan = await prisma.plan.findUnique({ where: { slug: "free" } });
+    const { getDefaultTrialPlan } = await import("../lib/plans");
+    const trialPlan = await getDefaultTrialPlan();
     const { getPlatformTrialDays } = await import("../lib/platformSettings");
     const trialDays =
-      (await getPlatformTrialDays(freePlan?.trialDays ?? 3)) ?? 3;
+      (await getPlatformTrialDays(trialPlan?.trialDays ?? 3)) ?? 3;
     const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
 
     const tenant = await prisma.$transaction(async (tx) => {
@@ -163,7 +178,7 @@ tenantsRouter.post("/", requireAuth, async (req, res, next) => {
           ownerUserId: user.id,
           status: "pending_verification",
           location: body.location ?? null,
-          planId: freePlan?.id ?? null,
+          planId: trialPlan?.id ?? null,
           trialEndsAt,
           notificationSettings: { whatsappOrdersEnabled: false },
         },

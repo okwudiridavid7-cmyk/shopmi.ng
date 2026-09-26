@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import type { HelloResponse, TenantPublic } from "@vendors/shared-types";
 import { apiFetch } from "@/lib/api";
+import { TextLink } from "@/components/ui/text-link";
 
 export default function HelloPage() {
   const router = useRouter();
@@ -55,9 +55,7 @@ export default function HelloPage() {
       <div className="space-y-token-4">
         <h1 className="font-display text-3xl">Not authenticated</h1>
         <p className="text-muted-foreground">{error}</p>
-        <Link href="/login" className="text-accent underline">
-          Log in
-        </Link>
+        <TextLink href="/login">Log in</TextLink>
       </div>
     );
   }
@@ -128,7 +126,7 @@ export default function HelloPage() {
       <button
         type="button"
         onClick={logout}
-        className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+        className="text-sm text-muted-foreground transition hover:text-foreground"
       >
         Log out
       </button>

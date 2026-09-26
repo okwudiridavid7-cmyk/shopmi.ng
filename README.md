@@ -110,7 +110,7 @@ pnpm db:seed
 
 Authorized redirect URI: `http://localhost:4000/api/auth/google/callback`
 
-- Subtle — should read as "polished," not "flashy AI demo"
+- Keep the UI calm and polished
 
 ## Wave 3.5 — Auth UX + dashboard overviews
 

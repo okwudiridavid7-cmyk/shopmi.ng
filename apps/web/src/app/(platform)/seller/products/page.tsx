@@ -1,14 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Package } from "lucide-react";
+import { Package, Tag } from "lucide-react";
 import type { ProductImageAsset, ProductPublic } from "@vendors/shared-types";
-import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { TextLink } from "@/components/ui/text-link";
 import { CountryStateSelect } from "@/components/country-state-select";
 import { CategoryPicker } from "@/components/category-picker";
 import {
@@ -288,28 +290,27 @@ export default function SellerProductsPage() {
   }
 
   return (
-    <div className="space-y-token-6">
-      <div className="flex flex-wrap items-center justify-between gap-token-3">
-        <div>
-          <h1 className="font-display text-2xl text-foreground">Products</h1>
-          <p className="mt-token-1 text-sm text-muted-foreground">
-            Manage catalog, stock, and listing status.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-token-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="lg:hidden"
-            onClick={() => setDrawerOpen(true)}
-          >
-            Filters
-          </Button>
-          <Button variant="primary" onClick={openCreate}>
-            Add product
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Products"
+        description="Manage catalog, stock, and listing status."
+        icon={Package}
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="lg:hidden"
+              onClick={() => setDrawerOpen(true)}
+            >
+              Filters
+            </Button>
+            <Button variant="primary" onClick={openCreate}>
+              Add product
+            </Button>
+          </>
+        }
+      />
 
       <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <SellerProductFilterPanel
@@ -320,9 +321,9 @@ export default function SellerProductsPage() {
         />
       </FilterDrawer>
 
-      <div className="grid gap-token-6 lg:grid-cols-[220px_1fr]">
-        <aside className="hidden rounded-lg border border-border bg-card p-token-4 lg:block">
-          <h2 className="mb-token-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+        <aside className="hidden rounded-2xl border border-border bg-card p-4 lg:block">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Filters
           </h2>
           <SellerProductFilterPanel
@@ -333,16 +334,16 @@ export default function SellerProductsPage() {
           />
         </aside>
 
-        <div className="min-w-0 space-y-token-6">
+        <div className="min-w-0 space-y-6">
       {showForm && (
-        <Card>
-          <CardHeader>
-            <p className="text-sm font-medium">
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="bg-muted/30">
+            <p className="text-sm font-semibold text-foreground">
               {editing ? "Edit product" : "New product"}
             </p>
           </CardHeader>
           <CardBody>
-            <form onSubmit={save} className="grid max-w-xl gap-token-4">
+            <form onSubmit={save} className="grid max-w-xl gap-4">
               <Label>
                 <span>Title</span>
                 <Input
@@ -379,7 +380,7 @@ export default function SellerProductsPage() {
                   {aiGenerating ? "Generating description…" : "Generate description"}
                 </Button>
               )}
-              <div className="grid gap-token-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Label>
                   <span>Price</span>
                   <Input
@@ -407,7 +408,7 @@ export default function SellerProductsPage() {
                   />
                 </Label>
               </div>
-              <div className="grid gap-token-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Label>
                   <span>Stock</span>
                   <Input
@@ -431,8 +432,8 @@ export default function SellerProductsPage() {
                   />
                 </Label>
               </div>
-              <div className="grid gap-token-3 sm:grid-cols-2">
-                <div className="space-y-token-1">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
                   <p className="text-sm font-medium">Platform category</p>
                   <CategoryPicker
                     categories={categories}
@@ -445,8 +446,8 @@ export default function SellerProductsPage() {
                 </div>
                 <Label>
                   <span>Shop category</span>
-                  <select
-                    className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
+                  <Select
+                    icon={<Tag />}
                     value={form.shopCategoryId}
                     onChange={(e) =>
                       setForm((f) => ({
@@ -461,10 +462,10 @@ export default function SellerProductsPage() {
                         {c.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </Label>
               </div>
-              <div className="space-y-token-2">
+              <div className="space-y-2">
                 <p className="text-sm font-medium">Location</p>
                 <CountryStateSelect
                   idPrefix="product-geo"
@@ -482,8 +483,8 @@ export default function SellerProductsPage() {
               </div>
               <Label>
                 <span>Status</span>
-                <select
-                  className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
+                <Select
+                  icon={<Package />}
                   value={form.status}
                   onChange={(e) =>
                     setForm((f) => ({
@@ -495,7 +496,7 @@ export default function SellerProductsPage() {
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
                   <option value="archived">Archived</option>
-                </select>
+                </Select>
               </Label>
               <Label>
                 <span>Images</span>
@@ -506,7 +507,7 @@ export default function SellerProductsPage() {
                   onChange={(e) => void onUpload(e.target.files?.[0] ?? null)}
                 />
               </Label>
-              <label className="flex items-center gap-token-2 text-sm">
+              <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={form.watermarkEnabled}
@@ -516,6 +517,7 @@ export default function SellerProductsPage() {
                       watermarkEnabled: e.target.checked,
                     }))
                   }
+                  className="h-4 w-4 accent-[var(--color-accent)]"
                 />
                 <span>
                   Show watermarked images on storefront
@@ -527,7 +529,7 @@ export default function SellerProductsPage() {
                 </span>
               </label>
               {form.imageAssets.length > 0 && (
-                <ul className="flex flex-wrap gap-token-2">
+                <ul className="flex flex-wrap gap-2">
                   {form.imageAssets.map((asset, i) => {
                     const url = productDisplayUrl(asset, form.watermarkEnabled);
                     return (
@@ -559,7 +561,7 @@ export default function SellerProductsPage() {
                   {formError}
                 </p>
               )}
-              <div className="flex gap-token-2">
+              <div className="flex gap-2">
                 <Button type="submit" disabled={busy} variant="primary">
                   {busy ? "Saving…" : editing ? "Update" : "Create"}
                 </Button>
@@ -580,23 +582,23 @@ export default function SellerProductsPage() {
       )}
 
       {error ? (
-        <p className="text-sm text-muted-foreground">
-          {error instanceof Error
-            ? error.message
-            : "Couldn’t load products. Refresh and try again."}
-        </p>
+        <QueryErrorState
+          error={error}
+          onRetry={() => {
+            void invalidate();
+          }}
+        />
       ) : isLoading ? (
         <SkeletonLines count={4} />
       ) : products.length === 0 ? (
         <EmptyState
-          title="No products yet"
-          description="Add your first listing to start selling on the marketplace and your shop page."
+          kind="products"
           actionLabel="Add product"
           onAction={openCreate}
-          icon={Package}
         />
       ) : filtered.length === 0 ? (
         <EmptyState
+          kind="empty_filtered"
           title="No products match these filters"
           description="Adjust status, category, or stock — or clear filters to see everything."
           actionLabel="Clear filters"
@@ -604,15 +606,15 @@ export default function SellerProductsPage() {
           icon={Package}
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
           <table className="w-full min-w-[40rem] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-token-4 py-token-3 font-medium">Product</th>
-                <th className="px-token-4 py-token-3 font-medium">Price</th>
-                <th className="px-token-4 py-token-3 font-medium">Stock</th>
-                <th className="px-token-4 py-token-3 font-medium">Status</th>
-                <th className="px-token-4 py-token-3 font-medium">Actions</th>
+                <th className="px-4 py-3 font-medium">Product</th>
+                <th className="px-4 py-3 font-medium">Price</th>
+                <th className="px-4 py-3 font-medium">Stock</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -620,8 +622,8 @@ export default function SellerProductsPage() {
                 const img = productImageUrl(p.images);
                 return (
                   <tr key={p.id}>
-                    <td className="px-token-4 py-token-3">
-                      <div className="flex items-center gap-token-3">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
                           {img ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -637,21 +639,21 @@ export default function SellerProductsPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-token-4 py-token-3 text-muted-foreground">
+                    <td className="px-4 py-3 text-muted-foreground">
                       {formatMoney(p.price, p.currency)}
                     </td>
-                    <td className="px-token-4 py-token-3 text-muted-foreground">
+                    <td className="px-4 py-3 text-muted-foreground">
                       {p.stockQty}
                     </td>
-                    <td className="px-token-4 py-token-3">
+                    <td className="px-4 py-3">
                       <span
-                        className={`rounded-sm px-token-2 py-0.5 text-xs capitalize ${statusClass(p.status)}`}
+                        className={`rounded-sm px-2 py-0.5 text-xs capitalize ${statusClass(p.status)}`}
                       >
                         {p.status}
                       </span>
                     </td>
-                    <td className="px-token-4 py-token-3">
-                      <div className="flex flex-wrap gap-token-2">
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -669,12 +671,12 @@ export default function SellerProductsPage() {
                           </Button>
                         )}
                         {p.tenant?.slug && (
-                          <Link
+                          <TextLink
                             href={`/shops/${p.tenant.slug}/products/${p.id}`}
-                            className="text-xs text-accent underline self-center"
+                            className="self-center text-xs"
                           >
                             View
-                          </Link>
+                          </TextLink>
                         )}
                       </div>
                     </td>

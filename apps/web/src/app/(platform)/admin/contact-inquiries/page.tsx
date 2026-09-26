@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { EmptyState } from "@/components/empty-state";
+import { Mail, MessageSquare, Search } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -17,10 +19,8 @@ import {
 export default function AdminContactInquiriesPage() {
   const [email, setEmail] = useState("");
   const [q, setQ] = useState("");
-  const { data: inquiries = [], isLoading, error } = useAdminContactInquiries(
-    email,
-    q
-  );
+  const { data: inquiries = [], isLoading, error, refetch } =
+    useAdminContactInquiries(email, q);
   const deleteOne = useDeleteContactInquiry();
   const deleteByEmail = useDeleteContactInquiriesByEmail();
   const { toast } = useToast();
@@ -30,30 +30,30 @@ export default function AdminContactInquiriesPage() {
   const [dsarEmail, setDsarEmail] = useState<string | null>(null);
 
   return (
-    <div className="space-y-token-4">
-      <div>
-        <h1 className="font-display text-2xl text-foreground">
-          Contact inquiries
-        </h1>
-        <p className="mt-token-1 text-sm text-muted-foreground">
-          Search platform and shop contact submissions for support and DSAR
-          requests. Rows expire after about 180 days.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Contact inquiries"
+        description="Search platform and shop contact submissions for support and DSAR requests. Rows expire after about 180 days."
+        icon={MessageSquare}
+      />
 
-      <div className="flex flex-wrap gap-token-3">
-        <Input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Exact email…"
-          className="max-w-xs"
-        />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search name, email, subject…"
-          className="max-w-xs"
-        />
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3">
+        <div className="w-full max-w-xs">
+          <InputWithIcon
+            icon={<Mail />}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Exact email…"
+          />
+        </div>
+        <div className="w-full max-w-xs">
+          <InputWithIcon
+            icon={<Search />}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search name, email, subject…"
+          />
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -65,52 +65,63 @@ export default function AdminContactInquiriesPage() {
       </div>
 
       {error ? (
-        <p className="text-sm text-muted-foreground">
-          {error instanceof Error ? error.message : "Failed to load"}
-        </p>
+        <QueryErrorState
+          error={error}
+          onRetry={() => {
+            void refetch();
+          }}
+          sellerHomeHref="/admin"
+        />
       ) : isLoading ? (
         <SkeletonLines count={5} />
       ) : inquiries.length === 0 ? (
         <EmptyState
+          kind="empty_filtered"
           title="No inquiries match"
           description="Try an email filter or broader search."
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
           <table className="w-full min-w-[48rem] text-left text-sm">
-            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+            <thead className="border-b border-border bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-token-4 py-token-3 font-medium">When</th>
-                <th className="px-token-4 py-token-3 font-medium">From</th>
-                <th className="px-token-4 py-token-3 font-medium">Subject</th>
-                <th className="px-token-4 py-token-3 font-medium">Scope</th>
-                <th className="px-token-4 py-token-3 font-medium">Status</th>
-                <th className="px-token-4 py-token-3 font-medium" />
+                <th className="px-4 py-3 font-medium">When</th>
+                <th className="px-4 py-3 font-medium">From</th>
+                <th className="px-4 py-3 font-medium">Subject</th>
+                <th className="px-4 py-3 font-medium">Scope</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
             <tbody>
               {inquiries.map((row) => (
-                <tr key={row.id} className="border-b border-border/60">
-                  <td className="px-token-4 py-token-3 text-muted-foreground">
+                <tr
+                  key={row.id}
+                  className="border-b border-border/60 hover:bg-muted/20"
+                >
+                  <td className="px-4 py-3 text-muted-foreground">
                     {new Date(row.createdAt).toLocaleString()}
                   </td>
-                  <td className="px-token-4 py-token-3">
+                  <td className="px-4 py-3">
                     <div className="font-medium">{row.name}</div>
                     <div className="text-xs text-muted-foreground">
                       {row.email}
                     </div>
                   </td>
-                  <td className="max-w-[14rem] truncate px-token-4 py-token-3">
+                  <td className="max-w-[14rem] truncate px-4 py-3">
                     {row.subject}
                   </td>
-                  <td className="px-token-4 py-token-3">
+                  <td className="px-4 py-3">
                     {row.scope}
                     {row.slug ? (
-                      <span className="text-muted-foreground"> · {row.slug}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {row.slug}
+                      </span>
                     ) : null}
                   </td>
-                  <td className="px-token-4 py-token-3">{row.status}</td>
-                  <td className="px-token-4 py-token-3 text-right">
+                  <td className="px-4 py-3">{row.status}</td>
+                  <td className="px-4 py-3 text-right">
                     <Button
                       type="button"
                       size="sm"
@@ -137,7 +148,7 @@ export default function AdminContactInquiriesPage() {
           {deleteTarget ? ` from ${deleteTarget.email}` : ""}. This is logged
           for audit.
         </p>
-        <div className="mt-token-4 flex justify-end gap-token-2">
+        <div className="mt-4 flex justify-end gap-2">
           <Button
             type="button"
             variant="outline"
@@ -156,8 +167,7 @@ export default function AdminContactInquiriesPage() {
                 setDeleteTarget(null);
               } catch (err) {
                 toast({
-                  title:
-                    err instanceof Error ? err.message : "Delete failed",
+                  title: err instanceof Error ? err.message : "Delete failed",
                   tone: "danger",
                 });
               }
@@ -178,7 +188,7 @@ export default function AdminContactInquiriesPage() {
           <span className="font-medium text-foreground">{dsarEmail}</span>.
           Use only for verified DSAR / deletion requests.
         </p>
-        <div className="mt-token-4 flex justify-end gap-token-2">
+        <div className="mt-4 flex justify-end gap-2">
           <Button
             type="button"
             variant="outline"
@@ -206,8 +216,7 @@ export default function AdminContactInquiriesPage() {
                 setDsarEmail(null);
               } catch (err) {
                 toast({
-                  title:
-                    err instanceof Error ? err.message : "Delete failed",
+                  title: err instanceof Error ? err.message : "Delete failed",
                   tone: "danger",
                 });
               }

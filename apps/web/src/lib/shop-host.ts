@@ -22,6 +22,7 @@ export const PLATFORM_ONLY_PREFIXES = [
   "/privacy",
   "/terms",
   "/hello",
+  "/pricing",
 ] as const;
 
 export function getHostname(host: string): string {

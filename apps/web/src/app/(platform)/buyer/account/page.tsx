@@ -1,13 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
+import { Lock, Mail, Phone, User } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
+import { Label } from "@/components/ui/input";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
+import { TextLink } from "@/components/ui/text-link";
 import {
   useBuyerMe,
   useChangePassword,
@@ -100,53 +103,60 @@ export default function BuyerAccountPage() {
   const googleOnly = !!user?.googleLinked && !user?.hasPassword;
 
   return (
-    <div className="space-y-token-6">
-      <div>
-        <h1 className="font-display text-2xl text-foreground">
-          Account settings
-        </h1>
-        <p className="mt-token-1 text-sm text-muted-foreground">
-          Profile, security, and notification preferences.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Account settings"
+        description="Profile, security, and notification preferences."
+        icon={User}
+      />
 
-      <form onSubmit={saveProfile} className="space-y-token-6">
-        <Card>
-          <CardHeader>
-            <p className="text-sm font-medium">Profile</p>
+      <form onSubmit={saveProfile} className="space-y-6">
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="bg-muted/30">
+            <p className="text-sm font-semibold text-foreground">Profile</p>
           </CardHeader>
-          <CardBody className="max-w-md space-y-token-4">
-            <Label>
-              <span>Name</span>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-              />
-            </Label>
-            <Label>
-              <span>Email</span>
-              <Input value={user?.email ?? ""} disabled readOnly />
-            </Label>
-            <Label>
-              <span>Phone</span>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+234…"
-              />
-            </Label>
-            <Label>
-              <span>WhatsApp number</span>
-              <Input
-                value={whatsappNumber}
-                onChange={(e) => setWhatsappNumber(e.target.value)}
-                placeholder="+234…"
-              />
-            </Label>
+          <CardBody className="space-y-6">
+            <div className="grid max-w-2xl gap-5 sm:grid-cols-2">
+              <Label>
+                <span>Name</span>
+                <InputWithIcon
+                  icon={<User />}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                />
+              </Label>
+              <Label>
+                <span>Email</span>
+                <InputWithIcon
+                  icon={<Mail />}
+                  value={user?.email ?? ""}
+                  disabled
+                  readOnly
+                />
+              </Label>
+              <Label>
+                <span>Phone</span>
+                <InputWithIcon
+                  icon={<Phone />}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+234…"
+                />
+              </Label>
+              <Label>
+                <span>WhatsApp number</span>
+                <InputWithIcon
+                  icon={<Phone />}
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  placeholder="+234…"
+                />
+              </Label>
+            </div>
 
             {user?.googleLinked && (
-              <p className="rounded-md border border-border bg-muted/50 px-token-3 py-token-2 text-xs text-muted-foreground">
+              <p className="max-w-2xl rounded-xl border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                 Google account linked
                 {googleOnly ? " · signed in with Google only" : ""}.
               </p>
@@ -154,39 +164,41 @@ export default function BuyerAccountPage() {
           </CardBody>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <p className="text-sm font-medium">Notifications</p>
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="bg-muted/30">
+            <p className="text-sm font-semibold text-foreground">
+              Notifications
+            </p>
           </CardHeader>
-          <CardBody className="max-w-md space-y-token-4">
-            <label className="flex items-start gap-token-3 text-sm">
+          <CardBody className="max-w-md space-y-4">
+            <label className="flex items-start gap-3 rounded-xl border border-border p-4 text-sm transition hover:bg-muted/40">
               <input
                 type="checkbox"
                 checked={orderEmails}
                 onChange={(e) => setOrderEmails(e.target.checked)}
-                className="mt-1"
+                className="mt-1 h-4 w-4 accent-[var(--color-accent)]"
               />
               <span>
                 <span className="font-medium text-foreground">
                   Order emails
                 </span>
-                <span className="mt-token-1 block text-muted-foreground">
+                <span className="mt-1 block text-muted-foreground">
                   Receive email updates when your order status changes.
                 </span>
               </span>
             </label>
-            <label className="flex items-start gap-token-3 text-sm opacity-70">
+            <label className="flex items-start gap-3 rounded-xl border border-border p-4 text-sm opacity-70">
               <input
                 type="checkbox"
                 disabled
                 checked={false}
-                className="mt-1"
+                className="mt-1 h-4 w-4"
               />
               <span>
                 <span className="font-medium text-foreground">
                   WhatsApp order alerts
                 </span>
-                <span className="mt-token-1 block text-muted-foreground">
+                <span className="mt-1 block text-muted-foreground">
                   Coming soon — WhatsApp notifications aren’t enabled yet.
                 </span>
               </span>
@@ -194,7 +206,7 @@ export default function BuyerAccountPage() {
           </CardBody>
         </Card>
 
-        <div className="space-y-token-2">
+        <div className="space-y-2">
           {profileErr && (
             <p className="text-sm text-red-700 dark:text-red-400">
               {profileErr}
@@ -213,41 +225,45 @@ export default function BuyerAccountPage() {
             {updateProfile.isPending ? "Saving…" : "Save profile"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            <Link href="/buyer" className="text-accent underline">
+            <TextLink href="/buyer" arrow="left" tone="muted">
               Back to overview
-            </Link>
+            </TextLink>
           </p>
         </div>
       </form>
 
       {!googleOnly && (
-        <Card>
-          <CardHeader>
-            <p className="text-sm font-medium">Password</p>
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="bg-muted/30">
+            <p className="text-sm font-semibold text-foreground">Password</p>
           </CardHeader>
           <CardBody>
-            <form onSubmit={savePassword} className="max-w-md space-y-token-4">
-              <Label>
-                <span>Current password</span>
-                <Input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                />
-              </Label>
-              <Label>
-                <span>New password</span>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </Label>
+            <form onSubmit={savePassword} className="max-w-md space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Label>
+                  <span>Current password</span>
+                  <InputWithIcon
+                    icon={<Lock />}
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                  />
+                </Label>
+                <Label>
+                  <span>New password</span>
+                  <InputWithIcon
+                    icon={<Lock />}
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                  />
+                </Label>
+              </div>
               {passwordErr && (
                 <p className="text-sm text-red-700 dark:text-red-400">
                   {passwordErr}

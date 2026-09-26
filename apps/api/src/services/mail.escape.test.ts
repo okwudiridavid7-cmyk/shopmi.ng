@@ -6,7 +6,7 @@ import { escapeHtml } from "../lib/htmlEscape";
  * Mirrors brandedEmailShell's heading interpolation (REM-04) without hitting DB.
  */
 function shellHeading(appName: string): string {
-  return `<h1 style="font-size:22px;margin-bottom:12px;">${escapeHtml(appName)}</h1>`;
+  return `<p style="margin:0;font-family:'Montserrat',Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:0.02em;color:#ffffff;">${escapeHtml(appName)}</p>`;
 }
 
 describe("brandedEmailShell appName escaping (REM-04)", () => {

@@ -11,6 +11,31 @@ export class ApiClientError extends Error {
   }
 }
 
+/** True for auth failures — UI must redirect, never show the message. */
+export function isAuthError(error: unknown): boolean {
+  if (error instanceof ApiClientError && error.status === 401) return true;
+  if (error instanceof Error) {
+    return /authentication required|unauthorized|sign in to continue/i.test(
+      error.message
+    );
+  }
+  return false;
+}
+
+/** Safe user-facing message — never returns "Authentication required". */
+export function friendlyErrorMessage(
+  error: unknown,
+  fallback = "Something went wrong"
+): string {
+  if (isAuthError(error)) return "";
+  if (error instanceof Error && error.message.trim()) {
+    const msg = error.message.trim();
+    if (/authentication required/i.test(msg)) return "";
+    return msg;
+  }
+  return fallback;
+}
+
 /** Paths that should never trigger a session-expired redirect loop. */
 const AUTH_SKIP_401 = [
   "/api/auth/me",
@@ -65,14 +90,23 @@ export async function apiFetch<T>(
       !AUTH_SKIP_401.some((p) => path.startsWith(p))
     ) {
       onUnauthorized(path);
+      // Never leak API auth strings into the UI — redirect owns the UX.
+      throw new ApiClientError("Sign in to continue", 401, data);
     }
-    throw new ApiClientError(
-      (data && typeof data === "object" && "error" in data
+
+    const rawMessage =
+      data && typeof data === "object" && "error" in data
         ? String((data as { error: string }).error)
-        : res.statusText) || "Request failed",
-      res.status,
-      data
-    );
+        : res.statusText || "Request failed";
+
+    const message =
+      res.status === 401 ||
+      /authentication required/i.test(rawMessage) ||
+      /unauthorized/i.test(rawMessage)
+        ? "Sign in to continue"
+        : rawMessage;
+
+    throw new ApiClientError(message, res.status, data);
   }
 
   return data as T;

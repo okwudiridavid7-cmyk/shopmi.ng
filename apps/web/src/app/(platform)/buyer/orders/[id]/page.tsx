@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { EmptyState } from "@/components/empty-state";
+import { ShoppingBag } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { TrustBadge } from "@/components/shell/trust-badge";
 import { Button } from "@/components/ui/button";
@@ -17,25 +19,34 @@ function statusLabel(status: string) {
 export default function BuyerOrderDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
-  const { data: order, error, isLoading } = useBuyerOrder(id);
+  const { data: order, error, isLoading, refetch } = useBuyerOrder(id);
 
   if (isLoading) {
     return (
-      <div className="space-y-token-4">
+      <div className="space-y-4">
         <SkeletonLines count={4} />
       </div>
     );
   }
 
-  if (error || !order) {
+  if (error) {
+    return (
+      <QueryErrorState
+        error={error}
+        onRetry={() => {
+          void refetch();
+        }}
+        sellerHomeHref="/buyer/orders"
+      />
+    );
+  }
+
+  if (!order) {
     return (
       <EmptyState
+        kind="not_found"
         title="Order not found"
-        description={
-          error instanceof Error
-            ? error.message
-            : "This order may have been removed or you don’t have access."
-        }
+        description="This order may have been removed or you don’t have access."
         actionLabel="Back to orders"
         actionHref="/buyer/orders"
       />
@@ -46,46 +57,45 @@ export default function BuyerOrderDetailPage() {
     order.status === "paid" || order.status === "fulfilled";
 
   return (
-    <div className="space-y-token-6">
-      <div className="flex flex-wrap items-start justify-between gap-token-3">
-        <div className="space-y-token-2">
-          <Link
-            href="/buyer/orders"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            ← Orders
-          </Link>
-          <h1 className="font-display text-2xl text-foreground">
-            Order details
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Placed {new Date(order.createdAt).toLocaleString()}
-          </p>
-        </div>
-        <span className="rounded-sm bg-muted px-token-3 py-token-1 text-xs capitalize text-foreground">
-          {statusLabel(order.status)}
-        </span>
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <Link
+          href="/buyer/orders"
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          ← Orders
+        </Link>
+        <PageHeader
+          title="Order details"
+          description={`Placed ${new Date(order.createdAt).toLocaleString()}`}
+          icon={ShoppingBag}
+          actions={
+            <span className="rounded-lg bg-muted px-3 py-1.5 text-xs capitalize text-foreground">
+              {statusLabel(order.status)}
+            </span>
+          }
+        />
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center gap-token-2">
+      <Card className="overflow-hidden rounded-2xl">
+        <CardHeader className="bg-muted/30">
+          <div className="flex flex-wrap items-center gap-2">
             {order.tenant ? (
               <Link
                 href={`/shops/${order.tenant.slug}`}
-                className="font-medium hover:underline"
+                className="text-sm font-semibold hover:text-accent"
               >
                 {order.tenant.name}
               </Link>
             ) : (
-              <span className="font-medium">Shop</span>
+              <span className="text-sm font-semibold">Shop</span>
             )}
             {order.tenant && (
               <TrustBadge verified={!!order.tenant.verifiedBadge} />
             )}
           </div>
         </CardHeader>
-        <CardBody className="space-y-token-4">
+        <CardBody className="space-y-4">
           <ul className="divide-y divide-border">
             {order.items.map((item) => {
               const img = item.product
@@ -94,7 +104,7 @@ export default function BuyerOrderDetailPage() {
               return (
                 <li
                   key={item.id}
-                  className="flex gap-token-3 py-token-3 first:pt-0 last:pb-0"
+                  className="flex gap-3 py-3 first:pt-0 last:pb-0"
                 >
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
                     {img ? (
@@ -120,8 +130,8 @@ export default function BuyerOrderDetailPage() {
             })}
           </ul>
 
-          <div className="flex flex-wrap items-center justify-between gap-token-3 border-t border-border pt-token-4 text-sm">
-            <div className="space-y-token-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-sm">
+            <div className="space-y-1">
               <p className="text-muted-foreground">
                 Subtotal {formatMoney(order.subtotal, order.currency)}
               </p>

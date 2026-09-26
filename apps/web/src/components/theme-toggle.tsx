@@ -7,7 +7,6 @@ import type { DropdownItem } from "@/components/ui/dropdown";
 const OPTIONS = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
 ] as const;
 
 /** Theme choices for the account dropdown menu. */

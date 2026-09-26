@@ -24,43 +24,57 @@ function DashboardShellInner({ mode, children }: Props) {
 
   return (
     <AuthGuard roles={MODE_ROLES[mode]}>
-    <div
-      data-shell={mode}
-      className="flex min-h-[calc(100vh-4.5rem)] w-full flex-1"
-    >
-      <Suspense fallback={null}>
-        <DashboardSidebar
-          mode={mode}
-          mobileOpen={mobileOpen}
-          onMobileClose={() => setMobileOpen(false)}
-          onOpenCommand={() => setCommandOpen(true)}
-        />
-      </Suspense>
+      <div
+        data-shell={mode}
+        className="flex h-full w-full flex-1 overflow-hidden"
+      >
+        <Suspense fallback={null}>
+          <DashboardSidebar
+            mode={mode}
+            mobileOpen={mobileOpen}
+            onMobileClose={() => setMobileOpen(false)}
+            onOpenCommand={() => setCommandOpen(true)}
+          />
+        </Suspense>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-token-3 border-b border-border bg-card/50 px-token-4 py-token-3 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="rounded-md p-token-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Open menu"
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center gap-token-3 border-b border-border bg-card/50 px-token-4 py-token-3 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="rounded-md p-token-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <p className="text-sm font-medium text-foreground">Menu</p>
+          </div>
+
+          <main
+            className={
+              mode === "admin"
+                ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background px-token-4 py-token-6 sm:px-token-6 lg:px-token-8 lg:py-token-8 motion-safe:animate-page-enter"
+                : "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-token-4 py-token-6 sm:px-token-6 lg:px-token-8 lg:py-token-8 motion-safe:animate-page-enter"
+            }
           >
-            <Menu className="h-5 w-5" />
-          </button>
-          <p className="text-sm font-medium text-foreground">Menu</p>
+            <div
+              className={
+                mode === "admin"
+                  ? "mx-auto w-full max-w-6xl"
+                  : "mx-auto w-full max-w-5xl"
+              }
+            >
+              {children}
+            </div>
+          </main>
         </div>
 
-        <main className="flex-1 overflow-x-hidden px-token-4 py-token-6 sm:px-token-6 lg:px-token-8 lg:py-token-8 motion-safe:animate-page-enter">
-          <div className="mx-auto w-full max-w-5xl">{children}</div>
-        </main>
+        <CommandPalette
+          mode={mode}
+          open={commandOpen}
+          onOpenChange={setCommandOpen}
+        />
       </div>
-
-      <CommandPalette
-        mode={mode}
-        open={commandOpen}
-        onOpenChange={setCommandOpen}
-      />
-    </div>
     </AuthGuard>
   );
 }
@@ -69,7 +83,7 @@ export function DashboardShell(props: Props) {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[calc(100vh-4.5rem)] w-full flex-1 items-center justify-center">
+        <div className="flex h-full w-full flex-1 items-center justify-center">
           <p className="text-sm text-muted-foreground">Loading…</p>
         </div>
       }

@@ -33,7 +33,7 @@ function emptyDraft(order: number): Draft {
     subtitle: "",
     ctaText: "",
     ctaUrl: "",
-    scrollSpeed: 5,
+    scrollSpeed: 10,
     displayOrder: order,
     active: true,
   };
@@ -266,7 +266,7 @@ export function BannerManager({
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "banners"] });
-      setMsg("Default premium banner added");
+      setMsg("Default banner added");
       setUseDefaultPreview(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to add default");
@@ -307,7 +307,7 @@ export function BannerManager({
           disabled={busy}
           onClick={() => void applyDefaultBanner()}
         >
-          Use default premium banner
+          Use default banner
         </Button>
         <Button
           type="button"
@@ -448,7 +448,7 @@ export function BannerManager({
                   onChange={(e) =>
                     setDraft({
                       ...draft,
-                      scrollSpeed: Number(e.target.value) || 5,
+                      scrollSpeed: Number(e.target.value) || 10,
                     })
                   }
                 />

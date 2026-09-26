@@ -13,7 +13,7 @@ export default function PrivacyPage() {
       body={platformPrivacyPolicy(
         appName,
         b?.webUrl ?? "",
-        b?.supportEmail ?? "support@vendors.local"
+        b?.supportEmail ?? "support@shopmi.ng"
       )}
     />
   );

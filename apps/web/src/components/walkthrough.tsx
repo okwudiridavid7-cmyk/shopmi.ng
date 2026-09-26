@@ -30,7 +30,17 @@ export function Walkthrough() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (localStorage.getItem(STORAGE_KEY)) return;
-    if (!sessionStorage.getItem("vendors-walkthrough-pending")) return;
+    const params = new URLSearchParams(window.location.search);
+    const fromCongrats = params.get("walkthrough") === "1";
+    if (
+      !sessionStorage.getItem("vendors-walkthrough-pending") &&
+      !fromCongrats
+    ) {
+      return;
+    }
+    if (fromCongrats) {
+      sessionStorage.setItem("vendors-walkthrough-pending", "1");
+    }
     setActive(true);
   }, []);
 
@@ -81,7 +91,7 @@ export function Walkthrough() {
           <button
             type="button"
             onClick={finish}
-            className="text-sm text-muted-foreground underline"
+            className="text-sm text-muted-foreground transition hover:text-foreground"
           >
             Skip
           </button>

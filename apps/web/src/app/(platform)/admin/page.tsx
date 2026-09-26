@@ -1,34 +1,42 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import {
+  Banknote,
+  Clock,
   CreditCard,
   Settings,
   Shield,
   Store,
   Users,
 } from "lucide-react";
-import { GreetingCard } from "@/components/dashboard/greeting-card";
-import { OverviewChart } from "@/components/dashboard/overview-chart";
-import { QuickActions } from "@/components/dashboard/quick-actions";
-import { StatCard } from "@/components/stat-card";
-import { EmptyState } from "@/components/empty-state";
+import { AdminActionStrip } from "@/components/dashboard/admin/admin-action-strip";
+import {
+  AdminHero,
+  AdminHeroMetric,
+} from "@/components/dashboard/admin/admin-hero";
+import { AdminInsightsChart } from "@/components/dashboard/admin/admin-insights-chart";
+import { AdminLivePanel } from "@/components/dashboard/admin/admin-live-panel";
+import { AdminMetricCard } from "@/components/dashboard/admin/admin-metric-card";
+import {
+  AdminPeriodToggle,
+  type AdminPeriod,
+} from "@/components/dashboard/admin/admin-period-toggle";
+import { QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { TrustBadge } from "@/components/shell/trust-badge";
 import { formatMoney } from "@/lib/api";
 import { firstNameFromUser } from "@/lib/auth-redirect";
 import { useAuth } from "@/hooks/use-auth";
 import { useAdminOverview } from "@/hooks/use-admin";
 
-type Period = "today" | "week" | "month";
-
 export default function AdminOverviewPage() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<Period>("month");
-  const { data, isLoading, error } = useAdminOverview(period);
+  const [period, setPeriod] = useState<AdminPeriod>("month");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const { data, isLoading, error, refetch } = useAdminOverview(
+    period,
+    selectedDay
+  );
 
   const firstName = firstNameFromUser(user?.name, user?.email);
 
@@ -41,11 +49,25 @@ export default function AdminOverviewPage() {
     [data?.signupsOverTime]
   );
 
+  const signupTotal = useMemo(
+    () => signupChart.reduce((sum, row) => sum + row.value, 0),
+    [signupChart]
+  );
+
+  const shopsSpark = useMemo(
+    () => signupChart.map((row) => ({ value: row.value })),
+    [signupChart]
+  );
+
   if (error) {
     return (
-      <p className="text-sm text-muted-foreground">
-        {error instanceof Error ? error.message : "Failed to load"}
-      </p>
+      <QueryErrorState
+        error={error}
+        onRetry={() => {
+          void refetch();
+        }}
+        sellerHomeHref="/admin"
+      />
     );
   }
 
@@ -55,79 +77,114 @@ export default function AdminOverviewPage() {
 
   if (!data) return null;
 
+  const gmv = formatMoney(data.gmv ?? data.salesTotal, data.currency);
+  const avgOrder =
+    data.paidOrderCount > 0
+      ? formatMoney(
+          (data.gmv ?? data.salesTotal) / data.paidOrderCount,
+          data.currency
+        )
+      : formatMoney(0, data.currency);
+  const periodLabel = selectedDay ?? period;
+
   return (
-    <div className="space-y-token-8">
-      <GreetingCard
+    <div className="space-y-6">
+      <AdminHero
         firstName={firstName}
-        stats={[
-          {
-            label: "Pending verifications",
-            value: String(data.pendingVerifications),
-          },
-          { label: "Shops", value: String(data.tenantCount) },
-          { label: "Users", value: String(data.userCount) },
-          {
-            label: `GMV (${period})`,
-            value: formatMoney(data.gmv ?? data.salesTotal, data.currency),
-          },
-        ]}
+        roleBadge="Administrator"
+        selectedDay={selectedDay}
+        onSelectedDayChange={setSelectedDay}
+        trailing={
+          selectedDay ? null : (
+            <AdminPeriodToggle value={period} onChange={setPeriod} />
+          )
+        }
+        metrics={
+          <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+            <AdminHeroMetric
+              label="Total shops"
+              value={String(data.tenantCount)}
+              hint="Marketplace shops"
+              icon={<Store className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-accent-soft text-accent dark:text-accent-on-dark"
+            />
+            <AdminHeroMetric
+              label="Total users"
+              value={String(data.userCount)}
+              hint="Buyers + sellers"
+              icon={<Users className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-info-muted text-info"
+            />
+            <AdminHeroMetric
+              label={`GMV (${periodLabel})`}
+              value={gmv}
+              hint={`${data.paidOrderCount} paid orders`}
+              icon={<Banknote className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-success-muted text-success"
+            />
+            <AdminHeroMetric
+              label="Pending verifications"
+              value={String(data.pendingVerifications)}
+              hint="Awaiting review"
+              icon={<Clock className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-warning-muted text-warning"
+            />
+          </div>
+        }
       />
 
-      <section className="space-y-token-3">
-        <div className="flex flex-wrap items-center justify-between gap-token-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Stats
-          </h2>
-          <div className="flex gap-token-1 rounded-md border border-border p-token-1">
-            {(
-              [
-                ["today", "Today"],
-                ["week", "Week"],
-                ["month", "Month"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setPeriod(value)}
-                className={`rounded-sm px-token-3 py-token-1 text-xs font-medium transition ${
-                  period === value
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid gap-token-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total shops"
-            value={String(data.tenantCount)}
-            type="shops"
-          />
-          <StatCard
-            label="Total users"
-            value={String(data.userCount)}
-            hint={`${data.buyerCount ?? 0} buyers · ${data.sellerCount ?? 0} sellers`}
-            type="users"
-          />
-          <StatCard
-            label={`GMV (${period})`}
-            value={formatMoney(data.gmv ?? data.salesTotal, data.currency)}
-            hint={`${data.paidOrderCount} paid in period`}
-            type="revenue"
-          />
-          <StatCard
-            label="Pending verifications"
-            value={String(data.pendingVerifications)}
-            type="pending"
-          />
-        </div>
-      </section>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminMetricCard
+          label="Buyers"
+          value={String(data.buyerCount ?? 0)}
+          type="users"
+          help="Accounts with buyer role"
+        />
+        <AdminMetricCard
+          label="Sellers"
+          value={String(data.sellerCount ?? 0)}
+          type="shops"
+          help="Seller & shop-admin accounts"
+          sparkline={shopsSpark.length >= 2 ? shopsSpark : undefined}
+        />
+        <AdminMetricCard
+          label="Catalogue size"
+          value={String(data.productCount ?? 0)}
+          type="products"
+          help="Products across all shops"
+        />
+        <AdminMetricCard
+          label="Avg paid order"
+          value={avgOrder}
+          type="revenue"
+          hint={`${data.paidOrderCount} paid · ${periodLabel}`}
+          help="Average value of paid orders in the selected window"
+        />
+      </div>
 
-      <QuickActions
+      <div className="grid items-stretch gap-4 xl:grid-cols-3">
+        <div className="xl:col-span-2">
+          <AdminInsightsChart
+            title="Shop signups over time"
+            totalLabel={`${signupTotal} signups`}
+            comparisonText={
+              selectedDay
+                ? `New shops · ${selectedDay}`
+                : `New shops · ${period}`
+            }
+            data={signupChart}
+            valueLabel="Signups"
+            periodControl={
+              selectedDay ? undefined : (
+                <AdminPeriodToggle value={period} onChange={setPeriod} />
+              )
+            }
+          />
+        </div>
+        <AdminLivePanel shops={data.recentShops} />
+      </div>
+
+      <AdminActionStrip
         actions={[
           {
             href: "/admin/verification",
@@ -141,68 +198,6 @@ export default function AdminOverviewPage() {
           { href: "/admin/settings", label: "Settings", icon: Settings },
         ]}
       />
-
-      <section className="space-y-token-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Insights
-        </h2>
-        <OverviewChart
-          title="Shop signups over time"
-          description={`New shops · ${period}`}
-          data={signupChart}
-          valueLabel="Signups"
-          emptyMessage="Not enough data yet — new shop signups will appear here."
-        />
-      </section>
-
-      <Card>
-        <CardHeader>
-          <p className="text-sm font-medium">Recently signed-up shops</p>
-        </CardHeader>
-        <CardBody>
-          {!data.recentShops?.length ? (
-            <EmptyState
-              title="No shops yet"
-              description="New seller shops will appear here as they onboard."
-              icon={Store}
-            />
-          ) : (
-            <ul className="divide-y divide-border">
-              {data.recentShops.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex flex-wrap items-center justify-between gap-token-3 py-token-3 text-sm first:pt-0 last:pb-0"
-                >
-                  <div className="min-w-0 space-y-token-1">
-                    <div className="flex flex-wrap items-center gap-token-2">
-                      <Link
-                        href={`/admin/tenants/${s.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {s.name}
-                      </Link>
-                      <TrustBadge verified={s.verifiedBadge} />
-                      <span className="text-xs capitalize text-muted-foreground">
-                        {s.status.replace(/_/g, " ")}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground">
-                      {s.ownerEmail}
-                      {s.planName ? ` · ${s.planName}` : ""} ·{" "}
-                      {new Date(s.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <Link href={`/admin/tenants/${s.id}`}>
-                    <Button variant="ghost" size="sm">
-                      View
-                    </Button>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardBody>
-      </Card>
     </div>
   );
 }

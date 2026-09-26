@@ -3,14 +3,23 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { setUnauthorizedHandler } from "@/lib/api";
-import { getAuthSnapshot, setAuthUser } from "@/lib/auth-store";
+import { setAuthUser } from "@/lib/auth-store";
 import { loginUrl } from "@/lib/auth-redirect";
 import { useAuthTransition } from "@/stores/auth-transition";
 import { AuthTransitionOverlay } from "@/components/auth-transition-overlay";
 
+function isAuthPath(pathname: string) {
+  return (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password")
+  );
+}
+
 /**
- * Wires global 401 → session-expired transition + login redirect.
- * Mount once under AppProviders.
+ * Global 401 → preserve return URL + calm redirect to login.
+ * Never surfaces "Authentication required" in the UI.
  */
 export function AuthSessionBridge({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -20,30 +29,28 @@ export function AuthSessionBridge({ children }: { children: ReactNode }) {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       if (handling.current) return;
-      if (
-        pathname.startsWith("/login") ||
-        pathname.startsWith("/signup") ||
-        pathname.startsWith("/forgot-password") ||
-        pathname.startsWith("/reset-password")
-      ) {
-        return;
-      }
-      // Only treat as session expiry if we had a user — cold unauth visits use AuthGuard.
-      const snap = getAuthSnapshot();
-      if (!snap.user) return;
+      if (isAuthPath(pathname)) return;
 
       handling.current = true;
       setAuthUser(null);
+
       const returnPath =
         typeof window !== "undefined"
           ? `${window.location.pathname}${window.location.search}`
           : pathname;
+
       show("session-expired", {
         nextHref: loginUrl(returnPath),
       });
+
+      // Ensure login actually opens even if the overlay soft-nav fails.
+      window.setTimeout(() => {
+        window.location.assign(loginUrl(returnPath));
+      }, 500);
+
       window.setTimeout(() => {
         handling.current = false;
-      }, 2000);
+      }, 2500);
     });
     return () => setUnauthorizedHandler(null);
   }, [pathname, show]);

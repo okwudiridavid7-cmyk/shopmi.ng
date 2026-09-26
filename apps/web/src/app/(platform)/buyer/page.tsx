@@ -9,10 +9,13 @@ import {
   Store,
   User,
 } from "lucide-react";
-import { GreetingCard } from "@/components/dashboard/greeting-card";
+import {
+  AdminHero,
+  AdminHeroMetric,
+} from "@/components/dashboard/admin/admin-hero";
+import { AdminMetricCard } from "@/components/dashboard/admin/admin-metric-card";
 import { OverviewChart } from "@/components/dashboard/overview-chart";
 import { QuickActions } from "@/components/dashboard/quick-actions";
-import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -52,53 +55,105 @@ export default function BuyerDashboardPage() {
       .map(([date, value]) => ({ date, value }));
   }, [paidOrders]);
 
+  const spendingSpark = useMemo(
+    () => spendingSeries.map((row) => ({ value: row.value })),
+    [spendingSeries]
+  );
+
   const currency = orders[0]?.currency ?? "NGN";
   const totalSpent = paidOrders.reduce((s, o) => s + o.total, 0);
+
+  const fulfilled = orders.filter((o) => o.status === "fulfilled");
+  const shopsBoughtFrom = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of orders) {
+      if (o.tenant?.id) set.add(o.tenant.id);
+    }
+    return set.size;
+  }, [orders]);
+
+  const lastOrderDate = orders[0]
+    ? new Date(orders[0].createdAt).toLocaleDateString()
+    : "—";
 
   if (loading && !ordersQ.data) {
     return <SkeletonLines count={5} />;
   }
 
   return (
-    <div className="space-y-token-8">
-      <GreetingCard
+    <div className="space-y-6">
+      <AdminHero
         firstName={firstName}
-        stats={[
-          { label: "Orders", value: String(orders.length) },
-          { label: "Active", value: String(activeOrders.length) },
-          { label: "Favorites", value: String(favorites.length) },
+        subtitle="Here's your shopping activity across Shopmi.ng."
+        badges={[
           {
-            label: "Spent",
-            value: formatMoney(totalSpent, currency),
+            icon: <User className="h-3.5 w-3.5" aria-hidden />,
+            label: "Buyer",
           },
         ]}
+        metrics={
+          <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+            <AdminHeroMetric
+              label="Orders"
+              value={String(orders.length)}
+              hint="All time"
+              icon={<ShoppingBag className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-info-muted text-info"
+            />
+            <AdminHeroMetric
+              label="Active"
+              value={String(activeOrders.length)}
+              hint="Pending payment or paid"
+              icon={<Package className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-warning-muted text-warning"
+            />
+            <AdminHeroMetric
+              label="Favorites"
+              value={String(favorites.length)}
+              hint="Saved items"
+              icon={<Heart className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-danger-muted text-danger"
+            />
+            <AdminHeroMetric
+              label="Spent"
+              value={formatMoney(totalSpent, currency)}
+              hint="Paid & fulfilled"
+              icon={<ShoppingBag className="h-3.5 w-3.5" aria-hidden />}
+              chipClass="bg-success-muted text-success"
+            />
+          </div>
+        }
       />
 
-      <section className="space-y-token-3">
+      <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Stats
+          More insights
         </h2>
-        <div className="grid gap-token-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Total orders"
-            value={String(orders.length)}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <AdminMetricCard
+            label="Shops shopped"
+            value={String(shopsBoughtFrom)}
+            type="shops"
+            help="Distinct shops you've ordered from"
+          />
+          <AdminMetricCard
+            label="Fulfilled"
+            value={String(fulfilled.length)}
             type="orders"
+            hint="Delivered / completed"
           />
-          <StatCard
-            label="Active orders"
-            value={String(activeOrders.length)}
-            type="pending"
-            hint="Pending payment or paid"
-          />
-          <StatCard
-            label="Favorites"
+          <AdminMetricCard
+            label="Wishlist"
             value={String(favorites.length)}
-            type="products"
+            type="favorites"
+            help="Items saved for later"
           />
-          <StatCard
-            label="Total spent"
-            value={formatMoney(totalSpent, currency)}
-            type="revenue"
+          <AdminMetricCard
+            label="Last order"
+            value={lastOrderDate}
+            type="pending"
+            sparkline={spendingSpark.length >= 2 ? spendingSpark : undefined}
+            help="Most recent order date"
           />
         </div>
       </section>
@@ -106,7 +161,7 @@ export default function BuyerDashboardPage() {
       <QuickActions
         actions={[
           {
-            href: "/",
+            href: "/explore",
             label: "Browse Marketplace",
             icon: Store,
             variant: "primary",
@@ -117,7 +172,7 @@ export default function BuyerDashboardPage() {
         ]}
       />
 
-      <section className="space-y-token-3">
+      <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Insights
         </h2>
@@ -146,7 +201,7 @@ export default function BuyerDashboardPage() {
               title="No orders yet"
               description="When you buy from a shop, your latest orders will show up here."
               actionLabel="Browse marketplace"
-              actionHref="/"
+              actionHref="/explore"
               icon={Package}
             />
           ) : (
@@ -161,7 +216,7 @@ export default function BuyerDashboardPage() {
                       {order.tenant ? (
                         <Link
                           href={`/shops/${order.tenant.slug}`}
-                          className="font-medium hover:underline"
+                          className="font-medium hover:text-accent"
                         >
                           {order.tenant.name}
                         </Link>

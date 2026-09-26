@@ -12,7 +12,7 @@ export type ShopCardShop = {
   themeSettings?: unknown;
 };
 
-/** Premium shop discovery card — marketplace carousel and listings. */
+/** Shop discovery card for marketplace listings. */
 export function ShopCard({ shop }: { shop: ShopCardShop }) {
   const theme = parseThemeSettings(shop.themeSettings);
   const accent =

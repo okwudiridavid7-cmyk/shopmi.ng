@@ -21,7 +21,7 @@ import {
 import { requireAuth } from "./middleware";
 import { mergeGuestCarts } from "../services/cartMerge";
 import { CART_SESSION_COOKIE } from "../lib/cartSession";
-import { brandedEmailShell, sendHtmlEmail } from "../services/mail";
+import { enqueueTransactionalMail } from "../queue/transactionalMail";
 
 async function mergeCartAfterAuth(
   req: import("express").Request,
@@ -83,6 +83,9 @@ authRouter.post("/signup", async (req, res, next) => {
     }
 
     // Signup creates a users row only — tenants are created via POST /api/tenants.
+    const verifyRaw = crypto.randomBytes(32).toString("hex");
+    const verifyHash = crypto.createHash("sha256").update(verifyRaw).digest("hex");
+
     const user = await prisma.user.create({
       data: {
         email: body.email.toLowerCase(),
@@ -90,11 +93,36 @@ authRouter.post("/signup", async (req, res, next) => {
         role: body.role,
         name: body.name,
         phone: body.phone,
+        emailVerificationToken: verifyHash,
+        emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
 
     await issueSession(user, res);
     await mergeCartAfterAuth(req, user.id);
+
+    const dashboardUrl =
+      body.role === "seller" ? `${env.webUrl}/onboarding` : `${env.webUrl}/explore`;
+    const verifyUrl = `${env.webUrl}/verify-email?token=${verifyRaw}`;
+
+    void enqueueTransactionalMail({
+      kind: "welcome",
+      to: user.email,
+      data: {
+        name: user.name,
+        appName: env.appName,
+        dashboardUrl,
+      },
+      idempotencyKey: `welcome:${user.id}`,
+    }).catch((e) => console.warn("[auth] welcome mail enqueue failed", e));
+
+    void enqueueTransactionalMail({
+      kind: "verify_email",
+      to: user.email,
+      data: { name: user.name, verifyUrl },
+      idempotencyKey: `verify:${user.id}:${verifyHash.slice(0, 12)}`,
+    }).catch((e) => console.warn("[auth] verify mail enqueue failed", e));
+
     return res.status(201).json({ user: toUserPublic(user) });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -200,16 +228,12 @@ authRouter.post("/forgot-password", forgotLimiter, async (req, res, next) => {
         },
       });
       const resetUrl = `${env.webUrl}/reset-password?token=${raw}`;
-      const { html } = await brandedEmailShell(`
-        <p>We received a request to reset the password for this account.</p>
-        <p><a href="${resetUrl}">Choose a new password</a> — this link expires in one hour.</p>
-        <p>If you didn’t ask for this, you can ignore the email.</p>
-      `);
       try {
-        await sendHtmlEmail({
+        await enqueueTransactionalMail({
+          kind: "password_reset",
           to: user.email,
-          subject: "Reset your password",
-          html,
+          data: { name: user.name, resetUrl },
+          idempotencyKey: `reset:${user.id}:${tokenHash.slice(0, 12)}`,
         });
       } catch (mailErr) {
         // Still 200 below — do not leak account existence or mail outages.
@@ -268,6 +292,86 @@ authRouter.post("/reset-password", forgotLimiter, async (req, res, next) => {
     return next(err);
   }
 });
+
+const verifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Confirm email via token from the verification message. */
+authRouter.post("/verify-email", verifyLimiter, async (req, res, next) => {
+  try {
+    const { token } = z.object({ token: z.string().min(20) }).parse(req.body);
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await prisma.user.findFirst({
+      where: {
+        emailVerificationToken: tokenHash,
+        emailVerificationExpires: { gt: new Date() },
+      },
+    });
+    if (!user) {
+      return res.status(400).json({
+        error: "This verification link is invalid or has expired.",
+      });
+    }
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerifiedAt: new Date(),
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+      },
+    });
+    return res.json({ user: toUserPublic(updated), ok: true });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: "Missing verification token." });
+    }
+    return next(err);
+  }
+});
+
+/** Resend verification email (auth required). */
+authRouter.post(
+  "/resend-verification",
+  requireAuth,
+  verifyLimiter,
+  async (req, res, next) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+      });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      if (user.emailVerifiedAt) {
+        return res.json({ ok: true, alreadyVerified: true });
+      }
+      const verifyRaw = crypto.randomBytes(32).toString("hex");
+      const verifyHash = crypto
+        .createHash("sha256")
+        .update(verifyRaw)
+        .digest("hex");
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerificationToken: verifyHash,
+          emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      const verifyUrl = `${env.webUrl}/verify-email?token=${verifyRaw}`;
+      await enqueueTransactionalMail({
+        kind: "verify_email",
+        to: user.email,
+        data: { name: user.name, verifyUrl },
+        idempotencyKey: `verify-resend:${user.id}:${Date.now()}`,
+      });
+      return res.json({ ok: true });
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
 
 /** Start Google OAuth2 — redirects to Google consent screen. */
 authRouter.get("/google", (req, res) => {
@@ -329,6 +433,7 @@ authRouter.get("/google/callback", async (req, res, next) => {
         OR: [{ googleId: payload.sub }, { email }],
       },
     });
+    let isNewUser = false;
 
     const googleName =
       typeof payload.name === "string" && payload.name.trim()
@@ -336,9 +441,14 @@ authRouter.get("/google/callback", async (req, res, next) => {
         : null;
 
     if (user) {
-      const linkData: { googleId?: string; name?: string } = {};
+      const linkData: {
+        googleId?: string;
+        name?: string;
+        emailVerifiedAt?: Date;
+      } = {};
       if (!user.googleId) linkData.googleId = payload.sub;
       if (!user.name && googleName) linkData.name = googleName;
+      if (!user.emailVerifiedAt) linkData.emailVerifiedAt = new Date();
       if (Object.keys(linkData).length > 0) {
         user = await prisma.user.update({
           where: { id: user.id },
@@ -346,6 +456,7 @@ authRouter.get("/google/callback", async (req, res, next) => {
         });
       }
     } else {
+      isNewUser = true;
       let intendedRole: "buyer" | "seller" = "buyer";
       if (typeof req.query.state === "string" && req.query.state) {
         try {
@@ -365,15 +476,29 @@ authRouter.get("/google/callback", async (req, res, next) => {
           role: intendedRole,
           name: googleName,
           passwordHash: null,
+          emailVerifiedAt: new Date(),
         },
       });
+
+      void enqueueTransactionalMail({
+        kind: "welcome",
+        to: user.email,
+        data: {
+          name: user.name,
+          appName: env.appName,
+          dashboardUrl:
+            intendedRole === "seller"
+              ? `${env.webUrl}/onboarding`
+              : `${env.webUrl}/explore`,
+        },
+        idempotencyKey: `welcome:${user.id}`,
+      }).catch((e) => console.warn("[auth] google welcome mail failed", e));
     }
 
     await issueSession(user, res);
     await mergeCartAfterAuth(req, user.id);
 
     let returnTo: string | null = null;
-    let oauthRole: string | null = null;
     if (typeof req.query.state === "string" && req.query.state) {
       try {
         const decoded = Buffer.from(req.query.state, "base64url").toString(
@@ -393,17 +518,22 @@ authRouter.get("/google/callback", async (req, res, next) => {
           ) {
             returnTo = parsed.returnTo;
           }
-          oauthRole = parsed.role ?? null;
         }
       } catch {
         /* ignore bad state */
       }
     }
+    const roleHome =
+      user.role === "super_admin"
+        ? "/admin"
+        : user.role === "seller" || user.role === "tenant_admin"
+          ? "/seller"
+          : "/buyer";
     const dest = returnTo
       ? `${env.webUrl}${returnTo}`
-      : oauthRole === "seller"
+      : isNewUser && user.role === "seller"
         ? `${env.webUrl}/onboarding`
-        : `${env.webUrl}/hello`;
+        : `${env.webUrl}${roleHome}`;
     return res.redirect(dest);
   } catch (err) {
     return next(err);

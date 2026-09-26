@@ -1,14 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TeamMemberPublic } from "@vendors/shared-types";
-import { EmptyState } from "@/components/empty-state";
+import { Globe, Mail, Phone, Settings, Store, Users } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Input, Label, Textarea } from "@/components/ui/input";
+import { Label, Textarea } from "@/components/ui/input";
+import { InputWithIcon } from "@/components/ui/input-with-icon";
+import { Select } from "@/components/ui/select";
+import { TextLink } from "@/components/ui/text-link";
 import { CountryStateSelect } from "@/components/country-state-select";
 import { apiFetch } from "@/lib/api";
 import {
@@ -31,6 +35,8 @@ export default function SellerSettingsPage() {
   const [address, setAddress] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const [settlementBankCode, setSettlementBankCode] = useState("");
+  const [settlementAccountNumber, setSettlementAccountNumber] = useState("");
   const [shopMsg, setShopMsg] = useState<string | null>(null);
   const [shopErr, setShopErr] = useState<string | null>(null);
   const [shopBusy, setShopBusy] = useState(false);
@@ -53,6 +59,8 @@ export default function SellerSettingsPage() {
       setAddress(shopQ.data.address ?? "");
       setContactEmail(shopQ.data.contactEmail ?? shopQ.data.email ?? "");
       setContactPhone(shopQ.data.contactPhone ?? shopQ.data.phone ?? "");
+      setSettlementBankCode(shopQ.data.settlementBankCode ?? "");
+      setSettlementAccountNumber(shopQ.data.settlementAccountNumber ?? "");
     }
   }, [shopQ.data]);
 
@@ -81,6 +89,8 @@ export default function SellerSettingsPage() {
           contactPhone: contactPhone || null,
           email: contactEmail || null,
           phone: contactPhone || null,
+          settlementBankCode: settlementBankCode || null,
+          settlementAccountNumber: settlementAccountNumber || null,
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "shop"] });
@@ -136,15 +146,11 @@ export default function SellerSettingsPage() {
 
   if (shopQ.error && !shopQ.data) {
     return (
-      <EmptyState
-        title="Could not load shop"
-        description={
-          shopQ.error instanceof Error
-            ? shopQ.error.message
-            : "Sign in as a seller to manage settings."
-        }
-        actionLabel="Overview"
-        actionHref="/seller"
+      <QueryErrorState
+        error={shopQ.error}
+        onRetry={() => {
+          void shopQ.refetch();
+        }}
       />
     );
   }
@@ -153,84 +159,111 @@ export default function SellerSettingsPage() {
   const domainConnected = !!(domainQ.data?.customDomain || customDomain.trim());
 
   return (
-    <div className="space-y-token-6">
-      <div>
-        <h1 className="font-display text-2xl text-foreground">Settings</h1>
-        <p className="mt-token-1 text-sm text-muted-foreground">
-          Shop profile, team admins, and custom domain.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Settings"
+        description="Shop profile, team admins, and custom domain."
+        icon={Settings}
+      />
 
-      <Card id="shop">
-        <CardHeader>
-          <p className="text-sm font-medium">Shop details</p>
+      <Card id="shop" className="overflow-hidden rounded-2xl">
+        <CardHeader className="bg-muted/30">
+          <p className="text-sm font-semibold text-foreground">Shop details</p>
         </CardHeader>
         <CardBody>
-          <form onSubmit={saveShop} className="max-w-lg space-y-token-4">
-            <Label>
-              <span>Shop name</span>
-              <Input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Label>
-            <Label>
-              <span>Description</span>
-              <Textarea
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="What you sell…"
-              />
-            </Label>
-            <div className="space-y-token-2">
-              <p className="text-sm font-medium">Location</p>
-              <CountryStateSelect
-                idPrefix="settings-geo"
-                countryCode={countryCode}
-                stateCode={stateCode}
-                onChange={(v) => {
-                  setCountryCode(v.countryCode);
-                  setStateCode(v.stateCode);
-                  setLocation(v.label);
-                }}
-              />
+          <form onSubmit={saveShop} className="max-w-2xl space-y-6">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Label>
+                <span>Shop name</span>
+                <InputWithIcon
+                  icon={<Store />}
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </Label>
+              <div className="space-y-2 sm:col-span-2">
+                <p className="text-sm font-medium">Location</p>
+                <CountryStateSelect
+                  idPrefix="settings-geo"
+                  countryCode={countryCode}
+                  stateCode={stateCode}
+                  onChange={(v) => {
+                    setCountryCode(v.countryCode);
+                    setStateCode(v.stateCode);
+                    setLocation(v.label);
+                  }}
+                />
+              </div>
+              <Label className="sm:col-span-2">
+                <span>Description</span>
+                <Textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What you sell…"
+                />
+              </Label>
+              <Label className="sm:col-span-2">
+                <span>Address</span>
+                <Textarea
+                  rows={2}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Street, city…"
+                />
+              </Label>
+              <Label>
+                <span>Contact email</span>
+                <InputWithIcon
+                  icon={<Mail />}
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                />
+              </Label>
+              <Label>
+                <span>Contact phone</span>
+                <InputWithIcon
+                  icon={<Phone />}
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="+234…"
+                />
+              </Label>
+              <Label>
+                <span>Settlement bank code</span>
+                <InputWithIcon
+                  icon={<Globe />}
+                  value={settlementBankCode}
+                  onChange={(e) => setSettlementBankCode(e.target.value)}
+                  placeholder="Paystack bank code (e.g. 058)"
+                />
+              </Label>
+              <Label>
+                <span>Settlement account number</span>
+                <InputWithIcon
+                  icon={<Store />}
+                  value={settlementAccountNumber}
+                  onChange={(e) => setSettlementAccountNumber(e.target.value)}
+                  placeholder="10-digit NUBAN"
+                />
+              </Label>
             </div>
-            <Label>
-              <span>Address</span>
-              <Textarea
-                rows={2}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Street, city…"
-              />
-            </Label>
-            <Label>
-              <span>Contact email</span>
-              <Input
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-              />
-            </Label>
-            <Label>
-              <span>Contact phone</span>
-              <Input
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                placeholder="+234…"
-              />
-            </Label>
+            <p className="text-xs text-muted-foreground">
+              After verification, Shopmi creates a Paystack subaccount from these
+              details so your payouts settle to this bank (minus the Shopmi
+              Service Fee).
+              {shopQ.data?.paystackSubaccountCode
+                ? ` Subaccount ready: ${shopQ.data.paystackSubaccountCode}.`
+                : ""}
+            </p>
             {shopQ.data && (
               <p className="text-xs text-muted-foreground">
                 Slug:{" "}
-                <Link
-                  href={`/shops/${shopQ.data.slug}`}
-                  className="text-accent underline"
-                >
+                <TextLink href={`/shops/${shopQ.data.slug}`}>
                   /shops/{shopQ.data.slug}
-                </Link>
+                </TextLink>
               </p>
             )}
             {shopErr && (
@@ -248,24 +281,25 @@ export default function SellerSettingsPage() {
         </CardBody>
       </Card>
 
-      <Card id="team">
-        <CardHeader>
-          <p className="text-sm font-medium">Team admins</p>
+      <Card id="team" className="overflow-hidden rounded-2xl">
+        <CardHeader className="bg-muted/30">
+          <p className="text-sm font-semibold text-foreground">Team admins</p>
         </CardHeader>
-        <CardBody className="space-y-token-4">
+        <CardBody className="space-y-6">
           {teamQ.isLoading ? (
             <SkeletonLines count={2} />
           ) : members.length === 0 ? (
             <EmptyState
+              kind="users"
               title="No team members"
               description="Invite a manager or staff member to help run this shop."
             />
           ) : (
-            <ul className="divide-y divide-border rounded-md border border-border">
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
               {members.map((m) => (
                 <li
                   key={m.id}
-                  className="flex flex-wrap items-center justify-between gap-token-2 px-token-4 py-token-3 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
                 >
                   <div>
                     <p className="font-medium text-foreground">
@@ -290,30 +324,33 @@ export default function SellerSettingsPage() {
             </ul>
           )}
 
-          <form onSubmit={invite} className="max-w-md space-y-token-3">
-            <p className="text-sm font-medium text-foreground">Invite admin</p>
-            <Label>
-              <span>Email</span>
-              <Input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-            </Label>
-            <Label>
-              <span>Role</span>
-              <select
-                className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
-                value={inviteRole}
-                onChange={(e) =>
-                  setInviteRole(e.target.value as "manager" | "staff")
-                }
-              >
-                <option value="staff">Staff</option>
-                <option value="manager">Manager</option>
-              </select>
-            </Label>
+          <form onSubmit={invite} className="max-w-md space-y-4">
+            <p className="text-sm font-semibold text-foreground">Invite admin</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Label>
+                <span>Email</span>
+                <InputWithIcon
+                  icon={<Mail />}
+                  type="email"
+                  required
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </Label>
+              <Label>
+                <span>Role</span>
+                <Select
+                  icon={<Users />}
+                  value={inviteRole}
+                  onChange={(e) =>
+                    setInviteRole(e.target.value as "manager" | "staff")
+                  }
+                >
+                  <option value="staff">Staff</option>
+                  <option value="manager">Manager</option>
+                </Select>
+              </Label>
+            </div>
             {teamErr && (
               <p className="text-sm text-red-700 dark:text-red-400">{teamErr}</p>
             )}
@@ -328,11 +365,11 @@ export default function SellerSettingsPage() {
         </CardBody>
       </Card>
 
-      <Card id="domain">
-        <CardHeader className="flex flex-wrap items-center justify-between gap-token-2">
-          <p className="text-sm font-medium">Custom domain</p>
+      <Card id="domain" className="overflow-hidden rounded-2xl">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-2 bg-muted/30">
+          <p className="text-sm font-semibold text-foreground">Custom domain</p>
           <span
-            className={`rounded-sm px-token-2 py-0.5 text-xs ${
+            className={`rounded-sm px-2 py-0.5 text-xs ${
               domainConnected
                 ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
                 : "bg-muted text-muted-foreground"
@@ -342,10 +379,11 @@ export default function SellerSettingsPage() {
           </span>
         </CardHeader>
         <CardBody>
-          <form onSubmit={saveDomain} className="max-w-lg space-y-token-4">
+          <form onSubmit={saveDomain} className="max-w-lg space-y-4">
             <Label>
               <span>Domain</span>
-              <Input
+              <InputWithIcon
+                icon={<Globe />}
                 value={customDomain}
                 onChange={(e) => setCustomDomain(e.target.value)}
                 placeholder="shop.yourdomain.com"
@@ -357,8 +395,7 @@ export default function SellerSettingsPage() {
                 <code className="rounded bg-muted px-1">
                   {domainQ.data.cnameTarget}
                 </code>
-                . Full DNS/SSL provisioning is Phase 4 — this field stores your
-                intended domain for now.
+                . We’ll use this domain once DNS is verified.
               </p>
             )}
             {domainErr && (

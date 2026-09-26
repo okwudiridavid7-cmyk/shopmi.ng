@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { TextLink } from "@/components/ui/text-link";
+import { usePlatformBranding } from "@/hooks/use-branding";
 
 const STORAGE_KEY = "seller-plan-banner-dismissed";
 
@@ -10,7 +11,7 @@ type BannerKind = "trial" | "limit" | null;
 
 /**
  * Dismissible trial / product-limit banner.
- * Reappears when still relevant after a new session or when the reason changes.
+ * Hidden entirely when platform billing is off.
  */
 export function SellerPlanBanner({
   trialActive,
@@ -23,11 +24,15 @@ export function SellerPlanBanner({
   productCount: number;
   productLimit: number | null;
 }) {
+  const billingEnabled =
+    usePlatformBranding().data?.billingEnabled !== false;
+
   const nearLimit =
     productLimit != null && productCount >= Math.max(1, productLimit - 2);
   const atLimit = productLimit != null && productCount >= productLimit;
 
-  const kind: BannerKind = atLimit || nearLimit ? "limit" : trialActive ? "trial" : null;
+  const kind: BannerKind =
+    atLimit || nearLimit ? "limit" : trialActive ? "trial" : null;
   const reasonKey = kind
     ? kind === "trial"
       ? `trial:${trialDaysLeft}`
@@ -41,6 +46,7 @@ export function SellerPlanBanner({
     setDismissedKey(sessionStorage.getItem(STORAGE_KEY));
   }, []);
 
+  if (!billingEnabled) return null;
   if (!kind || !reasonKey) return null;
   if (dismissedKey === reasonKey) return null;
 
@@ -60,10 +66,7 @@ export function SellerPlanBanner({
           <p className="text-foreground">
             <strong className="font-semibold">Trial active.</strong>{" "}
             {trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"} left —{" "}
-            <Link href="/seller/plan" className="text-accent underline">
-              view plans
-            </Link>
-            .
+            <TextLink href="/seller/plan">view plans</TextLink>.
           </p>
         ) : (
           <p className="text-foreground">
@@ -71,10 +74,7 @@ export function SellerPlanBanner({
               {atLimit ? "Product limit reached." : "Nearing product limit."}
             </strong>{" "}
             {productCount}/{productLimit} products used —{" "}
-            <Link href="/seller/plan" className="text-accent underline">
-              upgrade plan
-            </Link>
-            .
+            <TextLink href="/seller/plan">upgrade plan</TextLink>.
           </p>
         )}
       </div>

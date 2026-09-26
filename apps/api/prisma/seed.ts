@@ -16,12 +16,16 @@ const prisma = new PrismaClient();
 const DEFAULT_SETTINGS: { key: string; value: string }[] = [
   { key: "app_name", value: process.env.APP_NAME ?? "Vendors" },
   { key: "web_url", value: process.env.WEB_URL ?? "http://localhost:3000" },
-  { key: "support_email", value: "support@vendors.local" },
+  { key: "support_email", value: "support@shopmi.ng" },
   { key: "verification_required", value: "false" },
   { key: "ai_features_enabled", value: "true" },
   { key: "watermark_default_on", value: "true" },
   { key: "trial_days", value: "3" },
   { key: "commission_percent", value: "5" },
+  /** When false, hide public pricing and plan CTAs site-wide. */
+  { key: "billing_enabled", value: "true" },
+  /** When true, checkout requires a verified email address. */
+  { key: "email_verification_required", value: "false" },
   {
     key: "homepage_banners",
     value: JSON.stringify([
@@ -42,6 +46,17 @@ const DEFAULT_SETTINGS: { key: string; value: string }[] = [
   },
 ];
 
+/** Shared seller basics — every paid tier includes these. */
+const BASIC_SELLER_FEATURES = {
+  ai: true,
+  campaigns: true,
+  whatsapp: true,
+  invoices: true,
+  storefront: true,
+  orders: true,
+  products: true,
+} as const;
+
 const BRANDS = [
   { name: "Generic", slug: "generic" },
   { name: "Acme", slug: "acme" },
@@ -49,40 +64,111 @@ const BRANDS = [
   { name: "Pulse", slug: "pulse" },
 ];
 
+/**
+ * Public pricing tiers (monthly NGN). Longer intervals are discounted on the
+ * pricing page: 6 months ≈ 15% off, yearly ≈ 30% off (cheapest).
+ * New shops default to Yomi with a free trial (no card required).
+ */
 const PLANS = [
   {
-    name: "Free",
-    slug: "free",
-    price: 0,
-    currency: "NGN",
-    productLimit: 10,
-    featureFlags: { ai: true, campaigns: true },
-    trialDays: 3,
-  },
-  {
-    name: "Starter",
-    slug: "starter",
-    price: 5000,
+    name: "Yomi",
+    slug: "yomi",
+    price: 3000,
     currency: "NGN",
     productLimit: 50,
-    featureFlags: { ai: true, campaigns: true, customDomain: true },
     trialDays: 3,
+    featureFlags: {
+      ...BASIC_SELLER_FEATURES,
+      customDomain: false,
+      analytics: "basic",
+      staffAccounts: 1,
+      storeLocations: 1,
+      description:
+        "For new sellers launching their first storefront and catalog.",
+      benefits: [
+        "Add & manage products",
+        "Business website / storefront",
+        "Invoices & receipts",
+        "Order management",
+        "Campaigns & WhatsApp tools",
+        "AI listing help",
+        "1 staff account",
+      ],
+      limitations: [
+        "No custom domain",
+        "Basic analytics only",
+        "1 store location",
+      ],
+      recommended: false,
+      cta: "select",
+    },
   },
   {
-    name: "Pro",
-    slug: "pro",
+    name: "Lemi",
+    slug: "lemi",
+    price: 7500,
+    currency: "NGN",
+    productLimit: 200,
+    trialDays: 3,
+    featureFlags: {
+      ...BASIC_SELLER_FEATURES,
+      customDomain: true,
+      analytics: "business",
+      staffAccounts: 3,
+      storeLocations: 1,
+      pixels: true,
+      description:
+        "For growing shops that need a domain, team access, and deeper insights.",
+      benefits: [
+        "Everything in Yomi",
+        "Custom domain",
+        "3 staff accounts",
+        "Business analytics",
+        "Facebook Pixel & Google Analytics",
+        "Priority email support",
+      ],
+      limitations: ["1 store location", "No wholesale pricing"],
+      recommended: false,
+      cta: "select",
+    },
+  },
+  {
+    name: "Dami",
+    slug: "dami",
     price: 15000,
     currency: "NGN",
     productLimit: null as number | null,
-    featureFlags: {
-      ai: true,
-      campaigns: true,
-      customDomain: true,
-      whatsapp: true,
-    },
     trialDays: 3,
+    featureFlags: {
+      ...BASIC_SELLER_FEATURES,
+      customDomain: true,
+      analytics: "advanced",
+      staffAccounts: 10,
+      storeLocations: 3,
+      pixels: true,
+      wholesale: true,
+      shipmentTracking: true,
+      pos: true,
+      description:
+        "For established sellers running multi-location or high-volume shops.",
+      benefits: [
+        "Everything in Lemi",
+        "Unlimited products",
+        "10 staff accounts",
+        "3 store locations",
+        "Wholesale pricing",
+        "Shipment tracking",
+        "POS software",
+        "Dedicated onboarding",
+      ],
+      limitations: [] as string[],
+      recommended: true,
+      cta: "demo",
+    },
   },
 ];
+
+const LEGACY_PLAN_SLUGS = ["free", "starter", "pro"] as const;
 
 async function seedCategoryTree(
   nodes: CategorySeedNode[],
@@ -267,6 +353,31 @@ async function main() {
         trialDays: plan.trialDays,
         active: true,
       },
+    });
+  }
+
+  // Remap tenants on legacy free/starter/pro → Yomi/Lemi/Dami, then deactivate legacy.
+  const yomi = await prisma.plan.findUnique({ where: { slug: "yomi" } });
+  const lemi = await prisma.plan.findUnique({ where: { slug: "lemi" } });
+  const dami = await prisma.plan.findUnique({ where: { slug: "dami" } });
+  const planLegacyMap: Record<string, string | undefined> = {
+    free: yomi?.id,
+    starter: lemi?.id ?? yomi?.id,
+    pro: dami?.id ?? lemi?.id ?? yomi?.id,
+  };
+  for (const slug of LEGACY_PLAN_SLUGS) {
+    const legacy = await prisma.plan.findUnique({ where: { slug } });
+    if (!legacy) continue;
+    const nextId = planLegacyMap[slug];
+    if (nextId) {
+      await prisma.tenant.updateMany({
+        where: { planId: legacy.id },
+        data: { planId: nextId },
+      });
+    }
+    await prisma.plan.update({
+      where: { id: legacy.id },
+      data: { active: false },
     });
   }
 

@@ -5,6 +5,8 @@ import { Star } from "lucide-react";
 import type { ReviewSummary } from "@vendors/shared-types";
 import { SectionHeader } from "@/components/section-header";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 
 function Stars({ rating, size = "sm" }: { rating: number; size?: "sm" | "md" }) {
@@ -196,25 +198,25 @@ export function ProductReviews({
           </h3>
           <label className="block text-sm">
             <span className="text-muted-foreground">Rating</span>
-            <select
+            <Select
+              icon={<Star />}
               value={rating}
               onChange={(e) => setRating(Number(e.target.value))}
-              className="mt-1 w-full rounded-md border border-border bg-card px-token-3 py-token-2"
+              className="mt-1"
             >
               {[5, 4, 3, 2, 1].map((n) => (
                 <option key={n} value={n}>
                   {n} star{n === 1 ? "" : "s"}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
-          <textarea
+          <Textarea
             required
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             rows={3}
             placeholder="How was the product?"
-            className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm"
           />
           {error && (
             <p className="text-sm text-danger">{error}</p>

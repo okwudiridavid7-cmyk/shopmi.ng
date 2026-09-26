@@ -59,16 +59,22 @@ export type AdminUserRow = UserPublic & {
 
 const OVERVIEW_POLL_MS = 4 * 60 * 1000;
 
-export function useAdminOverview(period: "today" | "week" | "month") {
+export function useAdminOverview(
+  period: "today" | "week" | "month",
+  day?: string | null
+) {
+  const dayKey = day || "";
   return useQuery({
-    queryKey: queryKeys.admin.overview(period),
+    queryKey: [...queryKeys.admin.overview(period), dayKey] as const,
     queryFn: async () => {
+      const qs = new URLSearchParams({ period });
+      if (day) qs.set("day", day);
       const res = await apiFetch<{ overview: AdminOverview }>(
-        `/api/admin/overview?period=${period}`
+        `/api/admin/overview?${qs}`
       );
       return res.overview;
     },
-    refetchInterval: OVERVIEW_POLL_MS,
+    refetchInterval: day ? false : OVERVIEW_POLL_MS,
   });
 }
 

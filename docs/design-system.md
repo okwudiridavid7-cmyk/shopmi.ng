@@ -17,8 +17,10 @@ Primary brand color: **`#ff822e`**. Supporting palette: white, warm grays/blacks
 
 | Role | Token / class | Family |
 |------|---------------|--------|
-| Body UI | `--font-sans` / `font-sans` | DM Sans |
-| Display / section titles | `--font-display` / `font-display` | Fraunces |
+| Body UI | `--font-sans` / `font-sans` | Montserrat |
+| Display / headings | `--font-display` / `font-display` | Montserrat (semibold / bold) |
+
+Headings (`h1`–`h4`) use moderately bold weights (`font-semibold` / `font-bold`) site-wide.
 
 ## Spacing scale
 

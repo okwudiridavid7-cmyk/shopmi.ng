@@ -2,7 +2,12 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import type { VerificationRequestPublic } from "@vendors/shared-types";
+import { BadgeCheck } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { VerifiedBadge } from "@/components/shop-trust";
+import { Button } from "@/components/ui/button";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Input, Label } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 
 export default function SellerVerificationPage() {
@@ -64,26 +69,27 @@ export default function SellerVerificationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-token-6">
-      <div>
-        <h2 className="font-display text-xl">Shop verification</h2>
-      </div>
+    <div className="mx-auto max-w-xl space-y-6">
+      <PageHeader
+        title="Shop verification"
+        description="Submit ID or business documents for review. Unverified shops show a warning to buyers."
+        icon={BadgeCheck}
+      />
 
       {verifiedBadge ? (
-        <div className="space-y-2 rounded-lg border border-border bg-card p-token-4">
-          <VerifiedBadge />
-          <p className="text-sm text-muted-foreground">
-            Your shop is verified. Buyers will see the badge on your storefront.
-          </p>
-        </div>
+        <Card className="overflow-hidden rounded-2xl">
+          <CardBody className="space-y-2">
+            <VerifiedBadge />
+            <p className="text-sm text-muted-foreground">
+              Your shop is verified. Buyers will see the badge on your
+              storefront.
+            </p>
+          </CardBody>
+        </Card>
       ) : (
-        <div className="space-y-token-2">
-          <p className="text-sm text-muted-foreground">
-            Submit ID or business documents for review. Unverified shops show a
-            warning to buyers.
-          </p>
+        <div className="space-y-2">
           {verificationRequired && (
-            <p className="rounded-md border border-warning/40 bg-warning-muted px-token-3 py-token-2 text-sm text-warning">
+            <p className="rounded-xl border border-warning/40 bg-warning-muted px-3 py-2 text-sm text-warning">
               Platform setting: verification is required before your shop can
               accept payments.
             </p>
@@ -92,45 +98,64 @@ export default function SellerVerificationPage() {
       )}
 
       {request && (
-        <div className="rounded-lg border border-border bg-card p-token-4 text-sm">
-          <p>
-            Latest request: <strong>{request.status}</strong>
-          </p>
-          {request.note && (
-            <p className="mt-2 text-muted-foreground">Note: {request.note}</p>
-          )}
-          <ul className="mt-2 list-disc pl-5 text-muted-foreground">
-            {request.submittedDocs.map((d) => (
-              <li key={d.url}>
-                <a href={d.url} className="underline" target="_blank" rel="noreferrer">
-                  {d.name}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="bg-muted/30">
+            <p className="text-sm font-semibold text-foreground">
+              Latest request
+            </p>
+          </CardHeader>
+          <CardBody className="text-sm">
+            <p>
+              Status: <strong className="capitalize">{request.status}</strong>
+            </p>
+            {request.note && (
+              <p className="mt-2 text-muted-foreground">Note: {request.note}</p>
+            )}
+            <ul className="mt-2 list-disc pl-5 text-muted-foreground">
+              {request.submittedDocs.map((d) => (
+                <li key={d.url}>
+                  <a
+                    href={d.url}
+                    className="font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {d.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
       )}
 
       {!verifiedBadge && request?.status !== "pending" && (
-        <form onSubmit={submit} className="space-y-3">
-          <input
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            onChange={(e) => setFiles(e.target.files)}
-            className="block w-full text-sm"
-          />
-          {error && (
-            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-          )}
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-accent px-4 py-2 text-sm text-accent-foreground disabled:opacity-60"
-          >
-            {busy ? "Uploading…" : "Submit for review"}
-          </button>
-        </form>
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="bg-muted/30">
+            <p className="text-sm font-semibold text-foreground">
+              Submit documents
+            </p>
+          </CardHeader>
+          <CardBody>
+            <form onSubmit={submit} className="space-y-4">
+              <Label>
+                <span>Documents</span>
+                <Input
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(e) => setFiles(e.target.files)}
+                />
+              </Label>
+              {error && (
+                <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+              )}
+              <Button type="submit" disabled={busy} variant="primary">
+                {busy ? "Uploading…" : "Submit for review"}
+              </Button>
+            </form>
+          </CardBody>
+        </Card>
       )}
 
       {error && verifiedBadge && (

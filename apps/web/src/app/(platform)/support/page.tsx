@@ -12,7 +12,7 @@ import { useAppName, usePlatformBranding } from "@/hooks/use-branding";
 
 export default function SupportPage() {
   const appName = useAppName() || "Shopmi.ng";
-  const email = usePlatformBranding().data?.supportEmail ?? "support@vendors.local";
+  const email = usePlatformBranding().data?.supportEmail ?? "support@shopmi.ng";
 
   return (
     <div>
@@ -63,7 +63,7 @@ export default function SupportPage() {
         <div className="mx-auto mt-10 max-w-xl rounded-lg border border-border bg-muted/40 p-token-6 text-center">
           <p className="text-sm text-muted-foreground">
             Still need a human? Email{" "}
-            <a className="font-medium text-accent underline-offset-2 hover:underline" href={`mailto:${email}`}>
+            <a className="font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark" href={`mailto:${email}`}>
               {email}
             </a>{" "}
             or use the {appName} contact form.

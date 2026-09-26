@@ -24,6 +24,8 @@ export interface UserPublic {
   hasPassword: boolean;
   /** True when linked to Google OAuth. */
   googleLinked: boolean;
+  /** ISO timestamp when email was verified; null if pending. */
+  emailVerifiedAt: string | null;
   notificationPrefs: {
     orderEmails: boolean;
     whatsappOrders: boolean;
@@ -326,6 +328,10 @@ export type PlatformBranding = {
   turnstileSiteKey?: string | null;
   /** When true, shop contact requires submitter email confirmation (REM-17). */
   shopContactConfirmRequired?: boolean;
+  /** When false, hide public pricing / plan CTAs. */
+  billingEnabled?: boolean;
+  /** Platform take on marketplace orders (Shopmi Service Fee %), informational. */
+  commissionPercent?: number;
 };
 
 /** Platform homepage banner slide stored in platform_settings.homepage_banners JSON. */
@@ -392,6 +398,8 @@ export interface SellerAnalytics {
     orderCount: number;
     productCount: number;
     conversionRate: number;
+    pendingOrderCount?: number;
+    allOrderCount?: number;
   };
   salesOverTime: { date: string; revenue: number; orders: number }[];
   topProducts: {

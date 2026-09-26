@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Tag } from "lucide-react";
 import type { CategoryPublic } from "@vendors/shared-types";
+import { Select } from "@/components/ui/select";
 
 export type CategoryPickerProps = {
   categories: CategoryPublic[];
@@ -85,7 +86,7 @@ export function CategoryPicker({
   }
 
   return (
-    <div className={`space-y-token-2 ${className}`}>
+    <div className={`space-y-2 ${className}`}>
       {path.length > 0 && (
         <nav
           aria-label="Selected category"
@@ -102,7 +103,7 @@ export function CategoryPicker({
                 className={
                   i === path.length - 1
                     ? "font-medium text-foreground"
-                    : "hover:text-foreground hover:underline"
+                    : "hover:text-foreground"
                 }
               >
                 {node.name}
@@ -112,17 +113,19 @@ export function CategoryPicker({
         </nav>
       )}
 
-      <div className="space-y-token-2">
+      <div className="space-y-2">
         {levels.map((opts, depth) => {
           const selectedId = path[depth]?.id ?? "";
           return (
-            <select
+            <Select
               key={`level-${depth}`}
+              icon={<Tag />}
               value={selectedId}
               onChange={(e) => selectAtDepth(depth, e.target.value)}
-              className="w-full rounded-md border border-border bg-card px-token-3 py-token-2 text-sm text-foreground"
               aria-label={
-                depth === 0 ? "Top-level category" : `Subcategory level ${depth + 1}`
+                depth === 0
+                  ? "Top-level category"
+                  : `Subcategory level ${depth + 1}`
               }
             >
               <option value="">
@@ -133,17 +136,13 @@ export function CategoryPicker({
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           );
         })}
         {levels.length === 0 && (
-          <select
-            disabled
-            className="w-full rounded-md border border-border bg-muted px-token-3 py-token-2 text-sm text-muted-foreground"
-            aria-label="Category"
-          >
+          <Select disabled icon={<Tag />} aria-label="Category">
             <option>No categories available</option>
-          </select>
+          </Select>
         )}
       </div>
     </div>

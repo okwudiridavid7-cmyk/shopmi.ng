@@ -55,7 +55,7 @@ function Chip({
 /** Dark, two-column inquiry form for the platform Contact page. */
 export function ModernContactForm() {
   const b = usePlatformBranding().data;
-  const supportEmail = b?.supportEmail ?? "support@vendors.local";
+  const supportEmail = b?.supportEmail ?? "support@shopmi.ng";
   const turnstileSiteKey = b?.turnstileSiteKey ?? null;
 
   const [topic, setTopic] = useState<string>(TOPICS[0]);
@@ -148,7 +148,7 @@ export function ModernContactForm() {
             <div className="mt-10 space-y-token-4 lg:mt-16">
             <a
               href={`mailto:${supportEmail}`}
-              className="inline-block text-sm text-white underline decoration-white/40 underline-offset-4 transition hover:decoration-accent"
+              className="inline-block text-sm text-white/80 transition hover:text-white"
             >
               {supportEmail}
             </a>
@@ -168,7 +168,7 @@ export function ModernContactForm() {
 
         {/* Right: form */}
         <form onSubmit={onSubmit} className="space-y-token-8">
-          {/* Honeypot — leave empty (REM-08) */}
+          {/* Honeypot — leave empty */}
           <div
             className="absolute -left-[9999px] h-0 w-0 overflow-hidden"
             aria-hidden

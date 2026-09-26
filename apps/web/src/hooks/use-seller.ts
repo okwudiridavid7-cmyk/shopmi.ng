@@ -14,7 +14,7 @@ import type {
   TeamMemberPublic,
   TenantPublic,
 } from "@vendors/shared-types";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiClientError } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 export type SellerFeatures = {
@@ -47,6 +47,9 @@ export type SellerShop = TenantPublic & {
   contactFormEnabled?: boolean;
   watermarkDefaultOn: boolean | null;
   watermarkPlatformDefault: boolean;
+  settlementBankCode?: string | null;
+  settlementAccountNumber?: string | null;
+  paystackSubaccountCode?: string | null;
 };
 
 export type SellerBranding = {
@@ -116,16 +119,22 @@ export function useSellerStats() {
   });
 }
 
-export function useSellerAnalytics(period: "today" | "week" | "month") {
+export function useSellerAnalytics(
+  period: "today" | "week" | "month",
+  day?: string | null
+) {
+  const dayKey = day || "";
   return useQuery({
-    queryKey: [...queryKeys.seller.analytics, period] as const,
+    queryKey: [...queryKeys.seller.analytics, period, dayKey] as const,
     queryFn: async () => {
+      const qs = new URLSearchParams({ period });
+      if (day) qs.set("day", day);
       const res = await apiFetch<{ analytics: SellerAnalytics }>(
-        `/api/seller/analytics?period=${period}`
+        `/api/seller/analytics?${qs}`
       );
       return res.analytics;
     },
-    refetchInterval: 4 * 60 * 1000,
+    refetchInterval: day ? false : 4 * 60 * 1000,
   });
 }
 
@@ -133,6 +142,10 @@ export function useSellerPlan() {
   return useQuery({
     queryKey: ["seller", "plan"] as const,
     queryFn: async () => apiFetch<SellerPlanInfo>("/api/seller/plan"),
+    retry: (count, err) => {
+      if (err instanceof ApiClientError && err.status === 403) return false;
+      return count < 2;
+    },
   });
 }
 
@@ -146,7 +159,7 @@ export function useSellerShop() {
   });
 }
 
-export function useSellerBranding() {
+export function useSellerBranding(enabled = true) {
   return useQuery({
     queryKey: ["seller", "branding"] as const,
     queryFn: async () => {
@@ -155,6 +168,7 @@ export function useSellerBranding() {
       );
       return res.branding;
     },
+    enabled,
   });
 }
 
