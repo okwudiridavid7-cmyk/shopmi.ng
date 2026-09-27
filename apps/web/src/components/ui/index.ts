@@ -16,6 +16,15 @@ export type {
   InteractiveCheckoutProps,
 } from "./interactive-checkout";
 export { Card, CardHeader, CardBody, CardFooter, CardContent, CardTitle, CardDescription } from "./card";
+export { AnimatedAIChat } from "./animated-ai-chat";
+export type {
+  AnimatedAIChatHandle,
+  AnimatedAIChatProps,
+  ChatCommand,
+  ChatResult,
+} from "./animated-ai-chat";
+export { MoireField } from "./moire-field";
+export type { MoireFieldProps } from "./moire-field";
 export { Modal } from "./modal";
 export { Badge } from "./badge";
 export { Dropdown } from "./dropdown";

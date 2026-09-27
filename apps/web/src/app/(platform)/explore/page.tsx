@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProductCard } from "@/components/product-card";
@@ -91,6 +91,30 @@ export default function HomePage() {
   const breadcrumb = breadcrumbQ.data ?? [];
 
   const favSet = favorites.data ?? new Set<string>();
+
+  // Searches handed off from the home hero arrive as ?q= — apply them, then glide to the results.
+  const [scrollToResults, setScrollToResults] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q")?.trim();
+    if (!q) return;
+    const store = useMarketplaceFilters.getState();
+    if (store.filters.q !== q) {
+      store.clearFilters();
+      store.setFilter("q", q);
+    }
+    setPage(1);
+    setScrollToResults(true);
+  }, []);
+  useEffect(() => {
+    if (!scrollToResults || loading || shopsQuery.isLoading) return;
+    setScrollToResults(false);
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById("products")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [scrollToResults, loading, shopsQuery.isLoading]);
 
   const platformSlides = useMemo(() => {
     const list = bannersQ.data ?? [];
@@ -200,7 +224,7 @@ export default function HomePage() {
             </div>
           </aside>
 
-          <section className="space-y-token-4">
+          <section id="products" className="scroll-mt-24 space-y-token-4">
             {filters.category && breadcrumb.length > 0 && (
               <nav
                 aria-label="Category breadcrumb"
