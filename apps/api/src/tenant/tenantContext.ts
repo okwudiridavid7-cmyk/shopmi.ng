@@ -1,5 +1,5 @@
 /**
- * TENANT ISOLATION — security boundary
+ * TENANT ISOLATION - security boundary
  * =====================================
  * Every query against a tenant-scoped table MUST include tenantId from a
  * server-resolved TenantContext. Never accept tenant_id from the client
@@ -10,19 +10,22 @@
  * - resolveTenantFromSlug: public storefront routes (/api/shops/:slug/...)
  *
  * Later: swap resolveTenantFromSlug for a subdomain-based resolver with the
- * same TenantContext return shape — callers stay unchanged.
+ * same TenantContext return shape - callers stay unchanged.
  */
 
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
+import type { TenantStatus } from "@prisma/client";
 
 export class TenantIsolationError extends Error {
   status: number;
+  code?: string;
 
-  constructor(message: string, status = 403) {
+  constructor(message: string, status = 403, code?: string) {
     super(message);
     this.name = "TenantIsolationError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -43,7 +46,7 @@ export function tenantWhere<T extends object = object>(
   extra?: T
 ): { tenantId: string } & T {
   if (!ctx?.tenantId) {
-    throw new TenantIsolationError("Missing tenant context — refusing query", 500);
+    throw new TenantIsolationError("Missing tenant context - refusing query", 500);
   }
   return { tenantId: ctx.tenantId, ...(extra ?? ({} as T)) };
 }
@@ -99,9 +102,29 @@ export async function resolveTenantFromMembership(
   };
 }
 
+/** Shops in these states are hidden from shoppers; dashboards and orders still work. */
+export const UNAVAILABLE_SHOP_STATUSES: TenantStatus[] = ["suspended", "lapsed"];
+
+export function isShopAvailable(status: TenantStatus): boolean {
+  return !UNAVAILABLE_SHOP_STATUSES.includes(status);
+}
+
+function assertShopAvailable(status: TenantStatus) {
+  if (status === "suspended") {
+    throw new TenantIsolationError("Shop is suspended", 403);
+  }
+  if (status === "lapsed") {
+    throw new TenantIsolationError(
+      "This shop is temporarily unavailable",
+      403,
+      "SHOP_UNAVAILABLE"
+    );
+  }
+}
+
 /**
  * Public storefront routes: resolve tenant from :slug (tenants.slug).
- * Same shape as a future subdomain resolver — keep call sites on TenantContext.
+ * Same shape as a future subdomain resolver - keep call sites on TenantContext.
  */
 export async function resolveTenantFromSlug(slug: string): Promise<TenantContext> {
   if (!slug || typeof slug !== "string") {
@@ -116,9 +139,7 @@ export async function resolveTenantFromSlug(slug: string): Promise<TenantContext
     throw new TenantIsolationError("Shop not found", 404);
   }
 
-  if (tenant.status === "suspended") {
-    throw new TenantIsolationError("Shop is suspended", 403);
-  }
+  assertShopAvailable(tenant.status);
 
   return {
     tenantId: tenant.id,
@@ -127,10 +148,23 @@ export async function resolveTenantFromSlug(slug: string): Promise<TenantContext
   };
 }
 
+/** Tenant owning a verified custom domain, and whether its plan still includes custom domains. */
+export async function findVerifiedDomainTenant(hostname: string) {
+  const tenant = await prisma.tenant.findFirst({
+    where: { customDomain: hostname, customDomainVerifiedAt: { not: null } },
+    include: { plan: true },
+  });
+  if (!tenant) return null;
+  const domainAllowed =
+    !tenant.plan ||
+    !!(tenant.plan.featureFlags as { customDomain?: boolean } | null)?.customDomain;
+  return { ...tenant, domainAllowed };
+}
+
 /**
  * Subdomain / custom-domain routing: look up tenants.slug or custom_domain from Host,
  * return the same TenantContext. Callers keep using tenantWhere(ctx).
- * Used by GET /api/shops/resolve-host — Next.js middleware must call that endpoint
+ * Used by GET /api/shops/resolve-host - Next.js middleware must call that endpoint
  * rather than reimplementing lookup.
  */
 export async function resolveTenantFromHost(host: string): Promise<TenantContext> {
@@ -139,13 +173,9 @@ export async function resolveTenantFromHost(host: string): Promise<TenantContext
     throw new TenantIsolationError("Host header missing", 400);
   }
 
-  const byCustom = await prisma.tenant.findFirst({
-    where: { customDomain: hostname },
-  });
-  if (byCustom) {
-    if (byCustom.status === "suspended") {
-      throw new TenantIsolationError("Shop is suspended", 403);
-    }
+  const byCustom = await findVerifiedDomainTenant(hostname);
+  if (byCustom?.domainAllowed) {
+    assertShopAvailable(byCustom.status);
     return {
       tenantId: byCustom.id,
       slug: byCustom.slug,
@@ -158,7 +188,7 @@ export async function resolveTenantFromHost(host: string): Promise<TenantContext
   if (baseHost && (hostname === baseHost || hostname.endsWith(`.${baseHost}`))) {
     if (hostname !== baseHost) {
       sub = hostname.slice(0, -(baseHost.length + 1));
-      // Drop multi-label leftovers (e.g. www.shop) — take leftmost label only when single hop
+      // Drop multi-label leftovers (e.g. www.shop) - take leftmost label only when single hop
       if (sub.includes(".")) {
         sub = sub.split(".")[0] ?? "";
       }
@@ -171,9 +201,7 @@ export async function resolveTenantFromHost(host: string): Promise<TenantContext
   if (sub && sub !== "www") {
     const bySlug = await prisma.tenant.findUnique({ where: { slug: sub } });
     if (bySlug) {
-      if (bySlug.status === "suspended") {
-        throw new TenantIsolationError("Shop is suspended", 403);
-      }
+      assertShopAvailable(bySlug.status);
       return {
         tenantId: bySlug.id,
         slug: bySlug.slug,

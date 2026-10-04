@@ -37,6 +37,33 @@ function publicUrl(filename: string): string {
   return `${env.apiUrl}/uploads/${filename}`;
 }
 
+/**
+ * Resize an uploaded file to at most 1600px on the long edge and re-encode as WebP.
+ * GIFs are left alone so animations survive. Returns the stored filename.
+ */
+export async function optimizeUpload(filename: string, dir: string = env.uploadsDir): Promise<string> {
+  if (filename.toLowerCase().endsWith(".gif")) return filename;
+  const src = path.join(dir, filename);
+  const outName = `${filename.replace(/\.[^.]+$/, "")}.webp`;
+  const out = path.join(dir, outName);
+  try {
+    await sharp(src)
+      .rotate()
+      .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toFile(out === src ? `${out}.tmp` : out);
+    if (out === src) {
+      fs.renameSync(`${out}.tmp`, out);
+    } else {
+      fs.unlinkSync(src);
+    }
+    return outName;
+  } catch (e) {
+    console.warn("[images] optimizeUpload failed, keeping original", e);
+    return filename;
+  }
+}
+
 export type WatermarkOptions = {
   text: string;
   logoUrl?: string | null;
@@ -190,7 +217,7 @@ export async function buildShopLogos(opts: {
   };
 }
 
-/** Legacy initials logo — kept for onboarding compatibility. */
+/** Legacy initials logo - kept for onboarding compatibility. */
 export async function generateLogo(opts: {
   initials: string;
   color: string;

@@ -3,7 +3,7 @@ import type { ShopBannerPublic } from "@vendors/shared-types";
 /** Default autoplay interval (seconds) for hero banners. */
 export const BANNER_AUTOPLAY_SEC = 10;
 
-/** Premium stock banners — three slides so the peek carousel always has neighbors. */
+/** Premium stock banners - three slides so the peek carousel always has neighbors. */
 export const DEFAULT_PLATFORM_BANNERS: Array<
   Omit<ShopBannerPublic, "id" | "tenantId" | "createdAt" | "updatedAt">
 > = [
@@ -12,7 +12,7 @@ export const DEFAULT_PLATFORM_BANNERS: Array<
       "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1600&q=80",
     title: "Independent shops",
     subtitle:
-      "Discover makers and retailers with branded storefronts — pay once, track your order.",
+      "Discover makers and retailers with branded storefronts. Pay once, track your order.",
     ctaText: "Shop now",
     ctaUrl: "#marketplace",
     scrollSpeed: BANNER_AUTOPLAY_SEC,
@@ -44,7 +44,7 @@ export const DEFAULT_PLATFORM_BANNERS: Array<
   },
 ];
 
-/** @deprecated Use DEFAULT_PLATFORM_BANNERS[0] — kept for single-slide fallbacks. */
+/** @deprecated Use DEFAULT_PLATFORM_BANNERS[0] - kept for single-slide fallbacks. */
 export const DEFAULT_PLATFORM_BANNER = DEFAULT_PLATFORM_BANNERS[0]!;
 
 export const DEFAULT_SHOP_BANNER: Omit<

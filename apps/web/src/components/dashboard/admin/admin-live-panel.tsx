@@ -34,14 +34,14 @@ function statusTone(status: string): {
   };
 }
 
-/** Live shop signups panel — maps recentShops from overview (real data only). */
+/** Live shop signups panel - maps recentShops from overview (real data only). */
 export function AdminLivePanel({ shops }: { shops: Shop[] | undefined }) {
   const rows = shops ?? [];
 
   return (
-    <section className="flex h-full flex-col rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <h2 className="text-sm font-medium text-foreground">Live signups</h2>
+    <section className="dash-card flex h-full flex-col">
+      <div className="flex items-center justify-between gap-2 px-5 pb-2 pt-5">
+        <h2 className="text-base font-semibold text-foreground">Live signups</h2>
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
           <span
             className="h-1.5 w-1.5 rounded-full bg-success animate-live-pulse"
@@ -53,14 +53,14 @@ export function AdminLivePanel({ shops }: { shops: Shop[] | undefined }) {
 
       {!rows.length ? (
         <p className="flex-1 px-4 py-8 text-center text-sm text-muted-foreground">
-          New shops will appear here as they onboard.
+          No new shops
         </p>
       ) : (
-        <ul className="flex-1 divide-y divide-border">
+        <ul className="flex-1 space-y-1 px-3">
           {rows.slice(0, 8).map((shop) => {
             const tone = statusTone(shop.status);
             return (
-              <li key={shop.id} className="px-4 py-3">
+              <li key={shop.id} className="rounded-xl px-2 py-2.5 transition-colors hover:bg-muted">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -94,7 +94,7 @@ export function AdminLivePanel({ shops }: { shops: Shop[] | undefined }) {
         </ul>
       )}
 
-      <div className="border-t border-border px-4 py-3">
+      <div className="px-5 pb-5 pt-3">
         <TextLink href="/admin/tenants" arrow="right">
           View all shops
         </TextLink>

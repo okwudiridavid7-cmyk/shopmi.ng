@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { useAppName } from "@/hooks/use-branding";
 
-/** Sleeker retail / architecture hero — dark, calm, high-end. */
+/** Sleeker retail / architecture hero - dark, calm, high-end. */
 const AUTH_HERO =
   "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1600&q=80";
 
@@ -33,14 +33,14 @@ export function AuthSplitLayout({
           <BrandMark href="/" inverted />
           <div className="max-w-md space-y-4 text-white">
             <p className="font-display text-3xl font-semibold leading-tight xl:text-4xl">
-              Independent shops.
+              Shop local.
               <br />
-              Real checkout.
+              Pay once.
             </p>
             <p className="text-sm leading-relaxed text-white/75">
-              {appName} is built for sellers who want a storefront that looks
-              like them — and buyers who want to pay once and know where the
-              order went.
+              {appName} gives every seller a storefront with their own name and
+              web address, paid out through Paystack. Buyers fill one cart from
+              many shops, pay once, and follow every order until it arrives.
             </p>
           </div>
         </div>

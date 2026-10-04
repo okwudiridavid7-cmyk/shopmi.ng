@@ -42,7 +42,7 @@ type MarketplaceFilterState = {
   clearFilters: () => void;
 };
 
-/** Client UI store — marketplace sidebar filters (shared across remounts). */
+/** Client UI store - marketplace sidebar filters (shared across remounts). */
 export const useMarketplaceFilters = create<MarketplaceFilterState>((set) => ({
   filters: emptyFilters,
   setFilter: (key, value) =>

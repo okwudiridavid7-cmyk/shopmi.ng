@@ -42,7 +42,6 @@ export default function SellerOrderDetailPage() {
       <EmptyState
         kind="not_found"
         title="Order not found"
-        description="This order may have been removed."
         actionLabel="Back to orders"
         actionHref="/seller/orders"
       />

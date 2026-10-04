@@ -15,7 +15,7 @@ export async function sendWhatsAppText(
 
   if (!env.whatsappToken || !env.whatsappPhoneNumberId) {
     console.warn(
-      "[whatsapp] WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID not set — skipping notification"
+      "[whatsapp] WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID not set - skipping notification"
     );
     console.info(`[whatsapp] would send to ${phone}: ${body.slice(0, 120)}…`);
     return { sent: false, skipped: true };

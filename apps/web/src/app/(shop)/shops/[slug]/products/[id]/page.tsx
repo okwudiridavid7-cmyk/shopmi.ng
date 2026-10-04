@@ -1,53 +1,100 @@
 import type { Metadata } from "next";
+import { JsonLd } from "@/components/json-ld";
+import { API_URL, SITE_NAME } from "@/lib/seo";
+import { buildPublicShopUrl } from "@/lib/shop-url";
 import { ProductDetailClient } from "./product-detail-client";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const WEB_URL = process.env.NEXT_PUBLIC_WEB_URL ?? "http://localhost:3000";
 
 type Props = { params: { slug: string; id: string } };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+type ProductMeta = {
+  id: string;
+  title: string;
+  description: string;
+  price: string | number;
+  currency: string;
+  stock?: number | null;
+  images?: unknown;
+  brandName?: string | null;
+  tenant?: { name: string; slug: string } | null;
+};
+
+async function loadProduct(slug: string, id: string): Promise<ProductMeta | null> {
   try {
-    const res = await fetch(
-      `${API_URL}/api/shops/${params.slug}/products/${params.id}`,
-      { next: { revalidate: 60 } }
-    );
-    if (!res.ok) {
-      return { title: "Product · Vendors" };
-    }
-    const data = (await res.json()) as {
-      product: {
-        id: string;
-        title: string;
-        description: string;
-        tenant?: { name: string } | null;
-      };
-    };
-    const p = data.product;
-    const url = `${WEB_URL}/shops/${params.slug}/products/${params.id}`;
-    const ogImage = `${API_URL}/api/og/products/${p.id}`;
-    return {
-      title: `${p.title} · ${p.tenant?.name ?? "Vendors"}`,
-      description: p.description.slice(0, 160),
-      openGraph: {
-        title: p.title,
-        description: p.description.slice(0, 160),
-        url,
-        images: [{ url: ogImage, width: 1200, height: 630 }],
-        type: "website",
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: p.title,
-        description: p.description.slice(0, 160),
-        images: [ogImage],
-      },
-    };
+    const res = await fetch(`${API_URL}/api/shops/${slug}/products/${id}`, {
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return null;
+    return ((await res.json()) as { product: ProductMeta }).product;
   } catch {
-    return { title: "Product · Vendors" };
+    return null;
   }
 }
 
-export default function ProductDetailPage({ params }: Props) {
-  return <ProductDetailClient slug={params.slug} id={params.id} />;
+function firstImage(images: unknown): string | null {
+  if (!Array.isArray(images) || !images.length) return null;
+  const first = images[0] as unknown;
+  if (typeof first === "string") return first;
+  if (first && typeof first === "object" && "url" in first) {
+    const url = (first as { url?: unknown }).url;
+    return typeof url === "string" ? url : null;
+  }
+  return null;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const p = await loadProduct(params.slug, params.id);
+  if (!p) return { title: { absolute: `Product | ${SITE_NAME}` }, robots: { index: false } };
+  const shopName = p.tenant?.name ?? SITE_NAME;
+  const title = `${p.title} | ${shopName}`;
+  const description = p.description.replace(/\s+/g, " ").trim().slice(0, 160);
+  const url = `${buildPublicShopUrl(params.slug)}/products/${params.id}`;
+  return {
+    title: { absolute: title },
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: SITE_NAME,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
+  };
+}
+
+export default async function ProductDetailPage({ params }: Props) {
+  const p = await loadProduct(params.slug, params.id);
+  const image = p ? firstImage(p.images) : null;
+  const jsonLd = p
+    ? {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: p.title,
+        description: p.description.slice(0, 500),
+        ...(image ? { image: [image] } : {}),
+        ...(p.brandName ? { brand: { "@type": "Brand", name: p.brandName } } : {}),
+        offers: {
+          "@type": "Offer",
+          url: `${buildPublicShopUrl(params.slug)}/products/${params.id}`,
+          priceCurrency: p.currency || "NGN",
+          price: String(p.price),
+          availability:
+            p.stock === 0
+              ? "https://schema.org/OutOfStock"
+              : "https://schema.org/InStock",
+          seller: { "@type": "Organization", name: p.tenant?.name ?? SITE_NAME },
+        },
+      }
+    : null;
+  return (
+    <>
+      {jsonLd ? <JsonLd data={jsonLd} /> : null}
+      <ProductDetailClient slug={params.slug} id={params.id} />
+    </>
+  );
 }

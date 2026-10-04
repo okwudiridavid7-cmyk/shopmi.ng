@@ -21,7 +21,7 @@ type Props = {
   required?: boolean;
   idPrefix?: string;
   className?: string;
-  /** Lock country to Nigeria — only ask for state/region. */
+  /** Lock country to Nigeria - only ask for state/region. */
   nigeriaOnly?: boolean;
 };
 
@@ -121,9 +121,6 @@ export function CountryStateSelect({
             ))}
           </Select>
         </Label>
-        <p className="text-xs text-muted-foreground">
-          We’re focused on Nigeria for now — country is set automatically.
-        </p>
       </div>
     );
   }

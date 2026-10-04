@@ -4,15 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
-import {
-  ArrowRight,
-  Cloud,
-  CornerDownLeft,
-  HelpCircle,
-  LifeBuoy,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, CornerDownLeft, LifeBuoy, Search } from "lucide-react";
 import {
   flattenNavItems,
   navGroupsForMode,
@@ -52,29 +44,8 @@ function pushRecent(entry: Omit<RecentEntry, "at">) {
   }
 }
 
-const TIPS = [
-  {
-    id: "tip-go",
-    label: "go:",
-    description: "Jump to a section by name",
-    icon: Sparkles,
-  },
-  {
-    id: "tip-help",
-    label: "help:",
-    description: "Open FAQs and support",
-    icon: HelpCircle,
-  },
-  {
-    id: "tip-shop",
-    label: "shop:",
-    description: "Browse the marketplace",
-    icon: Cloud,
-  },
-] as const;
-
 /**
- * Robust ⌘K palette — categories, icons, keyboard hints, promo footer.
+ * Robust ⌘K palette - categories, icons, keyboard hints, promo footer.
  */
 export function CommandPalette({ mode, open, onOpenChange }: Props) {
   const router = useRouter();
@@ -192,44 +163,6 @@ export function CommandPalette({ mode, open, onOpenChange }: Props) {
                 ))}
               </Command.Group>
             ))}
-
-            <Command.Group
-              heading="Search tips"
-              className="[&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:normal-case [&_[cmdk-group-heading]]:tracking-normal [&_[cmdk-group-heading]]:text-foreground"
-            >
-              {TIPS.map((tip) => {
-                const Icon = tip.icon;
-                return (
-                  <Command.Item
-                    key={tip.id}
-                    value={`${tip.label} ${tip.description}`}
-                    onSelect={() => {
-                      if (tip.id === "tip-help") navigate("/faq", "FAQs");
-                      else if (tip.id === "tip-shop") navigate("/", "Marketplace");
-                      else setQuery("");
-                    }}
-                    className="group flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm aria-selected:bg-muted"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
-                      <Icon className="h-4 w-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="font-semibold text-foreground">
-                        {tip.label}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {" "}
-                        — {tip.description}
-                      </span>
-                    </span>
-                    <ArrowRight
-                      className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition group-aria-selected:opacity-100"
-                      aria-hidden
-                    />
-                  </Command.Item>
-                );
-              })}
-            </Command.Group>
           </Command.List>
 
           <div className="flex items-center gap-4 border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
@@ -259,14 +192,11 @@ export function CommandPalette({ mode, open, onOpenChange }: Props) {
             <p className="truncate text-sm font-medium text-foreground">
               Need a hand with Shopmi.ng?
             </p>
-            <p className="truncate text-xs text-muted-foreground">
-              FAQs, support hub, and contact — we&apos;re here.
-            </p>
           </div>
           <Link
             href="/support"
             onClick={() => onOpenChange(false)}
-            className="shrink-0 rounded-lg bg-accent px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent-deep"
+            className="shrink-0 rounded-lg bg-accent-strong px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-90"
           >
             Learn more
           </Link>
@@ -304,7 +234,7 @@ function PaletteItem({
       </span>
       <span className="min-w-0 flex-1 truncate">
         <span className="font-medium text-foreground">{item.label}</span>
-        <span className="text-muted-foreground"> — {secondary}</span>
+        <span className="text-muted-foreground"> · {secondary}</span>
       </span>
       <ArrowRight
         className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition group-aria-selected:opacity-100"

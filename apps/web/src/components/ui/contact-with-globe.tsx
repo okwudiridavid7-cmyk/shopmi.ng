@@ -709,7 +709,7 @@ interface ContactWithGlobeProps {
 export default function ContactWithGlobe({
   title = "Contact us",
   subtitle = "Contact",
-  description = "We read every message and reply as soon as we can on business days.",
+  description,
   className,
   supportEmail = "support@shopmi.ng",
   phone = null,
@@ -748,8 +748,8 @@ export default function ContactWithGlobe({
       : []),
     {
       icon: Headphones,
-      label: `Support · ${supportEmail}`,
-      href: `mailto:${supportEmail}`,
+      label: "Help centre",
+      href: "/support",
     },
   ];
 
@@ -800,7 +800,7 @@ export default function ContactWithGlobe({
             transition={{ duration: 0.8, ease: smoothEase }}
             className="inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5"
           >
-            <span className="text-sm font-medium text-accent">{subtitle}</span>
+            <span className="text-sm font-medium text-accent-strong dark:text-accent-on-dark">{subtitle}</span>
           </motion.div>
 
           <motion.h2
@@ -813,15 +813,17 @@ export default function ContactWithGlobe({
             {title}
           </motion.h2>
 
-          <motion.p
-            initial={{ opacity: 0, y: 14 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.9, delay: 0.3, ease: smoothEase }}
-            className="max-w-md text-base text-muted-foreground"
-          >
-            {description}
-          </motion.p>
+          {description ? (
+            <motion.p
+              initial={{ opacity: 0, y: 14 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.9, delay: 0.3, ease: smoothEase }}
+              className="max-w-md text-base text-muted-foreground"
+            >
+              {description}
+            </motion.p>
+          ) : null}
         </div>
 
         <div className="mx-auto grid max-w-5xl grid-cols-1 items-start gap-10 lg:grid-cols-2">
@@ -836,10 +838,6 @@ export default function ContactWithGlobe({
               <h3 className="text-xl font-semibold text-foreground">
                 Get in touch
               </h3>
-              <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Reach out via any channel below. We typically reply within one
-                business day.
-              </p>
             </div>
 
             {promises.length > 0 ? (
@@ -858,7 +856,7 @@ export default function ContactWithGlobe({
                     className="flex items-start gap-3 text-sm text-muted-foreground"
                   >
                     <span
-                      className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground"
+                      className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-strong text-[10px] font-bold text-accent-foreground"
                       aria-hidden
                     >
                       ✓
@@ -916,9 +914,6 @@ export default function ContactWithGlobe({
               <h3 className="mb-0.5 text-lg font-semibold text-foreground">
                 Send a message
               </h3>
-              <p className="text-sm text-muted-foreground">
-                Fill out the form and we&apos;ll get back to you promptly.
-              </p>
             </div>
 
             <FormDots />
@@ -957,7 +952,7 @@ export default function ContactWithGlobe({
                       className={cn(
                         "rounded-full border px-3.5 py-1.5 text-sm transition",
                         topic === t
-                          ? "border-accent bg-accent text-white"
+                          ? "border-accent-strong bg-accent-strong text-white"
                           : "border-border bg-muted/40 text-foreground hover:border-accent/40"
                       )}
                     >
@@ -980,7 +975,7 @@ export default function ContactWithGlobe({
                       className={cn(
                         "rounded-full border px-3.5 py-1.5 text-sm transition",
                         intent === t
-                          ? "border-accent bg-accent text-white"
+                          ? "border-accent-strong bg-accent-strong text-white"
                           : "border-border bg-muted/40 text-foreground hover:border-accent/40"
                       )}
                     >
@@ -1046,7 +1041,7 @@ export default function ContactWithGlobe({
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={supportEmail}
+                  placeholder="you@example.com"
                   className={inputClassName}
                 />
               </div>

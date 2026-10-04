@@ -20,23 +20,14 @@ export default function ShopFaqPage({ params }: { params: { slug: string } }) {
     return <p className="text-sm text-danger">{error}</p>;
   }
 
-  const faq: FaqItem[] = tenant?.faqContent?.length
-    ? tenant.faqContent
-    : [
-        {
-          question: "How do I place an order?",
-          answer:
-            "Browse products, add items to your cart, then checkout. You’ll receive confirmation after payment.",
-        },
-        {
-          question: "How can I contact the shop?",
-          answer: "Use the Contact page for phone, email, and social links.",
-        },
-      ];
+  const faq: FaqItem[] = tenant?.faqContent ?? [];
 
   return (
     <div className="mx-auto max-w-3xl space-y-token-6">
       <h1 className="font-display text-3xl text-foreground">FAQ</h1>
+      {tenant && faq.length === 0 && (
+        <p className="text-sm text-muted-foreground">No FAQs yet</p>
+      )}
       <ul className="space-y-token-4">
         {faq.map((item, i) => (
           <li

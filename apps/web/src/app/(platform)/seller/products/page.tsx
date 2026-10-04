@@ -2,7 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Package, Tag } from "lucide-react";
-import type { ProductImageAsset, ProductPublic } from "@vendors/shared-types";
+import type {
+  ProductImageAsset,
+  ProductPublic,
+  ProductStatus,
+} from "@vendors/shared-types";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
@@ -39,6 +43,8 @@ function statusClass(status: string) {
     return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300";
   if (status === "draft")
     return "bg-amber-500/15 text-amber-900 dark:text-amber-200";
+  if (status === "paused")
+    return "bg-sky-500/15 text-sky-900 dark:text-sky-200";
   return "bg-muted text-muted-foreground";
 }
 
@@ -102,7 +108,7 @@ export default function SellerProductsPage() {
     countryCode: "",
     stateCode: "",
     imageAssets: [] as ProductImageAsset[],
-    status: "active" as "draft" | "active" | "archived",
+    status: "active" as ProductStatus,
     watermarkEnabled: false,
     aiGeneratedDescription: false,
   });
@@ -256,7 +262,7 @@ export default function SellerProductsPage() {
           original: a.original,
           watermarked: a.watermarked,
         })),
-        status: form.status,
+        ...(form.status === "paused" ? {} : { status: form.status }),
         watermarkEnabled: form.watermarkEnabled,
         aiGeneratedDescription: form.aiGeneratedDescription,
       };
@@ -348,6 +354,7 @@ export default function SellerProductsPage() {
                 <span>Title</span>
                 <Input
                   required
+                  placeholder="e.g. Ankara wrap dress"
                   value={form.title}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, title: e.target.value }))
@@ -359,6 +366,7 @@ export default function SellerProductsPage() {
                 <Textarea
                   required
                   rows={4}
+                  placeholder="Material, sizes, fit and care. What should a buyer know?"
                   value={form.description}
                   onChange={(e) =>
                     setForm((f) => ({
@@ -388,6 +396,7 @@ export default function SellerProductsPage() {
                     type="number"
                     min="0"
                     step="0.01"
+                    placeholder="0.00"
                     value={form.price}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, price: e.target.value }))
@@ -415,6 +424,7 @@ export default function SellerProductsPage() {
                     required
                     type="number"
                     min="0"
+                    placeholder="e.g. 10"
                     value={form.stockQty}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, stockQty: e.target.value }))
@@ -422,7 +432,7 @@ export default function SellerProductsPage() {
                   />
                 </Label>
                 <Label>
-                  <span>Brand (free text)</span>
+                  <span>Brand</span>
                   <Input
                     value={form.brandName}
                     onChange={(e) =>
@@ -456,7 +466,7 @@ export default function SellerProductsPage() {
                       }))
                     }
                   >
-                    <option value="">—</option>
+                    <option value="">None</option>
                     {shopCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -496,7 +506,19 @@ export default function SellerProductsPage() {
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
                   <option value="archived">Archived</option>
+                  {form.status === "paused" ? (
+                    <option value="paused" disabled>
+                      Paused
+                    </option>
+                  ) : null}
                 </Select>
+                {form.status === "paused" ? (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Hidden because your shop is over its plan&apos;s product limit.
+                    Unpublish another product or{" "}
+                    <TextLink href="/seller/plan">change plan</TextLink> to bring it back.
+                  </span>
+                ) : null}
               </Label>
               <Label>
                 <span>Images</span>
@@ -600,7 +622,6 @@ export default function SellerProductsPage() {
         <EmptyState
           kind="empty_filtered"
           title="No products match these filters"
-          description="Adjust status, category, or stock — or clear filters to see everything."
           actionLabel="Clear filters"
           onAction={() => setFilters(emptyProductFilters)}
           icon={Package}

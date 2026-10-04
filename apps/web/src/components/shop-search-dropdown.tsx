@@ -7,7 +7,7 @@ import { formatMoney, productImageUrl } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 
 /**
- * Shop-page search ONLY — debounced typeahead DROPDOWN (not a filtered grid).
+ * Shop-page search ONLY - debounced typeahead DROPDOWN (not a filtered grid).
  * Marketplace search must remain grid-based on the homepage.
  */
 export function ShopSearchDropdown({
@@ -98,7 +98,7 @@ export function ShopSearchDropdown({
                       <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
                         {img ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={img}
                             alt=""
                             className="h-full w-full object-cover"

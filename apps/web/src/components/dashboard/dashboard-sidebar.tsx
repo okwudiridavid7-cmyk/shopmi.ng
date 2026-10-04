@@ -53,7 +53,6 @@ export function DashboardSidebar({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const branding = useSellerBranding(mode === "seller");
   const isCollapsed = collapsed && ready;
-  const admin = mode === "admin";
 
   useEffect(() => {
     const next: Record<string, boolean> = {};
@@ -79,7 +78,7 @@ export function DashboardSidebar({
     <div className="flex h-full min-h-0 flex-col">
       {mode === "seller" ? (
         <div
-          className={`shrink-0 border-b border-border ${
+          className={`shrink-0 border-b border-ink-border ${
             isCollapsed ? "px-2 py-3" : "px-4 py-4"
           }`}
         >
@@ -93,24 +92,24 @@ export function DashboardSidebar({
               />
             </div>
           ) : shopLogo ? (
-            <div className="flex items-center gap-3">
+            <div className="inline-flex max-w-full items-center rounded-xl bg-white px-2.5 py-1.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={shopLogo}
                 alt={shopName}
-                className="h-10 max-w-[11rem] object-contain object-left"
+                className="h-8 max-w-[10rem] object-contain object-left"
               />
             </div>
           ) : (
             <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent dark:text-accent-on-dark">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-accent">
                 <Store className="h-4 w-4" aria-hidden />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">
+                <p className="truncate text-sm font-semibold text-white">
                   {shopName}
                 </p>
-                <p className="truncate text-[11px] text-muted-foreground">
+                <p className="truncate text-[11px] text-white/55">
                   Seller dashboard
                 </p>
               </div>
@@ -119,11 +118,11 @@ export function DashboardSidebar({
         </div>
       ) : null}
 
-      <div className={`shrink-0 border-b border-border ${admin ? "p-3" : "p-3"}`}>
+      <div className="shrink-0 border-b border-ink-border p-3">
         <button
           type="button"
           onClick={onOpenCommand}
-          className={`flex w-full items-center gap-2 rounded-lg border border-border bg-shell-search px-3 py-2 text-sm text-muted-foreground transition hover:text-foreground ${
+          className={`flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-white/60 transition hover:bg-white/10 hover:text-white ${
             isCollapsed ? "justify-center px-2" : ""
           }`}
           title="Search navigation (⌘K)"
@@ -132,7 +131,7 @@ export function DashboardSidebar({
           {!isCollapsed && (
             <>
               <span className="flex-1 text-left">Search…</span>
-              <kbd className="hidden items-center gap-0.5 rounded border border-border bg-card px-1.5 py-0.5 font-sans text-xs font-semibold leading-none text-muted-foreground sm:inline-flex">
+              <kbd className="hidden items-center gap-0.5 rounded border border-white/15 px-1.5 py-0.5 font-sans text-xs font-semibold leading-none text-white/60 sm:inline-flex">
                 <span className="text-sm leading-none" aria-hidden>
                   ⌘
                 </span>
@@ -156,7 +155,7 @@ export function DashboardSidebar({
           {groups.map((group) => (
             <div key={group.id}>
               {!isCollapsed && (
-                <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
                   {group.label}
                 </p>
               )}
@@ -169,7 +168,6 @@ export function DashboardSidebar({
                     search={search}
                     collapsed={isCollapsed}
                     expanded={!!expanded[item.id]}
-                    admin={admin}
                     onToggleExpand={() => toggleExpand(item.id)}
                     onNavigate={onMobileClose}
                   />
@@ -180,10 +178,10 @@ export function DashboardSidebar({
         </div>
       </nav>
 
-      <div className="mt-auto shrink-0 border-t border-border">
+      <div className="mt-auto shrink-0 border-t border-ink-border">
         {mode === "seller" ? (
           <div
-            className={`border-b border-border ${
+            className={`border-b border-ink-border ${
               isCollapsed ? "px-2 py-3" : "px-4 py-4"
             }`}
           >
@@ -198,11 +196,12 @@ export function DashboardSidebar({
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">
                   Powered by
                 </p>
                 <BrandMark
                   href="/"
+                  inverted
                   className="opacity-90 transition hover:opacity-100 [&_img]:h-6 [&_img]:sm:h-7"
                 />
               </div>
@@ -214,7 +213,7 @@ export function DashboardSidebar({
           <button
             type="button"
             onClick={toggleCollapsed}
-            className="flex w-full items-center justify-center gap-2 rounded-lg px-2 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            className="flex w-full items-center justify-center gap-2 rounded-lg px-2 py-2 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -244,7 +243,7 @@ export function DashboardSidebar({
       )}
 
       <aside
-        className={`dashboard-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(100%,18rem)] flex-col border-r border-border bg-card shadow-sm motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out lg:static lg:z-auto lg:h-full lg:shrink-0 lg:shadow-none ${
+        className={`dashboard-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(100%,18rem)] flex-col border-r border-ink-border bg-ink text-white shadow-xl motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out lg:static lg:z-auto lg:h-full lg:shrink-0 lg:shadow-none ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${
           isCollapsed ? "lg:w-[4.25rem]" : "lg:w-[16.5rem]"
@@ -263,7 +262,6 @@ function SidebarNavItem({
   search,
   collapsed,
   expanded,
-  admin,
   onToggleExpand,
   onNavigate,
 }: {
@@ -272,7 +270,6 @@ function SidebarNavItem({
   search: string;
   collapsed: boolean;
   expanded: boolean;
-  admin: boolean;
   onToggleExpand: () => void;
   onNavigate: () => void;
 }) {
@@ -281,12 +278,8 @@ function SidebarNavItem({
   const parentActive = isNavParentActive(pathname, search, item);
   const selfActive = isNavActive(pathname, search, item.href);
 
-  const activeClass = admin
-    ? "bg-accent-soft font-medium text-accent dark:text-accent-on-dark"
-    : "bg-accent/15 font-medium text-accent";
-  const idleClass = admin
-    ? "text-muted-foreground hover:bg-shell-nav-hover hover:text-foreground"
-    : "text-muted-foreground hover:bg-muted hover:text-foreground";
+  const activeClass = "bg-white/10 font-medium text-white";
+  const idleClass = "text-white/65 hover:bg-white/[0.06] hover:text-white";
 
   if (hasChildren) {
     return (
@@ -301,12 +294,8 @@ function SidebarNavItem({
             } ${collapsed ? "justify-center px-2" : ""}`}
           >
             <Icon
-              className={`h-[1.125rem] w-[1.125rem] shrink-0 ${
-                parentActive
-                  ? admin
-                    ? "text-accent dark:text-accent-on-dark"
-                    : "text-accent"
-                  : ""
+              className={`h-[1.125rem] w-[1.125rem] shrink-0 transition-colors ${
+                parentActive ? "text-accent" : ""
               }`}
               aria-hidden
             />
@@ -318,7 +307,7 @@ function SidebarNavItem({
               onClick={onToggleExpand}
               aria-expanded={expanded}
               aria-label={`${expanded ? "Collapse" : "Expand"} ${item.label} menu`}
-              className="rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="rounded-lg px-2 text-white/50 hover:bg-white/[0.06] hover:text-white"
             >
               <ChevronDown
                 className={`h-4 w-4 motion-safe:transition-transform motion-safe:duration-200 ${
@@ -330,7 +319,7 @@ function SidebarNavItem({
         </div>
         {!collapsed && (
           <ul
-            className={`ml-4 space-y-1 overflow-hidden border-l border-border pl-2 motion-safe:transition-all motion-safe:duration-200 ${
+            className={`ml-4 space-y-1 overflow-hidden border-l border-white/10 pl-2 motion-safe:transition-all motion-safe:duration-200 ${
               expanded ? "mt-1 max-h-96 opacity-100" : "max-h-0 opacity-0"
             }`}
           >
@@ -343,8 +332,8 @@ function SidebarNavItem({
                     onClick={onNavigate}
                     className={`block rounded-lg px-3 py-2 text-sm transition ${
                       childActive
-                        ? "bg-accent/15 font-medium text-accent"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        ? "bg-white/10 font-medium text-white"
+                        : "text-white/60 hover:bg-white/[0.06] hover:text-white"
                     }`}
                   >
                     {child.label}
@@ -369,12 +358,8 @@ function SidebarNavItem({
         } ${collapsed ? "justify-center px-2" : ""}`}
       >
         <Icon
-          className={`h-[1.125rem] w-[1.125rem] shrink-0 ${
-            selfActive
-              ? admin
-                ? "text-accent dark:text-accent-on-dark"
-                : "text-accent"
-              : ""
+          className={`h-[1.125rem] w-[1.125rem] shrink-0 transition-colors ${
+            selfActive ? "text-accent" : ""
           }`}
           aria-hidden
         />

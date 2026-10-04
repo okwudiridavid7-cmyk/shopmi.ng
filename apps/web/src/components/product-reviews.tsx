@@ -145,7 +145,7 @@ export function ProductReviews({
         </div>
       ) : !summary.canReview ? (
         <p className="text-sm text-muted-foreground">
-          Be the first to share feedback
+          No reviews yet
         </p>
       ) : null}
 

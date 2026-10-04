@@ -160,7 +160,7 @@ const publicCampaignLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-/** Mount under /api/shops — GET /:slug/campaigns/active */
+/** Mount under /api/shops - GET /:slug/campaigns/active */
 export const shopCampaignsRouter = Router({ mergeParams: true });
 
 shopCampaignsRouter.get(

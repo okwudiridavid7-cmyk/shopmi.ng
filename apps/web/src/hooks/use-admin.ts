@@ -34,6 +34,8 @@ export type AdminTenantDetail = AdminTenantRow & {
   currency: string;
   themeSettings: Record<string, unknown> | null;
   customDomain: string | null;
+  trialEndsAt: string | null;
+  planExpiresAt?: string | null;
   recentOrders: {
     id: string;
     status: string;

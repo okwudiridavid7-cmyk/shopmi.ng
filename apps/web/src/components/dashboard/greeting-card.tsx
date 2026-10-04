@@ -50,7 +50,7 @@ function formatClock(now: Date): { date: string; time: string } {
   return { date, time };
 }
 
-/** Overview greeting — live clock (1min), time-of-day greeting, inline core stats. */
+/** Overview greeting - live clock (1min), time-of-day greeting, inline core stats. */
 export function GreetingCard({ firstName, stats }: Props) {
   const [now, setNow] = useState(() => new Date());
 
@@ -74,7 +74,7 @@ export function GreetingCard({ firstName, stats }: Props) {
         <CardBody className="relative space-y-token-6 p-token-6 sm:p-token-8">
           <div className="flex flex-wrap items-start justify-between gap-token-4">
             <div className="min-w-0 space-y-token-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-strong dark:text-accent-on-dark">
                 Overview
               </p>
               <h1 className="font-display text-3xl tracking-tight text-foreground sm:text-4xl">

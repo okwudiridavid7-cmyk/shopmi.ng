@@ -71,10 +71,10 @@ const LogoCloud = ({
         (beamOffset - textStartPercent) / (textEndPercent - textStartPercent);
       span.style.backgroundPosition = `${95 - t * 90}% center`;
     } else if (beamOffset < textStartPercent) {
-      // Beam hasn't reached text yet — wave parked to the right
+      // Beam hasn't reached text yet - wave parked to the right
       span.style.backgroundPosition = "0% center";
     } else {
-      // Beam has passed text — wave parked to the left
+      // Beam has passed text - wave parked to the left
       span.style.backgroundPosition = "100% center";
     }
   });

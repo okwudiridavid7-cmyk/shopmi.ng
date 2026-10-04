@@ -40,23 +40,39 @@ export function filtersToQueryString(
   return params.toString();
 }
 
+const categoryTreeQuery = {
+  queryKey: ["catalog", "categories", "tree"] as const,
+  queryFn: async () =>
+    (
+      await apiFetch<{ categories: CategoryPublic[] }>(
+        "/api/catalog/categories?tree=1"
+      )
+    ).categories,
+  staleTime: 5 * 60_000,
+};
+
+/** Category tree only - for nav and marketing surfaces that don't need brands/locations. */
+export function useCategoryTree() {
+  return useQuery(categoryTreeQuery);
+}
+
 export function useCatalogMeta() {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ["catalog", "meta"] as const,
     queryFn: async () => {
-      const [c, b, l] = await Promise.all([
-        apiFetch<{ categories: CategoryPublic[] }>(
-          "/api/catalog/categories?tree=1"
-        ),
+      const [categories, b, l] = await Promise.all([
+        qc.ensureQueryData(categoryTreeQuery),
         apiFetch<{ brands: BrandPublic[] }>("/api/catalog/brands"),
         apiFetch<{ locations: string[] }>("/api/catalog/locations"),
       ]);
       return {
-        categories: c.categories,
+        categories,
         brands: b.brands,
         locations: l.locations,
       };
     },
+    staleTime: 5 * 60_000,
   });
 }
 

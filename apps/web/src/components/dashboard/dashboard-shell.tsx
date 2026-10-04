@@ -38,7 +38,7 @@ function DashboardShellInner({ mode, children }: Props) {
         </Suspense>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 items-center gap-token-3 border-b border-border bg-card/50 px-token-4 py-token-3 lg:hidden">
+          <div className="flex shrink-0 items-center gap-token-3 border-b border-border bg-card px-token-4 py-token-3 lg:hidden">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -50,13 +50,7 @@ function DashboardShellInner({ mode, children }: Props) {
             <p className="text-sm font-medium text-foreground">Menu</p>
           </div>
 
-          <main
-            className={
-              mode === "admin"
-                ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background px-token-4 py-token-6 sm:px-token-6 lg:px-token-8 lg:py-token-8 motion-safe:animate-page-enter"
-                : "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-token-4 py-token-6 sm:px-token-6 lg:px-token-8 lg:py-token-8 motion-safe:animate-page-enter"
-            }
-          >
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-dash-canvas px-token-4 py-token-6 sm:px-token-6 lg:px-token-8 lg:py-token-8 motion-safe:animate-page-enter">
             <div
               className={
                 mode === "admin"

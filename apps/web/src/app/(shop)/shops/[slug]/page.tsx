@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import {
   FilterDrawer,
   FilterPanel,
+  FilterSidebar,
 } from "@/components/marketplace-filters";
 import {
   useCatalogMeta,
@@ -31,14 +32,17 @@ import {
   useToggleFavorite,
 } from "@/hooks/use-catalog";
 import { useAuth } from "@/hooks/use-auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, isAuthError, isShopUnavailableError } from "@/lib/api";
 import {
   shopDefaultSlides,
   toBannerSlides,
 } from "@/lib/default-banners";
 import { parseHexColor, parseThemeSettings } from "@/lib/theme";
 import { useUiStore, type MarketplaceFilters } from "@/stores/ui";
-import { queryKeys } from "@/lib/query-keys";
+import { addToShopCart } from "@/hooks/use-cart";
+import { useToast } from "@/components/ui/toast";
+import { useStoreTheme } from "@/components/store-themes/context";
+import { ThemedHome } from "@/components/store-themes/home";
 
 const emptyFilters: MarketplaceFilters = {
   category: "",
@@ -128,6 +132,7 @@ export default function ShopPage() {
   const slug = params.slug;
   const searchParams = useSearchParams();
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [filters, setFilters] = useState<MarketplaceFilters>(emptyFilters);
   const [page, setPage] = useState(1);
   const drawerOpen = useUiStore((s) => s.shopFilterDrawerOpen);
@@ -135,8 +140,15 @@ export default function ShopPage() {
 
   useEffect(() => {
     const q = searchParams.get("q") ?? "";
-    setFilters((f) => (f.q === q ? f : { ...f, q }));
+    const cat = searchParams.get("cat") ?? "";
+    setFilters((f) =>
+      f.q === q && (!cat || f.shopCategory === cat)
+        ? f
+        : { ...f, q, ...(cat ? { shopCategory: cat } : {}) }
+    );
   }, [searchParams]);
+
+  const { id: themeId } = useStoreTheme();
 
   const shopQ = useShop(slug);
   const peersQ = useShops(12);
@@ -153,15 +165,24 @@ export default function ShopPage() {
   const products = productsQ.data?.products ?? [];
   const pagination = productsQ.data?.pagination;
 
-  async function addToCart(productId: string) {
-    await apiFetch(`/api/carts/${slug}/items`, {
-      method: "POST",
-      body: JSON.stringify({ productId, qty: 1 }),
-    });
-    await qc.invalidateQueries({ queryKey: queryKeys.cart.summary });
-    useUiStore.getState().setCartDrawerOpen(true);
-  }
   const allActive = indexQ.data ?? [];
+  async function addToCart(productId: string) {
+    const product =
+      products.find((p) => p.id === productId) ??
+      allActive.find((p) => p.id === productId);
+    if (!product) return;
+    try {
+      await addToShopCart({ slug, product, qty: 1, shopName: tenant?.name, qc });
+      useUiStore.getState().setCartDrawerOpen(true);
+    } catch (err) {
+      if (isAuthError(err)) return;
+      toast({
+        title: "Couldn't add to cart",
+        description: err instanceof Error ? err.message : undefined,
+        tone: "danger",
+      });
+    }
+  }
   const favSet = favorites.data ?? new Set<string>();
   const shopCategories = shopCatsQ.data ?? [];
 
@@ -213,6 +234,14 @@ export default function ShopPage() {
       .filter((s) => s.products.length > 0);
   }, [shopCategories, allActive]);
 
+  const featured = useMemo(() => {
+    const deals = allActive.filter(
+      (p) => p.compareAtPrice != null && p.compareAtPrice > p.price && p.stockQty > 0
+    );
+    const rest = allActive.filter((p) => !deals.includes(p));
+    return [...deals, ...rest];
+  }, [allActive]);
+
   const hasShopCategoryFilter = !!filters.shopCategory;
   const showCategorySections =
     !hasShopCategoryFilter &&
@@ -252,13 +281,16 @@ export default function ShopPage() {
   );
 
   if (shopQ.error) {
+    const unavailable = isShopUnavailableError(shopQ.error);
     return (
       <EmptyState
-        title="Shop not found"
+        title={unavailable ? "This shop is temporarily unavailable" : "Shop not found"}
         description={
-          shopQ.error instanceof Error
-            ? shopQ.error.message
-            : "This shop may be unavailable."
+          unavailable
+            ? "It isn’t taking orders right now. If you’ve already ordered, you can track it from your orders page."
+            : shopQ.error instanceof Error
+              ? shopQ.error.message
+              : undefined
         }
         actionLabel="Browse marketplace"
         actionHref="/explore"
@@ -278,6 +310,145 @@ export default function ShopPage() {
     busy: toggleFavorite.isPending,
     onAddToCart: (id: string) => void addToCart(id),
   };
+
+  const renderCard = (p: ProductPublic) => {
+    const favorited = favSet.has(p.id);
+    return (
+      <ProductCard
+        key={p.id}
+        product={p}
+        className="w-full"
+        favorited={favorited}
+        favoriteBusy={toggleFavorite.isPending}
+        onFavoriteToggle={
+          isAuthenticated
+            ? () => toggleFavorite.mutate({ productId: p.id, favorited })
+            : () => {
+                window.location.href = `/login?returnTo=${encodeURIComponent(`/shops/${slug}`)}`;
+              }
+        }
+        onAddToCart={() => void addToCart(p.id)}
+      />
+    );
+  };
+
+  const pagerControls =
+    pagination && pagination.pages > 1 ? (
+      <div className="flex items-center justify-center gap-token-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page <= 1}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Previous
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Page {pagination.page} of {pagination.pages}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page >= pagination.pages}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    ) : null;
+
+  if (themeId !== "classic") {
+    const activeCategory = shopCategories.find((c) => c.slug === filters.shopCategory);
+    const gridClass =
+      themeId === "bazaar"
+        ? "grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-4"
+        : themeId === "runway" || themeId === "atelier"
+          ? "grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3"
+          : "grid-cols-2 gap-5 md:grid-cols-3";
+    const catalog = (
+      <div id="products" className="grid scroll-mt-32 gap-token-6 lg:grid-cols-[240px_1fr]">
+        <FilterSidebar>
+          <FilterPanel {...filterProps} />
+        </FilterSidebar>
+        <section className="min-w-0 space-y-token-6">
+          <SectionHeader
+            title={activeCategory?.name ?? "All products"}
+            description={
+              pagination ? `${pagination.total} product${pagination.total === 1 ? "" : "s"}` : undefined
+            }
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                className="lg:hidden"
+                onClick={() => setDrawerOpen(true)}
+              >
+                Filters
+              </Button>
+            }
+          />
+          {productsQ.isLoading ? (
+            <div className={`grid ${gridClass}`}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <ProductCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : products.length === 0 ? (
+            <EmptyState
+              title="No products found"
+              actionLabel="Clear filters"
+              onAction={clearFilters}
+            />
+          ) : (
+            <div className={`grid ${gridClass}`}>
+              {products.map((p) => (
+                <div key={p.id} className="flex">
+                  {renderCard(p)}
+                </div>
+              ))}
+            </div>
+          )}
+          {pagerControls}
+        </section>
+      </div>
+    );
+
+    return (
+      <>
+        <CampaignPopup slug={slug} />
+        <ShopEntryTransition
+          targetSlug={slug}
+          peers={peersQ.data ?? [{ ...tenant, productCount: 0 }]}
+        >
+          <ThemedHome
+            themeId={themeId}
+            tenant={tenant}
+            theme={theme}
+            slides={bannerSlides}
+            featured={featured}
+            promo={promoProducts}
+            newArrivals={newArrivals}
+            categorySections={categorySections}
+            renderCard={renderCard}
+            onPickCategory={(catSlug) => {
+              setFilter("shopCategory", catSlug);
+              window.setTimeout(
+                () =>
+                  document
+                    .getElementById("products")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                50
+              );
+            }}
+            catalog={catalog}
+          />
+          <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+            <FilterPanel {...filterProps} />
+          </FilterDrawer>
+        </ShopEntryTransition>
+      </>
+    );
+  }
 
   return (
     <>
@@ -307,14 +478,9 @@ export default function ShopPage() {
             id="products"
             className="grid gap-token-6 lg:grid-cols-[220px_1fr]"
           >
-            <aside className="hidden lg:block">
-              <div className="sticky top-24 rounded-lg border border-border bg-card p-token-4">
-              <h2 className="mb-token-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Filters
-              </h2>
+            <FilterSidebar>
               <FilterPanel {...filterProps} />
-              </div>
-            </aside>
+            </FilterSidebar>
 
             <section className="space-y-token-8">
               <SectionHeader
@@ -359,8 +525,7 @@ export default function ShopPage() {
                 </div>
               ) : products.length === 0 ? (
                 <EmptyState
-                  title="No products in this shop"
-                  description="Try clearing filters or check back when the seller lists more items."
+                  title="No products found"
                   actionLabel="Clear filters"
                   onAction={clearFilters}
                 />

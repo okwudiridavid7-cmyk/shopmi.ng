@@ -41,7 +41,6 @@ export default function AdminUsersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Users"
-        description="Platform accounts — filter by role and change roles carefully."
         icon={Users}
       />
 
@@ -84,9 +83,6 @@ export default function AdminUsersPage() {
         <EmptyState
           kind={q || role ? "empty_filtered" : "users"}
           title={q || role ? "No users match" : undefined}
-          description={
-            q || role ? "Try a different search or role filter." : undefined
-          }
         />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
@@ -104,7 +100,7 @@ export default function AdminUsersPage() {
             <tbody className="divide-y divide-border">
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-muted/20">
-                  <td className="px-4 py-3 font-medium">{u.name || "—"}</td>
+                  <td className="px-4 py-3 font-medium">{u.name || "-"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                   <td className="px-4 py-3 capitalize">{u.role}</td>
                   <td className="px-4 py-3 capitalize text-muted-foreground">
@@ -191,9 +187,6 @@ export default function AdminUsersPage() {
               </option>
             ))}
           </Select>
-          <p className="text-xs text-muted-foreground">
-            This is a sensitive action enforced server-side for super_admin only.
-          </p>
         </div>
       </Modal>
     </div>

@@ -159,6 +159,7 @@ export function LogoBuilder({
               className="h-10 w-14 cursor-pointer p-1"
             />
             <Input
+              placeholder="#1a5f4a"
               value={value.color}
               onChange={(e) =>
                 onChange({ ...value, color: e.target.value })
@@ -226,10 +227,7 @@ export function LogoBuilder({
       <Card>
         <CardHeader>
           <p className="text-sm font-medium">Live preview</p>
-          <p className="text-xs text-muted-foreground">
-            Outputs both a square icon (favicon / compact) and a wide lockup
-            (header) · {fontLabel}
-          </p>
+          <p className="text-xs text-muted-foreground">{fontLabel}</p>
         </CardHeader>
         <CardBody className="space-y-token-4">
           <div className="flex items-center gap-token-4">

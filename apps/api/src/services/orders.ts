@@ -36,7 +36,7 @@ export async function generateInvoicePdf(orderId: string): Promise<string> {
     doc.moveDown();
     doc.fontSize(10).fillColor("#444");
     doc.text(`Order: ${order.id}`);
-    doc.text(`Reference: ${order.paystackReference ?? "—"}`);
+    doc.text(`Reference: ${order.paystackReference ?? "-"}`);
     doc.text(`Date: ${order.createdAt.toISOString()}`);
     doc.text(`Shop: ${order.tenant.name}`);
     doc.text(`Buyer: ${order.buyer.email}`);

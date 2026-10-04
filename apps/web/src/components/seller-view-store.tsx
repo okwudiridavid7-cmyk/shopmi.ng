@@ -22,7 +22,7 @@ export function SellerViewStoreButton({
       target="_blank"
       rel="noopener noreferrer"
       title="View Store"
-      className={`flex items-center gap-token-2 rounded-md border border-border bg-accent/10 px-token-3 py-token-2 text-sm font-medium text-accent transition hover:bg-accent/20 ${
+      className={`flex items-center gap-token-2 rounded-lg bg-accent px-token-3 py-token-2 text-sm font-semibold text-ink transition hover:brightness-105 ${
         collapsed ? "justify-center px-token-2" : ""
       }`}
     >

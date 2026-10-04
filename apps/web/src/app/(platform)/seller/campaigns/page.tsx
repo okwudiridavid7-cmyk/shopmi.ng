@@ -98,7 +98,7 @@ export default function SellerCampaignsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Popup campaigns"
-        description="On-visit popups for your storefront (once per visitor session)."
+        description="On-visit popups for your storefront."
         icon={Megaphone}
       />
 
@@ -169,7 +169,6 @@ export default function SellerCampaignsPage() {
         <EmptyState
           kind="empty"
           title="No campaigns yet"
-          description="Create an on-visit popup to greet shoppers on your storefront."
           icon={Megaphone}
         />
       ) : (
@@ -191,7 +190,7 @@ export default function SellerCampaignsPage() {
                 <button
                   type="button"
                   onClick={() => void toggle(c.id, c.active)}
-                  className="text-sm font-medium text-accent transition hover:opacity-90"
+                  className="text-sm font-medium text-accent-strong dark:text-accent-on-dark transition hover:opacity-90"
                 >
                   {c.active ? "Deactivate" : "Activate"}
                 </button>

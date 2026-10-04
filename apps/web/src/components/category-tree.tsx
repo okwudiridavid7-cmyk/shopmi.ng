@@ -80,7 +80,7 @@ function CategoryNode({
           onClick={() => onSelect(node.slug)}
           className={`min-w-0 flex-1 rounded-sm px-token-2 py-token-1 text-left text-sm transition ${
             selected
-              ? "bg-accent/15 font-medium text-accent"
+              ? "bg-accent/15 font-medium text-accent-strong dark:text-accent-on-dark"
               : "text-foreground hover:bg-muted"
           }`}
         >
@@ -148,7 +148,7 @@ export function CategoryTree({
         onClick={() => onSelect("")}
         className={`w-full rounded-sm px-token-2 py-token-1 text-left text-sm transition ${
           !selectedSlug
-            ? "bg-accent/15 font-medium text-accent"
+            ? "bg-accent/15 font-medium text-accent-strong dark:text-accent-on-dark"
             : "text-muted-foreground hover:bg-muted hover:text-foreground"
         }`}
       >

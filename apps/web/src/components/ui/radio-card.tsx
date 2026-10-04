@@ -23,7 +23,7 @@ type Props = {
 };
 
 /**
- * Card-style radio group — selected: accent soft fill + border + filled radio.
+ * Card-style radio group - selected: accent soft fill + border + filled radio.
  * Matches modern checkout delivery/payment selectors.
  */
 export function RadioCardGroup({

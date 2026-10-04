@@ -15,17 +15,15 @@ import { Select } from "@/components/ui/select";
 import { TextLink } from "@/components/ui/text-link";
 import { CountryStateSelect } from "@/components/country-state-select";
 import { apiFetch } from "@/lib/api";
-import {
-  useSellerDomain,
-  useSellerShop,
-  useSellerTeam,
-} from "@/hooks/use-seller";
+import { useSellerShop, useSellerTeam } from "@/hooks/use-seller";
+import { SellerDomainLink } from "@/components/domain/seller-domain-link";
+import { useToast } from "@/components/ui/toast";
 
 export default function SellerSettingsPage() {
   const shopQ = useSellerShop();
   const teamQ = useSellerTeam();
-  const domainQ = useSellerDomain();
   const qc = useQueryClient();
+  const { toast } = useToast();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -37,17 +35,12 @@ export default function SellerSettingsPage() {
   const [contactPhone, setContactPhone] = useState("");
   const [settlementBankCode, setSettlementBankCode] = useState("");
   const [settlementAccountNumber, setSettlementAccountNumber] = useState("");
-  const [shopMsg, setShopMsg] = useState<string | null>(null);
   const [shopErr, setShopErr] = useState<string | null>(null);
   const [shopBusy, setShopBusy] = useState(false);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"manager" | "staff">("staff");
   const [teamErr, setTeamErr] = useState<string | null>(null);
-
-  const [customDomain, setCustomDomain] = useState("");
-  const [domainMsg, setDomainMsg] = useState<string | null>(null);
-  const [domainErr, setDomainErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (shopQ.data) {
@@ -64,16 +57,9 @@ export default function SellerSettingsPage() {
     }
   }, [shopQ.data]);
 
-  useEffect(() => {
-    if (domainQ.data) {
-      setCustomDomain(domainQ.data.customDomain ?? "");
-    }
-  }, [domainQ.data]);
-
   async function saveShop(e: FormEvent) {
     e.preventDefault();
     setShopBusy(true);
-    setShopMsg(null);
     setShopErr(null);
     try {
       await apiFetch("/api/seller/shop", {
@@ -94,7 +80,7 @@ export default function SellerSettingsPage() {
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "shop"] });
-      setShopMsg("Shop details saved");
+      toast({ title: "Shop details saved", tone: "success" });
     } catch (err) {
       setShopErr(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -110,6 +96,11 @@ export default function SellerSettingsPage() {
         method: "POST",
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
+      toast({
+        title: "Invite sent",
+        description: `We emailed ${inviteEmail} a link to join your shop.`,
+        tone: "success",
+      });
       setInviteEmail("");
       await qc.invalidateQueries({ queryKey: ["seller", "team"] });
     } catch (err) {
@@ -118,25 +109,16 @@ export default function SellerSettingsPage() {
   }
 
   async function removeMember(id: string) {
-    await apiFetch(`/api/seller/team/${id}`, { method: "DELETE" });
-    await qc.invalidateQueries({ queryKey: ["seller", "team"] });
-  }
-
-  async function saveDomain(e: FormEvent) {
-    e.preventDefault();
-    setDomainMsg(null);
-    setDomainErr(null);
     try {
-      await apiFetch("/api/seller/domain", {
-        method: "PUT",
-        body: JSON.stringify({
-          customDomain: customDomain.trim() || null,
-        }),
-      });
-      await qc.invalidateQueries({ queryKey: ["seller", "domain"] });
-      setDomainMsg("Domain saved");
+      await apiFetch(`/api/seller/team/${id}`, { method: "DELETE" });
+      await qc.invalidateQueries({ queryKey: ["seller", "team"] });
+      toast({ title: "Team member removed", tone: "success" });
     } catch (err) {
-      setDomainErr(err instanceof Error ? err.message : "Save failed");
+      toast({
+        title: "Couldn't remove team member",
+        description: err instanceof Error ? err.message : undefined,
+        tone: "danger",
+      });
     }
   }
 
@@ -156,8 +138,6 @@ export default function SellerSettingsPage() {
   }
 
   const members: TeamMemberPublic[] = teamQ.data ?? [];
-  const domainConnected = !!(domainQ.data?.customDomain || customDomain.trim());
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -178,6 +158,7 @@ export default function SellerSettingsPage() {
                 <InputWithIcon
                   icon={<Store />}
                   required
+                  placeholder="e.g. Lagos Loom"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
@@ -218,6 +199,7 @@ export default function SellerSettingsPage() {
                 <InputWithIcon
                   icon={<Mail />}
                   type="email"
+                  placeholder="orders@yourshop.com"
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                 />
@@ -228,7 +210,7 @@ export default function SellerSettingsPage() {
                   icon={<Phone />}
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="+234…"
+                  placeholder="+234 xxx xxx xxxx"
                 />
               </Label>
               <Label>
@@ -250,14 +232,11 @@ export default function SellerSettingsPage() {
                 />
               </Label>
             </div>
-            <p className="text-xs text-muted-foreground">
-              After verification, Shopmi creates a Paystack subaccount from these
-              details so your payouts settle to this bank (minus the Shopmi
-              Service Fee).
-              {shopQ.data?.paystackSubaccountCode
-                ? ` Subaccount ready: ${shopQ.data.paystackSubaccountCode}.`
-                : ""}
-            </p>
+            {shopQ.data?.paystackSubaccountCode ? (
+              <p className="text-xs text-muted-foreground">
+                Paystack subaccount: {shopQ.data.paystackSubaccountCode}
+              </p>
+            ) : null}
             {shopQ.data && (
               <p className="text-xs text-muted-foreground">
                 Slug:{" "}
@@ -268,11 +247,6 @@ export default function SellerSettingsPage() {
             )}
             {shopErr && (
               <p className="text-sm text-red-700 dark:text-red-400">{shopErr}</p>
-            )}
-            {shopMsg && (
-              <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                {shopMsg}
-              </p>
             )}
             <Button type="submit" disabled={shopBusy} variant="primary">
               {shopBusy ? "Saving…" : "Save shop"}
@@ -292,7 +266,6 @@ export default function SellerSettingsPage() {
             <EmptyState
               kind="users"
               title="No team members"
-              description="Invite a manager or staff member to help run this shop."
             />
           ) : (
             <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
@@ -333,6 +306,7 @@ export default function SellerSettingsPage() {
                   icon={<Mail />}
                   type="email"
                   required
+                  placeholder="teammate@example.com"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                 />
@@ -357,63 +331,11 @@ export default function SellerSettingsPage() {
             <Button type="submit" variant="outline">
               Send invite
             </Button>
-            <p className="text-xs text-muted-foreground">
-              Creates a real tenant_admins membership. Fine-grained permissions
-              enforcement can follow later.
-            </p>
           </form>
         </CardBody>
       </Card>
 
-      <Card id="domain" className="overflow-hidden rounded-2xl">
-        <CardHeader className="flex flex-wrap items-center justify-between gap-2 bg-muted/30">
-          <p className="text-sm font-semibold text-foreground">Custom domain</p>
-          <span
-            className={`rounded-sm px-2 py-0.5 text-xs ${
-              domainConnected
-                ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            {domainConnected ? "Pending DNS (not connected)" : "Not connected"}
-          </span>
-        </CardHeader>
-        <CardBody>
-          <form onSubmit={saveDomain} className="max-w-lg space-y-4">
-            <Label>
-              <span>Domain</span>
-              <InputWithIcon
-                icon={<Globe />}
-                value={customDomain}
-                onChange={(e) => setCustomDomain(e.target.value)}
-                placeholder="shop.yourdomain.com"
-              />
-            </Label>
-            {domainQ.data?.cnameTarget && (
-              <p className="text-xs text-muted-foreground">
-                Point a CNAME to{" "}
-                <code className="rounded bg-muted px-1">
-                  {domainQ.data.cnameTarget}
-                </code>
-                . We’ll use this domain once DNS is verified.
-              </p>
-            )}
-            {domainErr && (
-              <p className="text-sm text-red-700 dark:text-red-400">
-                {domainErr}
-              </p>
-            )}
-            {domainMsg && (
-              <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                {domainMsg}
-              </p>
-            )}
-            <Button type="submit" variant="outline">
-              Save domain
-            </Button>
-          </form>
-        </CardBody>
-      </Card>
+      <SellerDomainLink />
     </div>
   );
 }

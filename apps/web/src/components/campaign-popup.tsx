@@ -48,7 +48,7 @@ export function CampaignPopup({ slug }: { slug: string }) {
           {content.ctaLabel && content.ctaUrl && (
             <a
               href={content.ctaUrl}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground"
+              className="rounded-md bg-accent-strong px-4 py-2 text-sm font-medium text-accent-foreground"
             >
               {content.ctaLabel}
             </a>

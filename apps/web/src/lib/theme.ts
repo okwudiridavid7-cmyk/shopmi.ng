@@ -1,4 +1,4 @@
-import type { ShopThemeSettings } from "@vendors/shared-types";
+import type { ShopThemeSettings, StoreThemeId } from "@vendors/shared-types";
 
 /** Default CTA label color on brand-colored buttons. */
 export const BRAND_BUTTON_TEXT = "#ffffff";
@@ -43,7 +43,23 @@ export function parseThemeSettings(
     tickerColor: typeof t.tickerColor === "string" ? t.tickerColor : null,
     whatsappUrl: typeof t.whatsappUrl === "string" ? t.whatsappUrl : null,
     chatbotHtml: typeof t.chatbotHtml === "string" ? t.chatbotHtml : null,
+    storeTheme: parseStoreThemeId(t.storeTheme),
   };
+}
+
+const STORE_THEME_IDS: readonly StoreThemeId[] = [
+  "classic",
+  "mono",
+  "runway",
+  "atelier",
+  "bazaar",
+  "pop",
+];
+
+export function parseStoreThemeId(value: unknown): StoreThemeId {
+  return STORE_THEME_IDS.includes(value as StoreThemeId)
+    ? (value as StoreThemeId)
+    : "classic";
 }
 
 function expandHex(hex: string): string {
@@ -126,7 +142,20 @@ export function checkBrandContrast(
   };
 }
 
-/** Resolve CTA text color for a brand fill — never silently unreadable. */
+/** CSS variables a themed storefront reads its brand colour from. */
+export function storeBrandVars(brandHex: string): Record<string, string> {
+  const brand = parseHexColor(brandHex) ?? "#111111";
+  return {
+    "--shop-brand": brand,
+    "--shop-brand-ink":
+      contrastRatio(brand, "#ffffff") >= 4.5 ? brand : "#1f1f1f",
+    "--shop-brand-on-dark":
+      contrastRatio(brand, "#0a0a0b") >= 4.5 ? brand : "#f5f5f7",
+    "--shop-brand-fg": brandButtonTextColor(brand),
+  };
+}
+
+/** Resolve CTA text color for a brand fill - never silently unreadable. */
 export function brandButtonTextColor(
   brandHex: string | null | undefined
 ): string {

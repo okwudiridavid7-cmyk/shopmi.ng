@@ -1,12 +1,12 @@
 import type { TenantPublic } from "@vendors/shared-types";
 import { TrustBadge, UnverifiedShopBanner } from "@/components/shell/trust-badge";
 
-/** @deprecated Prefer TrustBadge — kept for existing imports. */
+/** @deprecated Prefer TrustBadge - kept for existing imports. */
 export function VerifiedBadge({ className = "" }: { className?: string }) {
   return <TrustBadge verified className={className} />;
 }
 
-/** @deprecated Prefer UnverifiedShopBanner — kept for existing imports. */
+/** @deprecated Prefer UnverifiedShopBanner - kept for existing imports. */
 export function UnverifiedBanner({ shopName }: { shopName?: string }) {
   return <UnverifiedShopBanner shopName={shopName} />;
 }

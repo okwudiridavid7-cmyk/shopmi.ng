@@ -12,7 +12,7 @@ export default function SignupRolePage() {
   return (
     <AuthSplitLayout
       title="I want to be a…"
-      subtitle={`Choose how you’ll use ${appName}. You can always open a shop later from your account.`}
+      subtitle={`Choose how you’ll use ${appName}.`}
     >
       <div className="grid gap-3">
         <Link
@@ -33,7 +33,7 @@ export default function SignupRolePage() {
           </span>
         </Link>
         <Link
-          href="/signup/account?role=seller"
+          href="/onboarding"
           className={cn(
             "flex items-start gap-4 rounded-2xl border border-border bg-card p-5 text-left transition",
             "hover:border-accent hover:bg-accent/5"

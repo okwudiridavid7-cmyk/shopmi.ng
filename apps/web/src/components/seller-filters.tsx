@@ -8,7 +8,7 @@ import { Select } from "@/components/ui/select";
 import { FilterDrawer } from "@/components/marketplace-filters";
 
 export type SellerProductFilters = {
-  status: "" | "draft" | "active" | "archived";
+  status: "" | "draft" | "active" | "archived" | "paused";
   categoryId: string;
   stock: "" | "in_stock" | "low" | "out";
   q: string;
@@ -41,7 +41,7 @@ function flattenCategories(
 ): { id: string; name: string }[] {
   const out: { id: string; name: string }[] = [];
   for (const n of nodes) {
-    const prefix = depth > 0 ? `${"— ".repeat(depth)}` : "";
+    const prefix = depth > 0 ? `${"\u00a0\u00a0\u00a0".repeat(depth)}` : "";
     out.push({ id: n.id, name: `${prefix}${n.name}` });
     if (n.children?.length) {
       out.push(...flattenCategories(n.children, depth + 1));
@@ -88,6 +88,7 @@ export function SellerProductFilterPanel({
           <option value="">All</option>
           <option value="active">Active</option>
           <option value="draft">Draft</option>
+          <option value="paused">Paused</option>
           <option value="archived">Archived</option>
         </Select>
       </Label>
@@ -180,5 +181,5 @@ export function SellerOrderFilterPanel({
   );
 }
 
-/** Shared mobile drawer wrapper — re-export for seller pages. */
+/** Shared mobile drawer wrapper - re-export for seller pages. */
 export { FilterDrawer };

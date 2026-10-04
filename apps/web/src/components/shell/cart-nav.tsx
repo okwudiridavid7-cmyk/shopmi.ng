@@ -16,12 +16,20 @@ import {
 } from "@/hooks/use-cart";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/ui";
+import { useComingSoon } from "@/components/coming-soon";
+import {
+  goToLocalCheckout,
+  useLocalCart,
+  useOnCustomDomain,
+} from "@/lib/local-cart";
 
 /**
- * Cart Overview dropdown — header, subtotal + CTAs, scrollable lines with qty.
+ * Cart Overview dropdown - header, subtotal + CTAs, scrollable lines with qty.
  */
 export function CartNav() {
   const { data: summary, isLoading } = useCartSummary();
+  const onCustomDomain = useOnCustomDomain();
+  const localSlug = onCustomDomain ? summary?.carts[0]?.shopSlug : undefined;
   const open = useUiStore((s) => s.cartDrawerOpen);
   const setOpen = useUiStore((s) => s.setCartDrawerOpen);
   const toggle = useUiStore((s) => s.toggleCartDrawer);
@@ -51,7 +59,7 @@ export function CartNav() {
         data-tour="nav-cart"
         aria-label={count > 0 ? `Cart, ${count} items` : "Cart"}
         aria-expanded={open}
-        className="relative rounded-md p-token-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        className="relative rounded-md p-token-2 text-foreground transition hover:bg-muted"
       >
         <ShoppingCart className="h-5 w-5" aria-hidden />
         {count > 0 && (
@@ -96,9 +104,8 @@ export function CartNav() {
               <div className="p-4">
                 <EmptyState
                   title="Cart is empty"
-                  description="Browse the marketplace and add items from any shop."
-                  actionLabel="Browse marketplace"
-                  actionHref="/explore"
+                  actionLabel={onCustomDomain ? "Keep shopping" : "Browse marketplace"}
+                  actionHref={onCustomDomain ? "/" : "/explore"}
                 />
               </div>
             ) : (
@@ -126,22 +133,37 @@ export function CartNav() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Link
-                      href="/cart"
-                      onClick={() => setOpen(false)}
-                      className="inline-flex h-11 items-center justify-center rounded-full border-2 border-accent text-sm font-semibold text-accent transition hover:bg-accent/5 dark:text-accent-on-dark"
-                    >
-                      Go to Cart
-                    </Link>
-                    <Link
-                      href="/cart"
-                      onClick={() => setOpen(false)}
-                      className="inline-flex h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white transition hover:bg-accent-deep"
-                    >
-                      Checkout ({count})
-                    </Link>
-                  </div>
+                  {localSlug ? (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => goToLocalCheckout(localSlug)}
+                        className="inline-flex h-11 w-full items-center justify-center rounded-full bg-accent-strong text-sm font-semibold text-white transition hover:brightness-90"
+                      >
+                        Checkout ({count})
+                      </button>
+                      <p className="text-center text-xs text-muted-foreground">
+                        You&apos;ll pay securely on Shopmi.ng
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        href="/cart"
+                        onClick={() => setOpen(false)}
+                        className="inline-flex h-11 items-center justify-center rounded-full border-2 border-accent-strong text-sm font-semibold text-accent-strong transition hover:bg-accent/5 dark:text-accent-on-dark"
+                      >
+                        Go to Cart
+                      </Link>
+                      <Link
+                        href="/cart"
+                        onClick={() => setOpen(false)}
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-accent-strong text-sm font-semibold text-white transition hover:brightness-90"
+                      >
+                        Checkout ({count})
+                      </Link>
+                    </div>
+                  )}
                 </div>
 
                 <div className="max-h-[min(50vh,22rem)] overflow-y-auto">
@@ -149,16 +171,11 @@ export function CartNav() {
                     <CartShopSection
                       key={cart.tenantId}
                       cart={cart}
+                      local={onCustomDomain}
                       onClose={() => setOpen(false)}
                     />
                   ))}
                 </div>
-
-                <p className="border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
-                  {summary.carts.length > 1
-                    ? "Checkout settles each shop separately via Paystack — we chain payments for you."
-                    : "Review items on the cart page, then pay securely with Paystack."}
-                </p>
               </>
             )}
           </div>
@@ -170,12 +187,16 @@ export function CartNav() {
 
 function CartShopSection({
   cart,
+  local,
   onClose,
 }: {
   cart: CartPublic;
+  /** Browser-held cart on a seller's own domain. */
+  local: boolean;
   onClose: () => void;
 }) {
   const { isAuthenticated } = useAuth();
+  const comingSoon = useComingSoon();
   const removeItem = useRemoveCartItem();
   const qc = useQueryClient();
   const slug = cart.shopSlug ?? "";
@@ -183,6 +204,10 @@ function CartShopSection({
 
   async function updateQty(itemId: string, qty: number) {
     if (!slug) return;
+    if (local) {
+      useLocalCart.getState().setQty(slug, itemId, qty);
+      return;
+    }
     setBusyId(itemId);
     try {
       if (qty <= 0) {
@@ -257,7 +282,7 @@ function CartShopSection({
               <button
                 type="button"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-                onClick={onClose}
+                onClick={() => comingSoon("Save for later")}
               >
                 <Heart className="h-3.5 w-3.5" />
                 Save for Later
@@ -276,6 +301,7 @@ function CartShopSection({
           </div>
         );
       })}
+      {local ? null : (
       <div className="flex flex-wrap gap-2 px-4 py-3">
         <Link href="/cart" onClick={onClose}>
           <Button variant="outline" size="sm">
@@ -295,6 +321,7 @@ function CartShopSection({
           </Button>
         </Link>
       </div>
+      )}
     </section>
   );
 }

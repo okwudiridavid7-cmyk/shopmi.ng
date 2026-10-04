@@ -10,7 +10,7 @@ import { TrustBadge } from "@/components/shell/trust-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { apiUrl, formatMoney, productImageUrl } from "@/lib/api";
-import { useBuyerOrder } from "@/hooks/use-buyer";
+import { useBuyerOrder, type OrderShopContact } from "@/hooks/use-buyer";
 
 function statusLabel(status: string) {
   return status.replace(/_/g, " ");
@@ -46,7 +46,6 @@ export default function BuyerOrderDetailPage() {
       <EmptyState
         kind="not_found"
         title="Order not found"
-        description="This order may have been removed or you don’t have access."
         actionLabel="Back to orders"
         actionHref="/buyer/orders"
       />
@@ -80,13 +79,15 @@ export default function BuyerOrderDetailPage() {
       <Card className="overflow-hidden rounded-2xl">
         <CardHeader className="bg-muted/30">
           <div className="flex flex-wrap items-center gap-2">
-            {order.tenant ? (
+            {order.tenant && order.shopContact?.available !== false ? (
               <Link
                 href={`/shops/${order.tenant.slug}`}
                 className="text-sm font-semibold hover:text-accent"
               >
                 {order.tenant.name}
               </Link>
+            ) : order.tenant ? (
+              <span className="text-sm font-semibold">{order.tenant.name}</span>
             ) : (
               <span className="text-sm font-semibold">Shop</span>
             )}
@@ -151,6 +152,57 @@ export default function BuyerOrderDetailPage() {
           </div>
         </CardBody>
       </Card>
+
+      {order.shopContact ? <ShopContactCard contact={order.shopContact} /> : null}
     </div>
+  );
+}
+
+function ShopContactCard({ contact }: { contact: OrderShopContact }) {
+  const whatsappHref = contact.whatsappUrl
+    ? contact.whatsappUrl.startsWith("http")
+      ? contact.whatsappUrl
+      : `https://wa.me/${contact.whatsappUrl.replace(/\D/g, "")}`
+    : null;
+  const hasAny = contact.email || contact.phone || whatsappHref;
+  if (!hasAny && contact.available) return null;
+
+  return (
+    <Card className="overflow-hidden rounded-2xl">
+      <CardHeader className="bg-muted">
+        <p className="text-sm font-semibold text-foreground">Contact the seller</p>
+      </CardHeader>
+      <CardBody className="space-y-2 text-sm">
+        {!contact.available ? (
+          <p className="text-muted-foreground">
+            This shop’s storefront is currently unavailable. Your order isn’t affected; the seller
+            can still fulfil it.
+          </p>
+        ) : null}
+        {contact.email ? (
+          <p>
+            <span className="text-muted-foreground">Email: </span>
+            <a href={`mailto:${contact.email}`} className="font-medium hover:underline">
+              {contact.email}
+            </a>
+          </p>
+        ) : null}
+        {contact.phone ? (
+          <p>
+            <span className="text-muted-foreground">Phone: </span>
+            <a href={`tel:${contact.phone}`} className="font-medium hover:underline">
+              {contact.phone}
+            </a>
+          </p>
+        ) : null}
+        {whatsappHref ? (
+          <p>
+            <a href={whatsappHref} target="_blank" rel="noreferrer" className="font-medium hover:underline">
+              Chat on WhatsApp
+            </a>
+          </p>
+        ) : null}
+      </CardBody>
+    </Card>
   );
 }

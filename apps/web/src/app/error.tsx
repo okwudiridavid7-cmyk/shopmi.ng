@@ -24,7 +24,7 @@ export default function Error({ error, reset }: Props) {
       onRetry={reset}
       description={
         kind === "server"
-          ? "We hit an unexpected error on our side. Try again, or visit a safer page."
+          ? "Something went wrong on our side. Please try again."
           : undefined
       }
     />

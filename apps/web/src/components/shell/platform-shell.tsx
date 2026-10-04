@@ -8,11 +8,12 @@ import { FaviconSync } from "@/components/favicon-sync";
 import { SiteTicker } from "@/components/site-ticker";
 import { ChatWidgets } from "@/components/chat-widgets";
 import { usePlatformBranding } from "@/hooks/use-branding";
+import { isUnderPath } from "@/lib/utils";
 
 function dashboardMode(pathname: string): "buyer" | "seller" | "admin" | null {
-  if (pathname.startsWith("/seller")) return "seller";
-  if (pathname.startsWith("/buyer")) return "buyer";
-  if (pathname.startsWith("/admin")) return "admin";
+  if (isUnderPath(pathname, "/seller")) return "seller";
+  if (isUnderPath(pathname, "/buyer")) return "buyer";
+  if (isUnderPath(pathname, "/admin")) return "admin";
   return null;
 }
 
@@ -23,7 +24,7 @@ const AUTH_PREFIXES = [
   "/reset-password",
 ];
 
-/** Marketplace / auth / dashboard shell — never used for shop storefronts. */
+/** Marketplace / auth / dashboard shell - never used for shop storefronts. */
 export function PlatformShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const mode = dashboardMode(pathname);
@@ -35,12 +36,14 @@ export function PlatformShell({ children }: { children: ReactNode }) {
   const isHome = pathname === "/";
   const isMarketing =
     isHome ||
-    pathname === "/about" ||
+    pathname === "/buyers" ||
+    pathname === "/sellers" ||
     pathname === "/contact" ||
     pathname === "/privacy" ||
     pathname === "/terms" ||
     pathname === "/faq" ||
     pathname === "/support" ||
+    pathname === "/cookies" ||
     pathname === "/pricing";
   const branding = usePlatformBranding().data;
   const ticker = branding?.ticker;
@@ -78,11 +81,11 @@ export function PlatformShell({ children }: { children: ReactNode }) {
       {isDashboard ? (
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       ) : isMarketing || isExplore ? (
-        <main className="w-full flex-1 motion-safe:animate-page-enter">
+        <main className="w-full min-w-0 flex-1 motion-safe:animate-page-enter">
           {children}
         </main>
       ) : (
-        <main className="mx-auto w-full flex-1 max-w-6xl px-token-6 py-token-8 motion-safe:animate-page-enter">
+        <main className="mx-auto w-full min-w-0 flex-1 max-w-6xl px-token-6 py-token-8 motion-safe:animate-page-enter">
           {children}
         </main>
       )}

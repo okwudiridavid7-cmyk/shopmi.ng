@@ -31,7 +31,7 @@ async function mergeCartAfterAuth(
   try {
     await mergeGuestCarts(userId, sessionId);
   } catch {
-    // Non-fatal — guest cart can be merged later via POST /api/carts/merge
+    // Non-fatal - guest cart can be merged later via POST /api/carts/merge
   }
 }
 
@@ -82,7 +82,7 @@ authRouter.post("/signup", async (req, res, next) => {
       return res.status(409).json({ error: "Email already registered" });
     }
 
-    // Signup creates a users row only — tenants are created via POST /api/tenants.
+    // Signup creates a users row only - tenants are created via POST /api/tenants.
     const verifyRaw = crypto.randomBytes(32).toString("hex");
     const verifyHash = crypto.createHash("sha256").update(verifyRaw).digest("hex");
 
@@ -216,8 +216,9 @@ authRouter.post("/forgot-password", forgotLimiter, async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
-    // Always 200 — don't leak whether the email exists.
-    if (user?.passwordHash) {
+    // Always 200 - don't leak whether the email exists. Passwordless accounts
+    // (invited team members, Google sign-ups) use this to set a first password.
+    if (user) {
       const raw = crypto.randomBytes(32).toString("hex");
       const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
       await prisma.user.update({
@@ -236,7 +237,7 @@ authRouter.post("/forgot-password", forgotLimiter, async (req, res, next) => {
           idempotencyKey: `reset:${user.id}:${tokenHash.slice(0, 12)}`,
         });
       } catch (mailErr) {
-        // Still 200 below — do not leak account existence or mail outages.
+        // Still 200 below - do not leak account existence or mail outages.
         console.warn("[auth] forgot-password mail failed:", mailErr);
       }
     }
@@ -373,7 +374,7 @@ authRouter.post(
   }
 );
 
-/** Start Google OAuth2 — redirects to Google consent screen. */
+/** Start Google OAuth2 - redirects to Google consent screen. */
 authRouter.get("/google", (req, res) => {
   if (!env.googleClientId || !env.googleClientSecret) {
     return res.status(503).json({

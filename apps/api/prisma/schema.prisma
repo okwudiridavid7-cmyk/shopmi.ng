@@ -1,13 +1,15 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
   /// Neon: use the non-pooler connection here for migrations (`prisma db push`).
   /// Local Docker: set to the same value as DATABASE_URL.
-  directUrl = env("DIRECT_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pg_trgm]
 }
 
 enum UserRole {
@@ -21,6 +23,8 @@ enum TenantStatus {
   pending_verification
   active
   suspended
+  /// Plan ended with no free plan to fall back to. Storefront hidden; dashboards stay up.
+  lapsed
 }
 
 enum TenantAdminRole {
@@ -33,6 +37,8 @@ enum ProductStatus {
   draft
   active
   archived
+  /// Hidden because the shop is over its plan's product limit; restored on upgrade.
+  paused
 }
 
 enum OrderStatus {
@@ -44,16 +50,16 @@ enum OrderStatus {
 }
 
 model Plan {
-  id            String   @id @default(cuid())
-  name          String
-  slug          String   @unique
-  price         Decimal  @db.Decimal(12, 2)
-  currency      String   @default("NGN")
-  productLimit  Int?     @map("product_limit")
-  featureFlags  Json     @default("{}") @map("feature_flags")
-  trialDays     Int      @default(3) @map("trial_days")
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  price        Decimal  @db.Decimal(12, 2)
+  currency     String   @default("NGN")
+  productLimit Int?     @map("product_limit")
+  featureFlags Json     @default("{}") @map("feature_flags")
+  trialDays    Int      @default(3) @map("trial_days")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
 
   tenants Tenant[]
 
@@ -61,50 +67,61 @@ model Plan {
 }
 
 model Tenant {
-  id               String       @id @default(cuid())
-  ownerUserId      String       @map("owner_user_id")
-  name             String
-  slug             String       @unique
-  customDomain     String?      @unique @map("custom_domain")
-  status           TenantStatus @default(pending_verification)
-  verifiedBadge    Boolean      @default(false) @map("verified_badge")
-  themeSettings    Json?        @map("theme_settings")
-  notificationSettings Json?    @map("notification_settings")
-  location         String?
-  /// Structured location (ISO country) — used with states cascade.
-  countryCode      String?      @map("country_code")
-  stateCode        String?      @map("state_code")
-  address          String?      @db.Text
-  phone            String?
-  email            String?
+  id                      String       @id @default(cuid())
+  ownerUserId             String       @map("owner_user_id")
+  name                    String
+  slug                    String       @unique
+  customDomain            String?      @unique @map("custom_domain")
+  /// Value the seller publishes in a TXT record at _shopmi.<domain> to prove ownership.
+  customDomainToken       String?      @map("custom_domain_token")
+  /// Set once ownership and routing records check out; only verified domains are served.
+  customDomainVerifiedAt  DateTime?    @map("custom_domain_verified_at")
+  customDomainCheckedAt   DateTime?    @map("custom_domain_checked_at")
+  customDomainError       String?      @map("custom_domain_error")
+  status                  TenantStatus @default(pending_verification)
+  verifiedBadge           Boolean      @default(false) @map("verified_badge")
+  themeSettings           Json?        @map("theme_settings")
+  notificationSettings    Json?        @map("notification_settings")
+  location                String?
+  /// Structured location (ISO country) - used with states cascade.
+  countryCode             String?      @map("country_code")
+  stateCode               String?      @map("state_code")
+  address                 String?      @db.Text
+  phone                   String?
+  email                   String?
   /// { instagram?, twitter?, facebook?, tiktok?, whatsapp?, youtube? }
-  socialLinks      Json?        @map("social_links")
+  socialLinks             Json?        @map("social_links")
   /// [{ question: string, answer: string }]
-  faqContent       Json?        @map("faq_content")
-  termsText        String?      @map("terms_text") @db.Text
-  privacyText      String?      @map("privacy_text") @db.Text
-  onboardingAnswers Json?       @map("onboarding_answers")
-  trialEndsAt      DateTime?    @map("trial_ends_at")
-  planId           String?      @map("plan_id")
+  faqContent              Json?        @map("faq_content")
+  termsText               String?      @map("terms_text") @db.Text
+  privacyText             String?      @map("privacy_text") @db.Text
+  onboardingAnswers       Json?        @map("onboarding_answers")
+  trialEndsAt             DateTime?    @map("trial_ends_at")
+  /// End of the current paid period. Null on free plans and for comped shops.
+  planExpiresAt           DateTime?    @map("plan_expires_at")
+  /// Reminder keys already sent for the current period, e.g. "2026-10-14:5".
+  planRemindersSent       String[]     @default([]) @map("plan_reminders_sent")
+  planId                  String?      @map("plan_id")
   /// Paystack subaccount code (ACCT_…) for verified seller settlement splits.
-  paystackSubaccountCode String? @map("paystack_subaccount_code")
+  paystackSubaccountCode  String?      @map("paystack_subaccount_code")
   /// Optional bank details used to create/update the Paystack subaccount.
-  settlementBankCode     String? @map("settlement_bank_code")
-  settlementAccountNumber String? @map("settlement_account_number")
-  createdAt        DateTime     @default(now()) @map("created_at")
+  settlementBankCode      String?      @map("settlement_bank_code")
+  settlementAccountNumber String?      @map("settlement_account_number")
+  createdAt               DateTime     @default(now()) @map("created_at")
 
-  owner        User          @relation("TenantOwner", fields: [ownerUserId], references: [id])
-  plan         Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
-  tenantAdmins TenantAdmin[]
-  products     Product[]
-  carts        Cart[]
-  orders       Order[]
+  owner                User                  @relation("TenantOwner", fields: [ownerUserId], references: [id])
+  plan                 Plan?                 @relation(fields: [planId], references: [id], onDelete: SetNull)
+  tenantAdmins         TenantAdmin[]
+  products             Product[]
+  carts                Cart[]
+  orders               Order[]
   verificationRequests VerificationRequest[]
-  campaigns    Campaign[]
-  aiJobs       AiJob[]
-  shopCategories ShopCategory[]
-  shopBanners  ShopBanner[]
-  contactInquiries ContactInquiry[]
+  campaigns            Campaign[]
+  aiJobs               AiJob[]
+  shopCategories       ShopCategory[]
+  shopBanners          ShopBanner[]
+  contactInquiries     ContactInquiry[]
+  registeredDomains    RegisteredDomain[]
 
   @@index([planId])
   @@index([countryCode])
@@ -112,36 +129,36 @@ model Tenant {
 }
 
 model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
-  passwordHash   String?  @map("password_hash")
-  googleId       String?  @unique @map("google_id")
-  role           UserRole @default(buyer)
-  name           String?
-  phone          String?
-  whatsappNumber String?  @map("whatsapp_number")
+  id                       String    @id @default(cuid())
+  email                    String    @unique
+  passwordHash             String?   @map("password_hash")
+  googleId                 String?   @unique @map("google_id")
+  role                     UserRole  @default(buyer)
+  name                     String?
+  phone                    String?
+  whatsappNumber           String?   @map("whatsapp_number")
   /// Buyer prefs e.g. { orderEmails: true, whatsappOrders: false }
-  notificationPrefs Json? @map("notification_prefs")
-  passwordResetToken   String?   @unique @map("password_reset_token")
-  passwordResetExpires DateTime? @map("password_reset_expires")
-  emailVerifiedAt            DateTime? @map("email_verified_at")
-  emailVerificationToken     String?   @unique @map("email_verification_token")
-  emailVerificationExpires   DateTime? @map("email_verification_expires")
-  createdAt      DateTime @default(now()) @map("created_at")
+  notificationPrefs        Json?     @map("notification_prefs")
+  passwordResetToken       String?   @unique @map("password_reset_token")
+  passwordResetExpires     DateTime? @map("password_reset_expires")
+  emailVerifiedAt          DateTime? @map("email_verified_at")
+  emailVerificationToken   String?   @unique @map("email_verification_token")
+  emailVerificationExpires DateTime? @map("email_verification_expires")
+  createdAt                DateTime  @default(now()) @map("created_at")
 
-  ownedTenants  Tenant[]       @relation("TenantOwner")
-  tenantAdmins  TenantAdmin[]
-  refreshTokens RefreshToken[]
-  carts         Cart[]
-  orders        Order[]        @relation("BuyerOrders")
-  favorites     Favorite[]
-  reviews       Review[]
+  ownedTenants          Tenant[]              @relation("TenantOwner")
+  tenantAdmins          TenantAdmin[]
+  refreshTokens         RefreshToken[]
+  carts                 Cart[]
+  orders                Order[]               @relation("BuyerOrders")
+  favorites             Favorite[]
+  reviews               Review[]
   reviewedVerifications VerificationRequest[] @relation("VerificationReviewer")
 
   @@map("users")
 }
 
-/// Join table — multirole admin per shop. tenant_id is required (tenant-scoped).
+/// Join table - multirole admin per shop. tenant_id is required (tenant-scoped).
 model TenantAdmin {
   id          String          @id @default(cuid())
   tenantId    String          @map("tenant_id")
@@ -160,7 +177,7 @@ model TenantAdmin {
 
 /// Super-admin editable sitewide settings (app name, feature toggles, etc.).
 /// This is NOT for secrets. API keys, JWT secrets, OAuth secrets, DB URLs stay in .env
-/// and require a redeploy to change — never put them here.
+/// and require a redeploy to change - never put them here.
 model PlatformSetting {
   id    String @id @default(cuid())
   key   String @unique
@@ -185,13 +202,13 @@ model RefreshToken {
 }
 
 model Category {
-  id        String     @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
-  slug      String     @unique
+  slug      String   @unique
   /// Self-referencing parent for unlimited nesting depth.
-  parentId  String?    @map("parent_id")
-  sortOrder Int        @default(0) @map("sort_order")
-  createdAt DateTime   @default(now()) @map("created_at")
+  parentId  String?  @map("parent_id")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
 
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
   children Category[] @relation("CategoryTree")
@@ -202,7 +219,7 @@ model Category {
   @@map("categories")
 }
 
-/// Legacy platform brand taxonomy — prefer Product.brandName (free-text). Kept for backfill.
+/// Legacy platform brand taxonomy - prefer Product.brandName (free-text). Kept for backfill.
 model Brand {
   id        String    @id @default(cuid())
   name      String
@@ -230,29 +247,29 @@ model ShopCategory {
 }
 
 model Product {
-  id                      String        @id @default(cuid())
-  tenantId                String        @map("tenant_id")
-  title                   String
-  description             String        @db.Text
-  aiGeneratedDescription  Boolean       @default(false) @map("ai_generated_description")
-  price                   Decimal       @db.Decimal(12, 2)
+  id                     String        @id @default(cuid())
+  tenantId               String        @map("tenant_id")
+  title                  String
+  description            String        @db.Text
+  aiGeneratedDescription Boolean       @default(false) @map("ai_generated_description")
+  price                  Decimal       @db.Decimal(12, 2)
   /// Former / compare-at price for strikethrough display when set.
-  compareAtPrice          Decimal?      @map("compare_at_price") @db.Decimal(12, 2)
-  currency                String        @default("NGN")
-  stockQty                Int           @default(0) @map("stock_qty")
-  categoryId              String?       @map("category_id")
-  shopCategoryId          String?       @map("shop_category_id")
+  compareAtPrice         Decimal?      @map("compare_at_price") @db.Decimal(12, 2)
+  currency               String        @default("NGN")
+  stockQty               Int           @default(0) @map("stock_qty")
+  categoryId             String?       @map("category_id")
+  shopCategoryId         String?       @map("shop_category_id")
   /// Free-text brand typed by seller (preferred over Brand FK).
-  brandName               String?       @map("brand_name")
-  brandId                 String?       @map("brand_id")
-  location                String?
-  countryCode             String?       @map("country_code")
-  stateCode               String?       @map("state_code")
-  images                  Json
-  watermarkEnabled        Boolean       @default(false) @map("watermark_enabled")
-  status                  ProductStatus @default(draft)
-  createdAt               DateTime      @default(now()) @map("created_at")
-  updatedAt               DateTime      @updatedAt @map("updated_at")
+  brandName              String?       @map("brand_name")
+  brandId                String?       @map("brand_id")
+  location               String?
+  countryCode            String?       @map("country_code")
+  stateCode              String?       @map("state_code")
+  images                 Json
+  watermarkEnabled       Boolean       @default(false) @map("watermark_enabled")
+  status                 ProductStatus @default(draft)
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -270,6 +287,8 @@ model Product {
   @@index([brandId])
   @@index([brandName])
   @@index([location])
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_title_trgm_idx")
+  @@index([brandName(ops: raw("gin_trgm_ops"))], type: Gin, map: "products_brand_name_trgm_idx")
   @@map("products")
 }
 
@@ -358,17 +377,17 @@ model CartItem {
 }
 
 model Order {
-  id                 String      @id @default(cuid())
-  tenantId           String      @map("tenant_id")
-  buyerId            String      @map("buyer_id")
-  status             OrderStatus @default(pending_payment)
-  subtotal           Decimal     @db.Decimal(12, 2)
-  total              Decimal     @db.Decimal(12, 2)
-  currency           String      @default("NGN")
-  paystackReference  String?     @unique @map("paystack_reference")
-  invoiceUrl         String?     @map("invoice_url")
-  createdAt          DateTime    @default(now()) @map("created_at")
-  updatedAt          DateTime    @updatedAt @map("updated_at")
+  id                String      @id @default(cuid())
+  tenantId          String      @map("tenant_id")
+  buyerId           String      @map("buyer_id")
+  status            OrderStatus @default(pending_payment)
+  subtotal          Decimal     @db.Decimal(12, 2)
+  total             Decimal     @db.Decimal(12, 2)
+  currency          String      @default("NGN")
+  paystackReference String?     @unique @map("paystack_reference")
+  invoiceUrl        String?     @map("invoice_url")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
 
   tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   buyer  User        @relation("BuyerOrders", fields: [buyerId], references: [id])
@@ -419,14 +438,14 @@ enum CampaignType {
 }
 
 model VerificationRequest {
-  id            String                     @id @default(cuid())
-  tenantId      String                     @map("tenant_id")
-  status        VerificationRequestStatus  @default(pending)
-  submittedDocs Json                       @map("submitted_docs")
-  reviewedById  String?                    @map("reviewed_by")
-  reviewedAt    DateTime?                  @map("reviewed_at")
-  note          String?                    @db.Text
-  createdAt     DateTime                   @default(now()) @map("created_at")
+  id            String                    @id @default(cuid())
+  tenantId      String                    @map("tenant_id")
+  status        VerificationRequestStatus @default(pending)
+  submittedDocs Json                      @map("submitted_docs")
+  reviewedById  String?                   @map("reviewed_by")
+  reviewedAt    DateTime?                 @map("reviewed_at")
+  note          String?                   @db.Text
+  createdAt     DateTime                  @default(now()) @map("created_at")
 
   tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   reviewedBy User?  @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
@@ -517,30 +536,30 @@ enum ContactInquiryStatus {
 
 /// Persisted contact-form submissions (platform + shop) for delivery integrity.
 model ContactInquiry {
-  id                String               @id @default(cuid())
-  scope             ContactInquiryScope
-  tenantId          String?              @map("tenant_id")
-  slug              String?
-  name              String               @db.VarChar(120)
-  email             String               @db.VarChar(255)
-  phone             String?              @db.VarChar(40)
-  subject           String               @db.VarChar(160)
-  message           String               @db.Text
-  ipHash            String?              @map("ip_hash") @db.VarChar(64)
-  userAgent         String?              @map("user_agent") @db.VarChar(512)
-  idempotencyKey    String?              @unique @map("idempotency_key") @db.VarChar(128)
-  status            ContactInquiryStatus @default(received)
-  providerMessageId String?              @map("provider_message_id") @db.VarChar(128)
-  error             String?              @db.Text
+  id                  String               @id @default(cuid())
+  scope               ContactInquiryScope
+  tenantId            String?              @map("tenant_id")
+  slug                String?
+  name                String               @db.VarChar(120)
+  email               String               @db.VarChar(255)
+  phone               String?              @db.VarChar(40)
+  subject             String               @db.VarChar(160)
+  message             String               @db.Text
+  ipHash              String?              @map("ip_hash") @db.VarChar(64)
+  userAgent           String?              @map("user_agent") @db.VarChar(512)
+  idempotencyKey      String?              @unique @map("idempotency_key") @db.VarChar(128)
+  status              ContactInquiryStatus @default(received)
+  providerMessageId   String?              @map("provider_message_id") @db.VarChar(128)
+  error               String?              @db.Text
   /// Intended notify recipient (shop/support) captured at submit (REM-17).
-  recipientEmail    String?              @map("recipient_email") @db.VarChar(255)
+  recipientEmail      String?              @map("recipient_email") @db.VarChar(255)
   /// SHA-256 of magic-link token while status=awaiting_confirm (REM-17).
-  confirmTokenHash  String?              @unique @map("confirm_token_hash") @db.VarChar(64)
-  confirmTokenExpires DateTime?          @map("confirm_token_expires")
+  confirmTokenHash    String?              @unique @map("confirm_token_hash") @db.VarChar(64)
+  confirmTokenExpires DateTime?            @map("confirm_token_expires")
   /// Soft retention deadline (REM-16). Null on legacy rows → purge uses createdAt + retention.
-  expiresAt         DateTime?            @map("expires_at")
-  createdAt         DateTime             @default(now()) @map("created_at")
-  updatedAt         DateTime             @updatedAt @map("updated_at")
+  expiresAt           DateTime?            @map("expires_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
 
   tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
@@ -563,4 +582,69 @@ model ContactInquiryPurgeLog {
 
   @@index([createdAt])
   @@map("contact_inquiry_purge_logs")
+}
+
+enum RegisteredDomainStatus {
+  /// Waiting for the seller's payment.
+  pending_payment
+  /// Paid (or free) and queued with the registrar.
+  registering
+  active
+  failed
+  expired
+  /// Checkout abandoned or superseded.
+  cancelled
+}
+
+enum DomainPaymentStatus {
+  pending
+  paid
+  failed
+}
+
+/// A domain bought through Shopmi.ng and held with the registrar on the seller's behalf.
+model RegisteredDomain {
+  id            String                 @id @default(cuid())
+  tenantId      String                 @map("tenant_id")
+  domain        String                 @unique
+  tld           String
+  status        RegisteredDomainStatus @default(pending_payment)
+  /// Included with the plan (free .com.ng); renewed automatically while the plan allows it.
+  free          Boolean                @default(false)
+  /// Registrant details sent to the registry.
+  contact       Json
+  registrarRef  String?                @map("registrar_ref")
+  registeredAt  DateTime?              @map("registered_at")
+  expiresAt     DateTime?              @map("expires_at")
+  /// Renewal reminder keys already sent, e.g. "2027-10-01:30".
+  remindersSent String[]               @default([]) @map("reminders_sent")
+  lastError     String?                @map("last_error")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments DomainPayment[]
+
+  @@index([tenantId])
+  @@index([status, expiresAt])
+  @@map("registered_domains")
+}
+
+model DomainPayment {
+  id                 String              @id @default(cuid())
+  registeredDomainId String              @map("registered_domain_id")
+  /// "register" or "renew".
+  kind               String
+  years              Int                 @default(1)
+  amount             Decimal             @db.Decimal(12, 2)
+  currency           String              @default("NGN")
+  status             DomainPaymentStatus @default(pending)
+  paystackReference  String              @unique @map("paystack_reference")
+  paidAt             DateTime?           @map("paid_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+
+  registeredDomain RegisteredDomain @relation(fields: [registeredDomainId], references: [id], onDelete: Cascade)
+
+  @@index([registeredDomainId])
+  @@map("domain_payments")
 }

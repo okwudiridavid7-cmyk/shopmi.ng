@@ -12,7 +12,8 @@ import {
   safeReturnTo,
 } from "@/lib/auth-redirect";
 import { useAuthTransition } from "@/stores/auth-transition";
-import { Button, Label } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { PasswordInput } from "@/components/ui/password-input";
 import { TextLink } from "@/components/ui/text-link";
@@ -71,7 +72,7 @@ function LoginForm() {
   return (
     <AuthSplitLayout
       title="Log in"
-      subtitle="Welcome back — pick up where you left off."
+      subtitle="Welcome back. Pick up where you left off."
     >
       {!emailMode ? (
         <div className="space-y-4">
@@ -91,10 +92,7 @@ function LoginForm() {
           </p>
         </div>
       ) : (
-        <SettingsCard
-          title="Sign in with email"
-          description="Enter your email and password to continue."
-        >
+        <SettingsCard title="Sign in with email">
           <form onSubmit={onSubmit} className="space-y-5">
             <Label>
               <span className="text-sm font-medium">Email</span>
@@ -115,6 +113,7 @@ function LoginForm() {
                 <PasswordInput
                   name="password"
                   required
+                  placeholder="Your password"
                   autoComplete="current-password"
                   className="pl-10"
                 />

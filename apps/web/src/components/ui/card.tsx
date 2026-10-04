@@ -16,7 +16,7 @@ const Card = React.forwardRef<
 ));
 Card.displayName = "Card";
 
-/** Existing app header — keeps seller/admin spacing. */
+/** Existing app header - keeps seller/admin spacing. */
 const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>

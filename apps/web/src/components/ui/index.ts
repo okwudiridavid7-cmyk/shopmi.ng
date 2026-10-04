@@ -20,8 +20,8 @@ export { AnimatedAIChat } from "./animated-ai-chat";
 export type {
   AnimatedAIChatHandle,
   AnimatedAIChatProps,
-  ChatCommand,
   ChatResult,
+  ChatSuggestion,
 } from "./animated-ai-chat";
 export { MoireField } from "./moire-field";
 export type { MoireFieldProps } from "./moire-field";

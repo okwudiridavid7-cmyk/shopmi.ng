@@ -7,6 +7,7 @@ import { decimalToNumber, toOrderPublic } from "../lib/serialize";
 import { fulfillPaidOrder } from "../services/orders";
 import { getCommissionPercent, getPlatformSetting } from "../lib/platformSettings";
 import { ensurePaystackSubaccount } from "../services/paystackSubaccount";
+import { isShopAvailable } from "../tenant/tenantContext";
 
 export const checkoutRouter = Router();
 
@@ -42,7 +43,7 @@ checkoutRouter.post(
       const tenant = await prisma.tenant.findUnique({
         where: { id: req.tenant!.tenantId },
       });
-      if (!tenant || tenant.status === "suspended") {
+      if (!tenant || !isShopAvailable(tenant.status)) {
         return res.status(404).json({ error: "Shop not found" });
       }
 

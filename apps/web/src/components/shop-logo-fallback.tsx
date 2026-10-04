@@ -4,7 +4,7 @@ import { Store } from "lucide-react";
 
 /**
  * Default shop mark when themeSettings.logoUrl is missing.
- * Soft store glyph — not initials-in-a-box.
+ * Soft store glyph - not initials-in-a-box.
  */
 export function ShopLogoFallback({
   className = "",

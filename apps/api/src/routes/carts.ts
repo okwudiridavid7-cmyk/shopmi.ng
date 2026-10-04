@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { optionalAuth } from "../auth/middleware";
 import { requireTenantFromSlugParam } from "../tenant/middleware";
-import { tenantWhere } from "../tenant/tenantContext";
+import type { TenantStatus } from "@prisma/client";
+import { isShopAvailable, tenantWhere } from "../tenant/tenantContext";
 import { toProductPublic } from "../lib/serialize";
 import { getOrSetCartSessionId } from "../lib/cartSession";
 import { mergeGuestCarts } from "../services/cartMerge";
@@ -72,7 +73,7 @@ async function serializeCart(
       qty: number;
       product: Parameters<typeof toProductPublic>[0];
     }[];
-    tenant?: { name: string; slug: string } | null;
+    tenant?: { name: string; slug: string; status?: TenantStatus } | null;
   } | null,
   tenantId: string,
   meta?: { shopSlug?: string; shopName?: string }
@@ -86,6 +87,7 @@ async function serializeCart(
       items: [],
       subtotal: 0,
       currency: "NGN",
+      available: true,
     };
   }
   const items = cart.items.map((item) => ({
@@ -106,6 +108,8 @@ async function serializeCart(
     items,
     subtotal,
     currency: items[0]?.product.currency ?? "NGN",
+    /** False when the shop is hidden; its items can be removed but not bought. */
+    available: cart.tenant?.status ? isShopAvailable(cart.tenant.status) : true,
   };
 }
 
@@ -121,7 +125,7 @@ const cartInclude = {
       },
     },
   },
-  tenant: { select: { name: true, slug: true } },
+  tenant: { select: { name: true, slug: true, status: true } },
 } as const;
 
 async function loadCart(owner: CartOwner, tenantId: string) {
@@ -172,6 +176,28 @@ cartsRouter.post("/merge", optionalAuth, async (req, res, next) => {
     const sessionId = req.cookies?.cart_session as string | undefined;
     const merged = await mergeGuestCarts(req.user.id, sessionId);
     return res.json({ merged });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Removing items works even when the shop is unavailable, so carts never get stuck. */
+cartsRouter.delete("/:slug/items/:itemId", optionalAuth, async (req, res, next) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { slug: req.params.slug.toLowerCase() },
+      select: { id: true },
+    });
+    if (!tenant) return res.status(404).json({ error: "Shop not found" });
+    const owner = ownerFromReq(req, res);
+    const cart = await findCart(owner, tenant.id);
+    if (!cart) {
+      return res.status(404).json({ error: "Cart not found" });
+    }
+    await prisma.cartItem.deleteMany({
+      where: { id: req.params.itemId, cartId: cart.id },
+    });
+    return res.json({ cart: await loadCart(owner, tenant.id) });
   } catch (err) {
     return next(err);
   }
@@ -245,6 +271,70 @@ cartsRouter.post("/:slug/items", async (req, res, next) => {
   }
 });
 
+const importSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        qty: z.coerce.number().int().min(1).max(99),
+      })
+    )
+    .min(1)
+    .max(50),
+});
+
+/**
+ * Cart handoff from a seller's custom domain. Sets quantities (not increments),
+ * so reopening the same handoff link doesn't double the cart.
+ */
+cartsRouter.post("/:slug/import", async (req, res, next) => {
+  try {
+    const body = importSchema.parse(req.body);
+    const owner = ownerFromReq(req, res);
+    const tenantId = req.tenant!.tenantId;
+    const ids = [...new Set(body.items.map((i) => i.productId))];
+    const products = await prisma.product.findMany({
+      where: tenantWhere(req.tenant!, { id: { in: ids }, status: "active" as const }),
+      select: { id: true, title: true, stockQty: true },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+
+    const cart = await getOrCreateCart(owner, tenantId);
+    const skipped: { productId: string; title?: string; reason: string }[] = [];
+    for (const item of body.items) {
+      const product = byId.get(item.productId);
+      if (!product) {
+        skipped.push({ productId: item.productId, reason: "No longer available" });
+        continue;
+      }
+      if (product.stockQty < 1) {
+        skipped.push({ productId: product.id, title: product.title, reason: "Out of stock" });
+        continue;
+      }
+      const qty = Math.min(item.qty, product.stockQty);
+      if (qty < item.qty) {
+        skipped.push({
+          productId: product.id,
+          title: product.title,
+          reason: `Only ${product.stockQty} left, quantity adjusted`,
+        });
+      }
+      await prisma.cartItem.upsert({
+        where: { cartId_productId: { cartId: cart.id, productId: product.id } },
+        create: { cartId: cart.id, productId: product.id, qty },
+        update: { qty },
+      });
+    }
+
+    return res.json({ cart: await loadCart(owner, tenantId), skipped });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid cart items" });
+    }
+    return next(err);
+  }
+});
+
 const patchSchema = z.object({
   qty: z.coerce.number().int().min(0).max(99),
 });
@@ -289,18 +379,3 @@ cartsRouter.patch("/:slug/items/:itemId", async (req, res, next) => {
   }
 });
 
-cartsRouter.delete("/:slug/items/:itemId", async (req, res, next) => {
-  try {
-    const owner = ownerFromReq(req, res);
-    const cart = await findCart(owner, req.tenant!.tenantId);
-    if (!cart) {
-      return res.status(404).json({ error: "Cart not found" });
-    }
-    await prisma.cartItem.deleteMany({
-      where: { id: req.params.itemId, cartId: cart.id },
-    });
-    return res.json({ cart: await loadCart(owner, req.tenant!.tenantId) });
-  } catch (err) {
-    return next(err);
-  }
-});

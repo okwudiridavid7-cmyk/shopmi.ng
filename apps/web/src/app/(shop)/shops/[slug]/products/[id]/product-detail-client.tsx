@@ -4,15 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Heart,
-  Minus,
-  Plus,
-  RotateCcw,
-  Shield,
-  Star,
-  Truck,
-} from "lucide-react";
+import { Heart, Minus, Plus, Star } from "lucide-react";
 import type {
   ProductPublic,
   SellerTrustPublic,
@@ -31,7 +23,8 @@ import { Card, CardBody } from "@/components/ui/card";
 import { SkeletonLines } from "@/components/skeleton";
 import { ProductGallery } from "@/components/product-gallery";
 import { apiFetch, formatMoney, isAuthError, productImageUrls } from "@/lib/api";
-import { queryKeys } from "@/lib/query-keys";
+import { goToLocalCheckout, onCustomDomainNow } from "@/lib/local-cart";
+import { addToShopCart } from "@/hooks/use-cart";
 import { useUiStore } from "@/stores/ui";
 import { useAuth } from "@/hooks/use-auth";
 import { useFavoriteIds, useToggleFavorite } from "@/hooks/use-catalog";
@@ -70,31 +63,35 @@ export function ProductDetailClient({
 
     async function load() {
       try {
+        const trustP = apiFetch<{ trust: SellerTrustPublic }>(
+          `/api/shops/${slug}/trust`
+        ).catch(() => null);
+        const relatedP = apiFetch<{ products: ProductPublic[] }>(
+          `/api/shops/${slug}/products/${id}/related`
+        ).catch(() => null);
+        const moreP = apiFetch<{ products: ProductPublic[] }>(
+          `/api/shops/${slug}/products?limit=12&page=1`
+        ).catch(() => null);
         const [prod, shop] = await Promise.all([
           apiFetch<{ product: ProductPublic }>(
             `/api/shops/${slug}/products/${id}`
           ),
-          apiFetch<{ tenant: TenantPublic }>(`/api/shops/${slug}`),
+          qc.ensureQueryData({
+            queryKey: ["shops", slug] as const,
+            queryFn: async () =>
+              (await apiFetch<{ tenant: TenantPublic }>(`/api/shops/${slug}`))
+                .tenant,
+          }),
         ]);
         if (cancelled) return;
         setProduct(prod.product);
-        setTenant(shop.tenant);
+        setTenant(shop);
 
-        const trustRes = await apiFetch<{ trust: SellerTrustPublic }>(
-          `/api/shops/${slug}/trust`
-        ).catch(() => null);
-        if (!cancelled && trustRes?.trust) {
-          setTrust(trustRes.trust);
-        }
+        void trustP.then((trustRes) => {
+          if (!cancelled && trustRes?.trust) setTrust(trustRes.trust);
+        });
 
-        const relatedRes = await apiFetch<{ products: ProductPublic[] }>(
-          `/api/shops/${slug}/products/${id}/related`
-        ).catch(() => null);
-
-        const moreRes = await apiFetch<{
-          products: ProductPublic[];
-        }>(`/api/shops/${slug}/products?limit=12&page=1`).catch(() => null);
-
+        const [relatedRes, moreRes] = await Promise.all([relatedP, moreP]);
         if (cancelled) return;
 
         const shopProducts = (moreRes?.products ?? []).filter(
@@ -129,7 +126,7 @@ export function ProductDetailClient({
     return () => {
       cancelled = true;
     };
-  }, [slug, id]);
+  }, [slug, id, qc]);
 
   const theme = parseThemeSettings(tenant?.themeSettings);
   const brand =
@@ -145,11 +142,7 @@ export function ProductDetailClient({
     setMessage(null);
     setError(null);
     try {
-      await apiFetch(`/api/carts/${slug}/items`, {
-        method: "POST",
-        body: JSON.stringify({ productId: product.id, qty }),
-      });
-      await qc.invalidateQueries({ queryKey: queryKeys.cart.summary });
+      await addToShopCart({ slug, product, qty, shopName: tenant?.name, qc });
       if (openDrawer) {
         setMessage("Added to cart");
         setCartDrawerOpen(true);
@@ -166,6 +159,10 @@ export function ProductDetailClient({
   async function buyNow() {
     try {
       await addToCart(false);
+      if (onCustomDomainNow()) {
+        goToLocalCheckout(slug);
+        return;
+      }
       router.push(`/cart?shop=${encodeURIComponent(slug)}`);
     } catch {
       /* error already set */
@@ -264,7 +261,7 @@ export function ProductDetailClient({
             )}
             <div className="flex flex-wrap items-baseline gap-token-2">
               <p
-                className="text-2xl font-semibold text-accent"
+                className="text-2xl font-semibold text-accent-strong dark:text-accent-on-dark"
                 style={brand ? { color: brand } : undefined}
               >
                 {formatMoney(product.price, product.currency)}
@@ -329,7 +326,7 @@ export function ProductDetailClient({
               variant="outline"
               disabled={busy || product.stockQty < 1}
               onClick={() => void buyNow()}
-              className="min-w-[8.5rem] border-accent text-accent hover:bg-accent-soft"
+              className="min-w-[8.5rem] border-accent-strong text-accent-strong dark:text-accent-on-dark hover:bg-accent-soft"
               style={
                 brand
                   ? { borderColor: brand, color: brand }
@@ -347,42 +344,11 @@ export function ProductDetailClient({
             />
           </div>
 
-          {message && <p className="text-sm text-accent">{message}</p>}
+          {message && <p className="text-sm text-accent-strong dark:text-accent-on-dark">{message}</p>}
           {error && <p className="text-sm text-danger">{error}</p>}
         </div>
 
         <aside className="space-y-token-4 lg:col-span-2 xl:col-span-1">
-          <Card>
-            <CardBody className="space-y-token-3">
-              <p className="text-sm font-semibold text-foreground">
-                Delivery & Returns
-              </p>
-              <ul className="space-y-token-3 text-sm text-muted-foreground">
-                <li className="flex gap-token-3">
-                  <Truck className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-                  <span>
-                    Delivery options vary by seller location. Check with the
-                    shop for timelines.
-                  </span>
-                </li>
-                <li className="flex gap-token-3">
-                  <RotateCcw className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-                  <span>
-                    Returns accepted per the seller’s policy — contact the shop
-                    within a reasonable window after delivery.
-                  </span>
-                </li>
-                <li className="flex gap-token-3">
-                  <Shield className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-                  <span>
-                    Secure checkout through the marketplace. Prefer verified
-                    shops when possible.
-                  </span>
-                </li>
-              </ul>
-            </CardBody>
-          </Card>
-
           {(trustCard || tenant) && (
             <Card>
               <CardBody className="space-y-token-4">
@@ -392,7 +358,7 @@ export function ProductDetailClient({
                   </p>
                   <Link
                     href={`/shops/${slug}`}
-                    className="text-sm font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark"
+                    className="text-sm font-medium text-accent-strong transition hover:opacity-80 dark:text-accent-on-dark"
                   >
                     View Store
                   </Link>
@@ -515,10 +481,7 @@ export function ProductDetailClient({
 
       {moreFromSeller.length > 0 && (
         <section className="space-y-token-4 border-t border-border pt-token-6">
-          <SectionHeader
-            title="More from this seller"
-            description="Other listings from the same shop."
-          />
+          <SectionHeader title="More from this seller" />
           <AutoScrollCarousel threshold={4} itemClassName="w-56 shrink-0 sm:w-64">
             {moreFromSeller.map((p) => (
               <ProductCard key={p.id} product={p} />
@@ -529,10 +492,7 @@ export function ProductDetailClient({
 
       {related.length > 0 && (
         <section className="space-y-token-4 border-t border-border pt-token-6">
-          <SectionHeader
-            title="Related products"
-            description="You might also like these."
-          />
+          <SectionHeader title="Related products" />
           <AutoScrollCarousel threshold={4} itemClassName="w-56 shrink-0 sm:w-64">
             {related.map((p) => (
               <ProductCard key={p.id} product={p} />

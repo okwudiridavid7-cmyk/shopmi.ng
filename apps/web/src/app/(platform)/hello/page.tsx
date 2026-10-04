@@ -68,9 +68,6 @@ export default function HelloPage() {
     <div className="space-y-token-8">
       <div className="space-y-token-3">
         <h1 className="font-display text-3xl">{data.message}</h1>
-        <p className="text-sm text-muted-foreground">
-          Auth cookies + optional tenant membership — end-to-end check.
-        </p>
       </div>
 
       <pre className="overflow-x-auto rounded-lg border border-border bg-card p-token-4 text-xs text-card-foreground shadow-sm">
@@ -80,12 +77,10 @@ export default function HelloPage() {
       {!data.tenant && (
         <form onSubmit={createTenant} className="max-w-md space-y-token-4">
           <h2 className="font-display text-xl">Create a shop</h2>
-          <p className="text-sm text-muted-foreground">
-            Separate from signup — creates tenant + owner membership.
-          </p>
           <label className="block space-y-token-2 text-sm">
             <span>Shop name</span>
             <input
+              placeholder="e.g. Lagos Loom"
               name="name"
               required
               className="w-full rounded-md border border-border bg-card px-token-3 py-token-3"
@@ -107,7 +102,7 @@ export default function HelloPage() {
           <button
             type="submit"
             disabled={creating}
-            className="rounded-md bg-accent px-token-4 py-token-3 text-sm font-medium text-accent-foreground"
+            className="rounded-md bg-accent-strong px-token-4 py-token-3 text-sm font-medium text-accent-foreground"
           >
             {creating ? "Creating…" : "Create tenant"}
           </button>
@@ -116,7 +111,7 @@ export default function HelloPage() {
 
       {(data.tenant || tenantResult) && (
         <p className="text-sm text-muted-foreground">
-          Tenant scoped via membership. Public lookup:{" "}
+          Public lookup:{" "}
           <code>
             GET /api/shops/{(data.tenant || tenantResult)?.slug}
           </code>

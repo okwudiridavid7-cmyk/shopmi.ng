@@ -52,7 +52,6 @@ export default function BuyerOrdersListPage() {
         <EmptyState
           kind="orders"
           title="No orders yet"
-          description="Your order history will live here once you complete a checkout. Explore shops and find something you love."
           actionLabel="Browse marketplace"
           actionHref="/explore"
           icon={ShoppingBag}

@@ -13,7 +13,7 @@ const sizeClasses: Record<BadgeSize, string> = {
 
 const VERIFIED_TICK_SRC = "/brand/verified-tick.png";
 
-/** Platform verified mark — single source (`/brand/verified-tick.png`). */
+/** Platform verified mark - single source (`/brand/verified-tick.png`). */
 export function VerifiedBadge({
   className = "",
   size = "md",

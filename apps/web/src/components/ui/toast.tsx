@@ -8,13 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Info,
-  X,
-  XCircle,
-} from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import { AlertToast } from "@/components/ui/alert-toast";
 
 export type ToastTone = "default" | "info" | "success" | "warning" | "danger";
 
@@ -25,48 +20,27 @@ type ToastItem = {
   tone: ToastTone;
 };
 
+type ToastOptions = {
+  title: string;
+  description?: string;
+  tone?: ToastTone;
+  /** Auto-dismiss ms (default 4500). */
+  duration?: number;
+};
+
 type ToastContextValue = {
-  toast: (opts: {
-    title: string;
-    description?: string;
-    tone?: ToastTone;
-    /** Auto-dismiss ms (default 4500). */
-    duration?: number;
-  }) => void;
+  toast: (opts: ToastOptions) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
-const toneUi: Record<
-  ToastTone,
-  { wrap: string; icon: typeof Info; iconClass: string }
-> = {
-  default: {
-    wrap: "border-border bg-card text-card-foreground",
-    icon: Info,
-    iconClass: "text-muted-foreground",
-  },
-  info: {
-    wrap: "border-info/30 bg-card text-card-foreground",
-    icon: Info,
-    iconClass: "text-info",
-  },
-  success: {
-    wrap: "border-success/35 bg-card text-card-foreground",
-    icon: CheckCircle2,
-    iconClass: "text-success",
-  },
-  warning: {
-    wrap: "border-warning/40 bg-card text-card-foreground",
-    icon: AlertTriangle,
-    iconClass: "text-warning",
-  },
-  danger: {
-    wrap: "border-danger/35 bg-card text-card-foreground",
-    icon: XCircle,
-    iconClass: "text-danger",
-  },
-};
+const toneVariant = {
+  default: "info",
+  info: "info",
+  success: "success",
+  warning: "warning",
+  danger: "error",
+} as const;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
@@ -76,15 +50,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toast = useCallback(
-    (opts: {
-      title: string;
-      description?: string;
-      tone?: ToastTone;
-      duration?: number;
-    }) => {
+    (opts: ToastOptions) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       setItems((prev) => [
-        ...prev.slice(-4),
+        ...prev.slice(-3),
         {
           id,
           title: opts.title,
@@ -102,45 +71,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
+      {/* Top right: the bottom corners hold the WhatsApp button and cookie banner. */}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed bottom-6 right-6 z-[80] flex w-[min(100%-2rem,24rem)] flex-col gap-2"
+        className="pointer-events-none fixed right-4 top-20 z-[95] flex w-[min(100%-2rem,24rem)] flex-col items-end gap-2 sm:right-6"
       >
-        {items.map((item) => {
-          const ui = toneUi[item.tone];
-          const Icon = ui.icon;
-          return (
-            <div
+        <AnimatePresence initial={false}>
+          {items.map((item) => (
+            <AlertToast
               key={item.id}
-              className={`pointer-events-auto flex gap-3 rounded-xl border px-4 py-3 shadow-lg backdrop-blur-sm motion-safe:animate-scale-in ${ui.wrap}`}
-              role="status"
-            >
-              <span
-                className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted ${ui.iconClass}`}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">
-                  {item.title}
-                </p>
-                {item.description ? (
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    {item.description}
-                  </p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={() => dismiss(item.id)}
-                className="shrink-0 rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                aria-label="Dismiss"
-              >
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            </div>
-          );
-        })}
+              className="pointer-events-auto"
+              variant={toneVariant[item.tone]}
+              styleVariant="default"
+              title={item.title}
+              description={item.description}
+              onClose={() => dismiss(item.id)}
+            />
+          ))}
+        </AnimatePresence>
       </div>
     </ToastContext.Provider>
   );

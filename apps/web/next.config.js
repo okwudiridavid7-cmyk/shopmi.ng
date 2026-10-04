@@ -14,6 +14,9 @@ const nextConfig = {
       { protocol: "http", hostname: "127.0.0.1", port: "4000" },
     ],
   },
+  async redirects() {
+    return [{ source: "/about", destination: "/#about", permanent: true }];
+  },
   experimental: {
     optimizePackageImports: [
       "lucide-react",

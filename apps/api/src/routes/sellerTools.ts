@@ -64,7 +64,7 @@ sellerToolsRouter.post("/images/enhance", async (req, res, next) => {
   }
 });
 
-/** Synchronous watermark (legacy) — prefer upload + background job. */
+/** Synchronous watermark (legacy) - prefer upload + background job. */
 sellerToolsRouter.post("/images/watermark", async (req, res, next) => {
   try {
     const body = imageSchema.parse(req.body);
@@ -190,7 +190,7 @@ sellerToolsRouter.post("/logo/generate", async (req, res, next) => {
   }
 });
 
-/** Public logo helpers for onboarding (no auth — generate / upload mark only). */
+/** Public logo helpers for onboarding (no auth - generate / upload mark only). */
 export const logoPublicRouter = Router();
 
 fs.mkdirSync(path.join(env.uploadsDir, "logos"), { recursive: true });

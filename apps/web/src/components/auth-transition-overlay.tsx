@@ -72,7 +72,7 @@ export function AuthTransitionOverlay() {
     }
     setVisible(true);
 
-    // signing-in stays until welcome/clear — no auto-navigate
+    // signing-in stays until welcome/clear - no auto-navigate
     if (kind === "signing-in") return;
 
     const reduced = prefersReducedMotion();
@@ -83,7 +83,7 @@ export function AuthTransitionOverlay() {
       clear();
       if (!dest) return;
       if (dest !== pathname) {
-        // Hard assign after auth moments — soft router.push can no-op when the
+        // Hard assign after auth moments - soft router.push can no-op when the
         // overlay unmount races with navigation (login → dashboard especially).
         if (
           kind === "session-expired" ||
@@ -113,7 +113,7 @@ export function AuthTransitionOverlay() {
       aria-live="polite"
       className="auth-transition-overlay fixed inset-0 z-[100] flex items-center justify-center px-6 motion-safe:animate-fade-in"
     >
-      {/* Soft underlay — always readable vs page behind */}
+      {/* Soft underlay - always readable vs page behind */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[var(--auth-overlay-bg)]"

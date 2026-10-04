@@ -8,7 +8,7 @@ import { SkeletonLines } from "@/components/skeleton";
 
 type Props = {
   children: ReactNode;
-  /** Optional role check — redirects away if wrong role. */
+  /** Optional role check - redirects away if wrong role. */
   roles?: string[];
 };
 

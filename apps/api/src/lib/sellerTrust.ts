@@ -4,7 +4,7 @@ import { prisma } from "../db/prisma";
 /**
  * Quality % / Delivery % gating threshold.
  * Hide these computed performance metrics until a shop has this many
- * completed (paid|fulfilled) orders — empty % reads as a negative trust signal.
+ * completed (paid|fulfilled) orders - empty % reads as a negative trust signal.
  * Adjust later if real seller data shows 10 is too high or low.
  */
 export const SELLER_TRUST_PERF_MIN_ORDERS = 10;

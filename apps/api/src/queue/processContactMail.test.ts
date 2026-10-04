@@ -92,7 +92,7 @@ describe("processContactMailJob (REM-15 at-most-once)", () => {
     assert.equal(sends, 1);
   });
 
-  it("skips awaiting_confirm (REM-17 — unconfirmed never emails shop)", async () => {
+  it("skips awaiting_confirm (REM-17 - unconfirmed never emails shop)", async () => {
     let sends = 0;
     const result = await processContactMailJob(baseJob, {
       findInquiry: async () => ({

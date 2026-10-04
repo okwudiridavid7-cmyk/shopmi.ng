@@ -11,7 +11,15 @@ export class ApiClientError extends Error {
   }
 }
 
-/** True for auth failures — UI must redirect, never show the message. */
+/** The shop exists but is hidden from shoppers (its plan ended). */
+export function isShopUnavailableError(error: unknown): boolean {
+  return (
+    error instanceof ApiClientError &&
+    (error.body as { code?: string } | null)?.code === "SHOP_UNAVAILABLE"
+  );
+}
+
+/** True for auth failures - UI must redirect, never show the message. */
 export function isAuthError(error: unknown): boolean {
   if (error instanceof ApiClientError && error.status === 401) return true;
   if (error instanceof Error) {
@@ -22,7 +30,7 @@ export function isAuthError(error: unknown): boolean {
   return false;
 }
 
-/** Safe user-facing message — never returns "Authentication required". */
+/** Safe user-facing message - never returns "Authentication required". */
 export function friendlyErrorMessage(
   error: unknown,
   fallback = "Something went wrong"
@@ -50,7 +58,7 @@ const AUTH_SKIP_401 = [
 
 let onUnauthorized: ((path: string) => void) | null = null;
 
-/** Register once from the app shell — handles session expiry UX. */
+/** Register once from the app shell - handles session expiry UX. */
 export function setUnauthorizedHandler(handler: ((path: string) => void) | null) {
   onUnauthorized = handler;
 }
@@ -63,7 +71,8 @@ export async function apiFetch<T>(
     ...(init?.headers ?? {}),
   };
   const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
-  if (!isForm && !(headers as Record<string, string>)["Content-Type"]) {
+  // Setting Content-Type on body-less requests forces a CORS preflight.
+  if (init?.body != null && !isForm && !(headers as Record<string, string>)["Content-Type"]) {
     (headers as Record<string, string>)["Content-Type"] = "application/json";
   }
 
@@ -90,7 +99,7 @@ export async function apiFetch<T>(
       !AUTH_SKIP_401.some((p) => path.startsWith(p))
     ) {
       onUnauthorized(path);
-      // Never leak API auth strings into the UI — redirect owns the UX.
+      // Never leak API auth strings into the UI - redirect owns the UX.
       throw new ApiClientError("Sign in to continue", 401, data);
     }
 
@@ -137,6 +146,20 @@ export function formatMoney(amount: number, currency = "NGN"): string {
     }).format(amount);
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+/** Short form for chart axes, e.g. "₦40K". */
+export function formatMoneyCompact(amount: number, currency = "NGN"): string {
+  try {
+    return new Intl.NumberFormat("en-NG", {
+      style: "currency",
+      currency,
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount}`;
   }
 }
 

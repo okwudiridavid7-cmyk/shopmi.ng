@@ -10,7 +10,7 @@ export type AuthSnapshot = {
 
 let user: UserPublic | null = null;
 let loading = true;
-/** Stable reference — useSyncExternalStore requires Object.is equality across calls. */
+/** Stable reference - useSyncExternalStore requires Object.is equality across calls. */
 let snapshot: AuthSnapshot = { user: null, loading: true };
 const serverSnapshot: AuthSnapshot = { user: null, loading: true };
 let listeners = new Set<AuthListener>();

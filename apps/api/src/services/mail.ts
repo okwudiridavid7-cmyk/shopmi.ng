@@ -8,7 +8,7 @@ export { MailConfigError, MailProviderError, isMailError } from "./mailErrors";
 
 const MAIL_TIMEOUT_MS = 8_000;
 
-/** Marketplace shopping hero — used as full promo-card background. */
+/** Marketplace shopping hero - used as full promo-card background. */
 const MARKETPLACE_BANNER_IMG =
   "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1200&q=80";
 
@@ -52,7 +52,7 @@ async function withTimeout<T>(
 
 /**
  * Send transactional HTML email via Resend.
- * Throws MailConfigError / MailProviderError — never returns a silent false.
+ * Throws MailConfigError / MailProviderError - never returns a silent false.
  */
 export async function sendHtmlEmail(
   opts: {
@@ -61,7 +61,7 @@ export async function sendHtmlEmail(
     html: string;
     /** Optional Reply-To (e.g. contact form submitter). */
     replyTo?: string;
-    /** Resend Idempotency-Key — reuse inquiry id for at-most-once (REM-15). */
+    /** Resend Idempotency-Key - reuse inquiry id for at-most-once (REM-15). */
     idempotencyKey?: string;
   },
   deps?: {
@@ -86,7 +86,7 @@ export async function sendHtmlEmail(
   const send: ResendSendFn =
     deps?.send ??
     (async (payload) => {
-      const resend = new Resend(env.resendApiKey);
+  const resend = new Resend(env.resendApiKey);
       return resend.emails.send(
         {
           from: payload.from,
@@ -110,10 +110,10 @@ export async function sendHtmlEmail(
   try {
     result = await withTimeout(
       send({
-        from: env.emailFrom,
-        to: opts.to,
-        subject: opts.subject,
-        html: opts.html,
+    from: env.emailFrom,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
         ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
       }),
       timeoutMs,
@@ -153,7 +153,7 @@ export async function brandedEmailShell(inner: string): Promise<{
   const safeSupport = escapeHtml(support);
   const safeWeb = escapeHtml(webUrl.replace(/\/$/, ""));
   const year = new Date().getFullYear();
-  // Email clients can't reliably swap logos by theme — lock light logo on white.
+  // Email clients can't reliably swap logos by theme - lock light logo on white.
   const logoUrl = `${safeWeb}/brand/logo-light.png`;
   const headerBg = "#ffffff";
   const accent = "#ff822e";
@@ -179,12 +179,12 @@ export async function brandedEmailShell(inner: string): Promise<{
     /*
      * EMAIL COLOR PERSISTENCE
      * Most clients invert colors in dark mode. What survives:
-     * 1) background-image: linear-gradient(#hex,#hex) — Apple rarely inverts this
+     * 1) background-image: linear-gradient(#hex,#hex) - Apple rarely inverts this
      * 2) -webkit-text-fill-color + color !important on span AND nested <font>
      * 3) bgcolor="" on <td> (HTML attribute, not only CSS)
      * 4) Re-declare locked rules inside @media (prefers-color-scheme: dark)
      * 5) [data-ogsc]/[data-ogsb] for Outlook.com / Yahoo
-     * 6) color-scheme: light only on .persist — opt that subtree out of dark
+     * 6) color-scheme: light only on .persist - opt that subtree out of dark
      *
      * Locked classes (same in light + dark):
      *   .btn-primary   orange CTA, white label
@@ -309,7 +309,7 @@ export async function brandedEmailShell(inner: string): Promise<{
           <!-- Body -->
           <tr>
             <td class="email-body-text" style="padding:28px 28px 8px;font-family:'Montserrat',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#1f2937;text-align:left;">
-              ${inner}
+        ${inner}
             </td>
           </tr>
           <!-- Promo: image as full card background; locked white text + white Learn More -->
@@ -334,7 +334,7 @@ export async function brandedEmailShell(inner: string): Promise<{
                       <a href="${safeWeb}/pricing" class="btn-learn" style="display:inline-block;padding:8px 16px;border-radius:999px;background-color:#ffffff !important;background-image:${whiteFill} !important;color:#111827 !important;-webkit-text-fill-color:#111827;font-family:'Montserrat',Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;text-decoration:none;border:1px solid #ffffff;">
                         <span style="color:#111827 !important;-webkit-text-fill-color:#111827;"><font color="#111827">Learn More</font></span>
                       </a>
-                    </div>
+      </div>
                     <!--[if gte mso 9]>
                     </v:textbox>
                     </v:rect>

@@ -82,7 +82,7 @@ export function MultiStepShell({
 
   return (
     <div className={cn("mx-auto w-full max-w-lg", className)}>
-      {/* Step rail — line is centered on the circle row only (not labels). */}
+      {/* Step rail - line is centered on the circle row only (not labels). */}
       <div className="relative mx-auto mb-8 w-full max-w-sm px-2">
         <div className="relative">
           <div className="pointer-events-none absolute left-[18px] right-[18px] top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-muted" />
@@ -109,9 +109,9 @@ export function MultiStepShell({
                   className={cn(
                     "relative z-[1] flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all duration-300",
                     "disabled:cursor-not-allowed",
-                    done && "border-accent bg-accent text-white",
+                    done && "border-accent-strong bg-accent-strong text-white",
                     active &&
-                      "border-accent bg-accent text-white shadow-[0_0_0_4px_rgba(255,130,46,0.2)]",
+                      "border-accent-strong bg-accent-strong text-white shadow-[0_0_0_4px_rgba(255,130,46,0.2)]",
                     !done &&
                       !active &&
                       "border-muted bg-card text-muted-foreground"

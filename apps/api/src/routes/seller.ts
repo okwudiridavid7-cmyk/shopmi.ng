@@ -23,6 +23,7 @@ import {
   getWatermarkQueue,
   type WatermarkJobPayload,
 } from "../queue/connection";
+import { optimizeUpload } from "../services/images";
 
 fs.mkdirSync(env.uploadsDir, { recursive: true });
 
@@ -94,7 +95,8 @@ sellerRouter.post("/uploads", (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({ error: "file is required" });
     }
-    const url = `${env.apiUrl}/uploads/${req.file.filename}`;
+    const filename = await optimizeUpload(req.file.filename);
+    const url = `${env.apiUrl}/uploads/${filename}`;
     const enqueueWatermark = req.query.watermark !== "0";
     let watermarkJobId: string | null = null;
     if (enqueueWatermark && req.tenant) {
@@ -129,7 +131,7 @@ sellerRouter.post("/uploads", (req, res, next) => {
     }
     return res.status(201).json({
       url,
-      path: `/uploads/${req.file.filename}`,
+      path: `/uploads/${filename}`,
       originalUrl: url,
       watermarkJobId,
     });
@@ -157,16 +159,18 @@ sellerRouter.get("/products", async (req, res, next) => {
 sellerRouter.post("/products", async (req, res, next) => {
   try {
     const body = productSchema.parse(req.body);
-    const { assertCanCreateProduct, PlanLimitError } = await import(
-      "../lib/plans"
-    );
-    try {
-      await assertCanCreateProduct(req.tenant!.tenantId);
-    } catch (err) {
-      if (err instanceof PlanLimitError) {
-        return res.status(err.status).json({ error: err.message });
+    if (body.status === "active") {
+      const { assertCanPublishProduct, PlanLimitError } = await import(
+        "../lib/plans"
+      );
+      try {
+        await assertCanPublishProduct(req.tenant!.tenantId);
+      } catch (err) {
+        if (err instanceof PlanLimitError) {
+          return res.status(err.status).json({ error: err.message, code: "PLAN_LIMIT" });
+        }
+        throw err;
       }
-      throw err;
     }
     const product = await prisma.product.create({
       data: {
@@ -215,6 +219,20 @@ sellerRouter.patch("/products/:id", async (req, res, next) => {
     });
     if (!existing) {
       return res.status(404).json({ error: "Product not found" });
+    }
+
+    if (body.status === "active" && existing.status !== "active") {
+      const { assertCanPublishProduct, PlanLimitError } = await import(
+        "../lib/plans"
+      );
+      try {
+        await assertCanPublishProduct(req.tenant!.tenantId, existing.id);
+      } catch (err) {
+        if (err instanceof PlanLimitError) {
+          return res.status(err.status).json({ error: err.message, code: "PLAN_LIMIT" });
+        }
+        throw err;
+      }
     }
 
     const product = await prisma.product.update({
@@ -326,7 +344,7 @@ sellerRouter.get("/orders/:id", async (req, res, next) => {
 });
 
 /**
- * Seller status updates — uses existing OrderStatus enum:
+ * Seller status updates - uses existing OrderStatus enum:
  * pending_payment | paid | fulfilled | cancelled | failed
  * Sellers may fulfill paid orders or cancel unpaid ones.
  */
@@ -651,6 +669,7 @@ sellerRouter.get("/branding", async (req, res, next) => {
           typeof theme.newArrivalsDays === "number"
             ? theme.newArrivalsDays
             : 30,
+        storeTheme: typeof theme.storeTheme === "string" ? theme.storeTheme : "classic",
         shopName: tenant.name,
         slug: tenant.slug,
       },
@@ -694,6 +713,9 @@ sellerRouter.patch("/branding", async (req, res, next) => {
         promoProductsEnabled: z.boolean().optional(),
         newArrivalsEnabled: z.boolean().optional(),
         newArrivalsDays: z.coerce.number().int().min(1).max(365).optional(),
+        storeTheme: z
+          .enum(["classic", "mono", "runway", "atelier", "bazaar", "pop"])
+          .optional(),
       })
       .parse(req.body);
 
@@ -703,6 +725,9 @@ sellerRouter.patch("/branding", async (req, res, next) => {
     if (!tenant) return res.status(404).json({ error: "Shop not found" });
 
     const theme = themeFromJson(tenant.themeSettings);
+    if (body.storeTheme !== undefined) {
+      theme.storeTheme = body.storeTheme;
+    }
     if (body.logoUrl !== undefined) {
       theme.logoUrl = body.logoUrl === "" ? null : body.logoUrl;
     }
@@ -739,6 +764,8 @@ sellerRouter.patch("/branding", async (req, res, next) => {
         logoRectUrl: (nextTheme.logoRectUrl as string) ?? null,
         primaryColor: (nextTheme.primaryColor as string) ?? null,
         accentColor: (nextTheme.accentColor as string) ?? null,
+        storeTheme:
+          typeof nextTheme.storeTheme === "string" ? nextTheme.storeTheme : "classic",
         shopName: updated.name,
         slug: updated.slug,
       },

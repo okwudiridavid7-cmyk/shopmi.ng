@@ -20,9 +20,10 @@ import {
   User,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useComingSoon } from "@/components/coming-soon";
 import { firstNameFromUser } from "@/lib/auth-redirect";
 import { useAuthTransition } from "@/stores/auth-transition";
-import { cn } from "@/lib/utils";
+import { cn, isUnderPath } from "@/lib/utils";
 
 function roleLabel(role: string) {
   if (role === "super_admin") return "Administrator";
@@ -47,7 +48,7 @@ type Workspace = {
 };
 
 /**
- * World-class account dropdown — profile header, workspaces, links,
+ * World-class account dropdown - profile header, workspaces, links,
  * segmented theme control, logout.
  */
 export function UserAccountMenu({
@@ -63,6 +64,7 @@ export function UserAccountMenu({
   const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const comingSoon = useComingSoon();
 
   useEffect(() => setMounted(true), []);
 
@@ -98,7 +100,7 @@ export function UserAccountMenu({
       id: "buyer",
       label: "Buyer",
       href: "/buyer",
-      active: pathname.startsWith("/buyer"),
+      active: isUnderPath(pathname, "/buyer"),
     });
   }
   if (role === "seller" || role === "tenant_admin" || role === "super_admin") {
@@ -106,7 +108,7 @@ export function UserAccountMenu({
       id: "seller",
       label: "Seller studio",
       href: "/seller",
-      active: pathname.startsWith("/seller"),
+      active: isUnderPath(pathname, "/seller"),
     });
   }
   if (role === "super_admin") {
@@ -114,7 +116,7 @@ export function UserAccountMenu({
       id: "admin",
       label: "Admin",
       href: "/admin",
-      active: pathname.startsWith("/admin"),
+      active: isUnderPath(pathname, "/admin"),
     });
   }
 
@@ -152,7 +154,7 @@ export function UserAccountMenu({
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition hover:bg-muted"
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-strong text-xs font-semibold text-white">
           {initials}
         </span>
         <span className="hidden max-w-[8rem] truncate text-sm font-medium text-foreground sm:inline">
@@ -171,7 +173,7 @@ export function UserAccountMenu({
         >
           {/* Header */}
           <div className="flex items-start gap-3 border-b border-border px-4 py-3.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-strong text-sm font-semibold text-white">
               {initials}
             </span>
             <div className="min-w-0 flex-1">
@@ -279,17 +281,25 @@ export function UserAccountMenu({
 
           <div className="border-b border-border px-2 py-1.5">
             <MenuRow
-              href="/about"
+              href="#"
               icon={Rocket}
               label="What's new"
-              onClick={() => setOpen(false)}
+              onClick={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                comingSoon("What's new");
+              }}
               badge={1}
             />
             <MenuRow
               href="/contact"
               icon={Gift}
               label="Refer a shop"
-              onClick={() => setOpen(false)}
+              onClick={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                comingSoon("Refer a shop");
+              }}
             />
           </div>
 
@@ -359,7 +369,7 @@ function MenuRow({
   href: string;
   icon: typeof User;
   label: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent<HTMLAnchorElement>) => void;
   badge?: number;
 }) {
   return (

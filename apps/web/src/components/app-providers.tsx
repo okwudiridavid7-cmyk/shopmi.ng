@@ -3,6 +3,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { AuthSessionBridge } from "@/components/auth-session-bridge";
+import { ComingSoonProvider } from "@/components/coming-soon";
+import { CookieConsentProvider } from "@/components/cookie-consent";
+import { NavigationProgress } from "@/components/navigation-progress";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -10,7 +13,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30_000,
+            staleTime: 60_000,
             refetchOnWindowFocus: false,
             retry: (failureCount, error) => {
               if (
@@ -30,7 +33,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthSessionBridge>{children}</AuthSessionBridge>
+      <NavigationProgress />
+      <CookieConsentProvider>
+        <ComingSoonProvider>
+          <AuthSessionBridge>{children}</AuthSessionBridge>
+        </ComingSoonProvider>
+      </CookieConsentProvider>
     </QueryClientProvider>
   );
 }

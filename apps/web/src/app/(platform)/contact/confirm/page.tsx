@@ -27,7 +27,7 @@ function ConfirmInner() {
         if (cancelled) return;
         setState("ok");
         setMessage(
-          "Thanks — your message is confirmed and on its way to the shop."
+          "Thanks! Your message is confirmed and on its way to the shop."
         );
       } catch (err) {
         if (cancelled) return;
@@ -45,7 +45,7 @@ function ConfirmInner() {
   }, [token]);
 
   return (
-    <main className="mx-auto flex min-h-[50vh] max-w-lg flex-col justify-center px-token-4 py-token-16">
+    <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col justify-center px-token-4 py-token-16">
       <h1 className="font-display text-2xl text-foreground">
         {state === "ok"
           ? "Message confirmed"
@@ -62,7 +62,7 @@ function ConfirmInner() {
           Back to home
         </Link>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -70,9 +70,9 @@ export default function ContactConfirmPage() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto max-w-lg px-token-4 py-token-16">
+        <div className="mx-auto max-w-lg px-token-4 py-token-16">
           <p className="text-sm text-muted-foreground">Loading…</p>
-        </main>
+        </div>
       }
     >
       <ConfirmInner />

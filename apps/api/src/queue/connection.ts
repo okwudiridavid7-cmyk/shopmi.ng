@@ -6,6 +6,8 @@ export const QUEUE_AI_DESCRIPTION = "ai-description";
 export const QUEUE_IMAGE_WATERMARK = "image-watermark";
 export const QUEUE_CONTACT_MAIL = "contact-mail";
 export const QUEUE_CONTACT_PURGE = "contact-purge";
+export const QUEUE_PLAN_LIFECYCLE = "plan-lifecycle";
+export const QUEUE_DOMAINS = "domains";
 
 let connection: IORedis | null = null;
 
@@ -91,7 +93,7 @@ export function getContactMailQueue(): Queue {
       defaultJobOptions: {
         removeOnComplete: 200,
         removeOnFail: 100,
-        /** Controlled retries — worker skips if providerMessageId already set. */
+        /** Controlled retries - worker skips if providerMessageId already set. */
         attempts: 5,
         backoff: { type: "exponential", delay: 3000 },
       },
@@ -115,6 +117,54 @@ export function getContactPurgeQueue(): Queue {
     });
   }
   return contactPurgeQueue;
+}
+
+let planLifecycleQueue: Queue | null = null;
+
+export function getPlanLifecycleQueue(): Queue {
+  if (!planLifecycleQueue) {
+    planLifecycleQueue = new Queue(QUEUE_PLAN_LIFECYCLE, {
+      connection: getRedisConnection(),
+      defaultJobOptions: {
+        removeOnComplete: 30,
+        removeOnFail: 30,
+        attempts: 2,
+        backoff: { type: "exponential", delay: 5000 },
+      },
+    });
+  }
+  return planLifecycleQueue;
+}
+
+export type DomainJobPayload =
+  | { kind: "register"; registeredDomainId: string }
+  | { kind: "renew"; registeredDomainId: string; years: number };
+
+let domainsQueue: Queue<DomainJobPayload> | null = null;
+
+/** Registrar calls; retried with a long backoff because registries can be briefly unavailable. */
+export function getDomainsQueue(): Queue<DomainJobPayload> {
+  if (!domainsQueue) {
+    domainsQueue = new Queue<DomainJobPayload>(QUEUE_DOMAINS, {
+      connection: getRedisConnection(),
+      defaultJobOptions: {
+        removeOnComplete: 200,
+        removeOnFail: 200,
+        attempts: 5,
+        backoff: { type: "exponential", delay: 30_000 },
+      },
+    });
+  }
+  return domainsQueue;
+}
+
+/** Hourly sweep: plan reminders, then expiry to the free plan (idempotent). */
+export async function ensurePlanLifecycleSchedule(): Promise<void> {
+  await getPlanLifecycleQueue().upsertJobScheduler(
+    "plan-lifecycle-hourly",
+    { pattern: "5 * * * *" },
+    { name: "plan-lifecycle", data: {} }
+  );
 }
 
 /** Ensure the daily retention purge is scheduled (idempotent). */

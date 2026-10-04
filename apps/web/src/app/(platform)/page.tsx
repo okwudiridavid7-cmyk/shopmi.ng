@@ -1,302 +1,224 @@
-"use client";
-
-import * as React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, Compass, Search, Store, Truck } from "lucide-react";
-import type { ProductPublic } from "@vendors/shared-types";
+import type { PlanPublic } from "@vendors/shared-types";
+import { HomeHero } from "@/components/marketing/home-hero";
+import { JsonLd } from "@/components/json-ld";
+import { Cta69 } from "@/components/ui/cta69";
+import ScrollFAQAccordion from "@/components/ui/scroll-faqaccordion";
 import {
-  AnimatedAIChat,
-  type AnimatedAIChatHandle,
-  type ChatCommand,
-  type ChatResult,
-} from "@/components/ui/animated-ai-chat";
-import { Button } from "@/components/ui/button";
-import { MoireField } from "@/components/ui/moire-field";
-import { apiFetch, formatMoney, productImageUrl } from "@/lib/api";
-import { useMarketplaceFilters } from "@/stores/ui";
+  faqJsonLd,
+  Section,
+  SectionIntro,
+  type FaqItem,
+} from "@/components/marketing/blocks";
+import { CircularGallery, type GalleryItem } from "@/components/ui/circular-gallery";
+import { HowItWorksTabs } from "@/components/marketing/how-it-works-tabs";
+import {
+  AboutSection,
+  FeaturesBento,
+  PricingTeaser,
+  TrustStrip,
+} from "@/components/marketing/home-sections";
+import { ReplacesSection, ThemesShowcase } from "@/components/marketing/sections";
+import { categoryPhoto } from "@/lib/category-images";
+import {
+  cheapestPaidPlan,
+  getPlans,
+  getTopCategories,
+  hasFreePlan,
+  nairaWhole,
+} from "@/lib/marketing-data";
+import { pageMetadata, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
 
-const COMMANDS: ChatCommand[] = [
+export const revalidate = 300;
+
+export const metadata = pageMetadata({
+  title: "Shopmi.ng | Shop local brands or open your online store in Nigeria",
+  description:
+    "Discover products from independent Nigerian shops, or create your own online store in minutes with Paystack checkout, WhatsApp order alerts and a branded shop link.",
+  path: "/",
+  absoluteTitle: true,
+});
+
+const HOW_IT_WORKS = [
   {
-    icon: <Search />,
-    label: "Search items",
-    description: "Find products across every shop",
-    prefix: "/search",
-    takesQuery: true,
+    id: "sell",
+    label: "I want to sell",
+    steps: [
+      { title: "Create your shop", body: "Sign up, name your shop and pick a theme. It takes a few minutes." },
+      { title: "Add products", body: "Upload photos, set prices and stock. AI can draft descriptions for you." },
+      { title: "Share and get paid", body: "Share your link anywhere. Buyers pay with Paystack, you get paid to your bank." },
+    ],
   },
   {
-    icon: <Compass />,
-    label: "Explore marketplace",
-    description: "Browse shops, categories and new arrivals",
-    prefix: "/explore",
-    status: "Opening the marketplace",
-  },
-  {
-    icon: <Store />,
-    label: "Start selling",
-    description: "Create your shop in a few steps",
-    prefix: "/sell",
-    status: "Setting up your shop",
-  },
-  {
-    icon: <Truck />,
-    label: "Track an order",
-    description: "See where your purchases are",
-    prefix: "/orders",
-    status: "Opening your orders",
+    id: "buy",
+    label: "I want to buy",
+    steps: [
+      { title: "Discover", body: "Search the marketplace or browse categories from shops across Nigeria." },
+      { title: "Pay securely", body: "Check out with card, transfer or USSD through Paystack." },
+      { title: "Track your order", body: "Follow every order from your account and download the invoice." },
+    ],
   },
 ];
 
-const COMMAND_ROUTES: Record<string, string> = {
-  "/explore": "/explore",
-  "/sell": "/onboarding",
-  "/orders": "/buyer/orders",
-};
-
-const PLACEHOLDERS = [
-  "Search sneakers, skincare, gadgets…",
-  "Try “ankara dress” or “wireless earbuds”",
-  "Type / to explore, sell or track an order",
-];
-
-/** Lets the chat's status line register before the route changes. */
-const HANDOFF_MS = 280;
-
-function useDebounced<T>(value: T, delay: number) {
-  const [debounced, setDebounced] = React.useState(value);
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delay);
-    return () => window.clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-}
-
-function Highlight({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="relative isolate inline-block text-accent dark:text-accent-on-dark">
-      <span
-        aria-hidden="true"
-        className="absolute inset-x-[-0.06em] bottom-[0.08em] -z-10 h-[0.3em] rounded-sm bg-[color-mix(in_oklab,var(--color-accent)_22%,transparent)]"
-      />
-      {children}
-    </span>
-  );
-}
-
-const HEADLINES: React.ReactNode[] = [
-  <>
-    <Highlight>Shop</Highlight> items.
-  </>,
-  <>
-    Create your <Highlight>shop</Highlight>.
-  </>,
-];
-
-function RotatingHeadline() {
-  const reduceMotion = useReducedMotion();
-  const [index, setIndex] = React.useState(0);
-
-  React.useEffect(() => {
-    const timer = window.setInterval(
-      () => setIndex((i) => (i + 1) % HEADLINES.length),
-      3400
-    );
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return (
-    <h1 className="font-display text-[2.6rem] font-bold leading-[1.05] tracking-tight text-foreground sm:text-6xl md:text-7xl">
-      <span className="sr-only">Shop items or create your shop — in minutes.</span>
-      <span aria-hidden="true" className="grid justify-items-center">
-        {/* Reserves the widest line so the rotation never shifts the layout. */}
-        <span className="invisible col-start-1 row-start-1">
-          Create your shop.
-        </span>
-        <AnimatePresence initial={false}>
-          <motion.span
-            key={index}
-            className="col-start-1 row-start-1 whitespace-nowrap"
-            initial={
-              reduceMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: "0.45em", filter: "blur(8px)" }
-            }
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={
-              reduceMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: "-0.45em", filter: "blur(8px)" }
-            }
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {HEADLINES[index]}
-          </motion.span>
-        </AnimatePresence>
-        <span className="block text-muted-foreground">In minutes.</span>
-      </span>
-    </h1>
-  );
-}
-
-/**
- * Marketing landing (home). Marketplace catalog lives at /explore.
- */
-export default function MarketingHomePage() {
-  const router = useRouter();
-  const reduceMotion = useReducedMotion();
-  const chatRef = React.useRef<AnimatedAIChatHandle>(null);
-  const [query, setQuery] = React.useState("");
-  const debounced = useDebounced(query, 220);
-
-  React.useEffect(() => {
-    router.prefetch("/explore");
-    router.prefetch("/onboarding");
-  }, [router]);
-
-  const resultsQuery = useQuery({
-    queryKey: ["catalog", "hero-search", debounced] as const,
-    queryFn: () =>
-      apiFetch<{ products: ProductPublic[] }>(
-        `/api/catalog/products?q=${encodeURIComponent(debounced)}&page=1&limit=5`
-      ),
-    enabled: debounced.length >= 2,
-    staleTime: 30_000,
-    placeholderData: (previous) => previous,
-  });
-
-  const results = React.useMemo<ChatResult[]>(
-    () =>
-      (resultsQuery.data?.products ?? []).map((p) => ({
-        id: p.id,
-        title: p.title,
-        subtitle: p.tenant?.name ?? p.location ?? null,
-        meta: formatMoney(p.price, p.currency),
-        imageUrl: productImageUrl(p.images),
-        href: p.tenant
-          ? `/shops/${p.tenant.slug}/products/${p.id}`
-          : `/catalog/${p.id}`,
-      })),
-    [resultsQuery.data]
-  );
-
-  const handleSubmit = React.useCallback(
-    async (q: string, command: ChatCommand | null) => {
-      await new Promise((r) => setTimeout(r, reduceMotion ? 0 : HANDOFF_MS));
-      const route = command ? COMMAND_ROUTES[command.prefix] : undefined;
-      if (route && !(command?.prefix === "/explore" && q)) {
-        router.push(route);
-        return;
-      }
-      const { clearFilters, setFilter } = useMarketplaceFilters.getState();
-      clearFilters();
-      setFilter("q", q);
-      router.push(q ? `/explore?q=${encodeURIComponent(q)}` : "/explore");
+function homeFaq(billingEnabled: boolean, free: boolean, fromPrice: string | null): FaqItem[] {
+  const cost = !billingEnabled
+    ? "Opening a shop is free right now."
+    : [
+        free ? "You can start on the free plan." : null,
+        fromPrice ? `Paid plans start from ${fromPrice} a month.` : null,
+        "Buyers never pay to use Shopmi.ng.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+  return [
+    {
+      q: "What is Shopmi.ng?",
+      a: "Shopmi.ng is a Nigerian marketplace and online store builder. Independent sellers get their own branded shop, and buyers can discover and buy from all of them in one place.",
     },
-    [reduceMotion, router]
-  );
+    { q: "How much does it cost?", a: cost },
+    {
+      q: "How do payments work?",
+      a: "Every payment goes through Paystack. Buyers pay by card, bank transfer or USSD, and verified sellers receive payouts directly to their bank account.",
+    },
+    {
+      q: "How do I know a seller is genuine?",
+      a: "Look for the verified tick, which shops earn by passing our review. Product pages also show reviews from other buyers and each shop's policies.",
+    },
+    {
+      q: "Can I use my own domain for my shop?",
+      a: "Yes, on plans that include a custom domain. Connect a domain you already own, or buy one from your seller dashboard.",
+    },
+    {
+      q: "Do I need an account to shop?",
+      a: "You can browse and fill your cart without one. You sign in at checkout so we can send your receipt and keep your orders in one place.",
+    },
+  ];
+}
 
-  const replay =
-    (command: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
-      if (
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      event.preventDefault();
-      chatRef.current?.run(command);
-    };
+function ctaFootnote(billingEnabled: boolean, free: boolean, fromPrice: string | null): string {
+  if (!billingEnabled) return "Opening a shop is free right now.";
+  if (free && fromPrice) return `Free to start. Paid plans from ${fromPrice}/month.`;
+  if (fromPrice) return `Plans from ${fromPrice}/month.`;
+  return "Free to start.";
+}
+
+function categoryGallery(categories: Awaited<ReturnType<typeof getTopCategories>>): GalleryItem[] {
+  return categories.flatMap((c) => {
+    const photo = categoryPhoto(c.slug);
+    if (!photo) return [];
+    const examples = (c.children ?? []).slice(0, 3).map((child) => child.name);
+    return [
+      {
+        common: c.name,
+        binomial: examples.length ? examples.join(", ") : undefined,
+        href: `/explore?category=${encodeURIComponent(c.slug)}`,
+        photo: { url: photo.url, text: photo.alt, pos: photo.pos },
+      },
+    ];
+  });
+}
+
+function startOffer(billingEnabled: boolean, plans: PlanPublic[]): { value: string; label: string } {
+  if (!billingEnabled || hasFreePlan(plans)) return { value: "₦0", label: "to open your shop" };
+  const trialDays = plans.find((p) => p.trialDays > 0)?.trialDays ?? 0;
+  if (trialDays > 0) return { value: `${trialDays}`, label: "days free, no card needed" };
+  return { value: "1 link", label: "for your whole shop" };
+}
+
+function sellerBadge(billingEnabled: boolean, plans: PlanPublic[]): string | undefined {
+  if (!billingEnabled || hasFreePlan(plans)) return "Free to start";
+  const trialDays = plans.find((p) => p.trialDays > 0)?.trialDays ?? 0;
+  return trialDays > 0 ? `${trialDays}-day free trial` : undefined;
+}
+
+export default async function HomePage() {
+  const [{ plans, billingEnabled }, categories] = await Promise.all([getPlans(), getTopCategories(40)]);
+  const cheapest = cheapestPaidPlan(plans);
+  const faq = homeFaq(billingEnabled, hasFreePlan(plans), cheapest ? nairaWhole(Number(cheapest.price)) : null);
+  const gallery = categoryGallery(categories);
+
+  const structuredData = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: `${SITE_URL}/brand/logo-light.png`,
+      description: SITE_DESCRIPTION,
+      areaServed: "NG",
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: SITE_URL,
+      potentialAction: {
+        "@type": "SearchAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/explore?q={search_term_string}` },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    faqJsonLd(faq),
+  ];
 
   return (
-    <MoireField
-      accent
-      intensity={0.24}
-      drift={0.55}
-      fade={0.45}
-      className="flex min-h-[max(620px,90svh)] w-full items-center justify-center bg-background px-5 py-16 sm:px-8"
-    >
-      <style>{`
-        @keyframes hero-rise {
-          from { opacity: 0; transform: translateY(14px); }
-          to   { opacity: 1; transform: none; }
-        }
-        [data-hero] > * { animation: hero-rise .6s cubic-bezier(.22,1,.36,1) both; }
-        [data-hero] > :nth-child(2) { animation-delay: 70ms; }
-        [data-hero] > :nth-child(3) { animation-delay: 140ms; }
-        [data-hero] > :nth-child(4) { animation-delay: 210ms; }
-        [data-hero] > :nth-child(5) { animation-delay: 280ms; }
-        @media (prefers-reduced-motion: reduce) {
-          [data-hero] > * { animation: none; }
-        }
-      `}</style>
+    <>
+      <JsonLd data={structuredData} />
+      <HomeHero />
 
-      {/* Keeps the headline and search off the fringes without dimming the field around them. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 58% 44% at 50% 50%, var(--color-background) 0%, var(--color-background) 38%, color-mix(in oklab, var(--color-background) 55%, transparent) 72%, transparent 100%)",
+      <AboutSection sellerBadge={sellerBadge(billingEnabled, plans)} />
+
+      {gallery.length >= 6 ? (
+        <section className="overflow-hidden bg-[#0b0b0b] px-5 py-16 sm:px-8 sm:py-24">
+          <SectionIntro
+            inverted
+            eyebrow="On Shopmi.ng"
+            title="What people are selling"
+            body="Fashion, beauty, gadgets, food and home goods from shops across Nigeria. Tap a category to start browsing."
+          />
+          <div className="mt-6 h-[clamp(15rem,40vw,19rem)] sm:mt-10">
+            <CircularGallery items={gallery} autoRotateSpeed={0.08} maxScale={0.5} />
+          </div>
+        </section>
+      ) : null}
+
+      <Section id="how-it-works">
+        <SectionIntro eyebrow="How it works" title="Simple on both sides" />
+        <div className="mt-10">
+          <HowItWorksTabs tabs={HOW_IT_WORKS} />
+        </div>
+      </Section>
+
+      <FeaturesBento startOffer={startOffer(billingEnabled, plans)} />
+
+      <ReplacesSection plans={plans} billingEnabled={billingEnabled} tone="muted" />
+
+      <ThemesShowcase />
+
+      <TrustStrip plans={plans} billingEnabled={billingEnabled} categoryCount={categories.length} />
+
+      {billingEnabled ? <PricingTeaser plans={plans} /> : null}
+
+      <Section id="faq" tone="muted">
+        <ScrollFAQAccordion
+          className="py-0"
+          pinOffset={96}
+          data={faq.map((f, i) => ({ id: i + 1, question: f.q, answer: f.a }))}
+          header={<SectionIntro eyebrow="FAQ" title="Popular Questions" className="mb-10" />}
+        />
+      </Section>
+
+      <Cta69
+        badge={{ label: "Get started" }}
+        heading="Ready when you are."
+        button={{ label: "Create your shop", href: "/onboarding" }}
+        secondaryButton={{ label: "Explore marketplace", href: "/explore" }}
+        marqueeDurationSec={120}
+        labels={{
+          marqueePhrase: "Shopmi.ng",
+          note: "Find something you love, or open your own shop and make your first sale.",
+          footnote: ctaFootnote(billingEnabled, hasFreePlan(plans), cheapest ? nairaWhole(Number(cheapest.price)) : null),
         }}
       />
-
-      <section
-        data-hero
-        className="relative z-10 flex w-full max-w-2xl flex-col items-center text-center"
-      >
-        <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-[color-mix(in_oklab,var(--color-card)_70%,transparent)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-accent backdrop-blur-sm dark:text-accent-on-dark">
-          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />
-          Marketplace for independent shops
-        </p>
-
-        <RotatingHeadline />
-
-        <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-          Find something you love from independent shops — or open your own
-          branded storefront and start taking orders today.
-        </p>
-
-        <AnimatedAIChat
-          ref={chatRef}
-          className="mt-9 text-left"
-          commands={COMMANDS}
-          placeholders={PLACEHOLDERS}
-          onQueryChange={setQuery}
-          results={results}
-          resultsLoading={
-            query !== debounced || resultsQuery.isFetching
-          }
-          onResultSelect={(result) => router.push(result.href)}
-          onSubmit={handleSubmit}
-        />
-
-        <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
-          <Link href="/explore" onClick={replay("/explore")}>
-            <Button
-              variant="primary"
-              size="lg"
-              className="h-12 w-full gap-2 rounded-full px-6 shadow-md sm:w-auto"
-            >
-              <Store className="h-4 w-4" aria-hidden />
-              Explore marketplace
-              <ArrowRight className="h-4 w-4" aria-hidden />
-            </Button>
-          </Link>
-          <Link href="/onboarding" onClick={replay("/sell")}>
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-12 w-full rounded-full px-6 sm:w-auto"
-            >
-              Start selling
-            </Button>
-          </Link>
-        </div>
-      </section>
-    </MoireField>
+    </>
   );
 }

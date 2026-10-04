@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import type { ReactNode } from "react";
+import { AnimatedValue } from "@/components/dashboard/animated-value";
+import { BarTrend, fillDays as padDays } from "@/components/dashboard/bar-trend";
 
 export type ChartPoint = {
   date: string;
@@ -20,102 +13,69 @@ export type ChartPoint = {
 type Props = {
   title: string;
   description?: string;
+  /** Headline figure shown under the title, e.g. the period total. */
+  total?: string;
   data: ChartPoint[];
   valueLabel?: string;
   emptyMessage?: string;
   formatValue?: (n: number) => string;
+  /** Short axis labels; defaults to compact numbers. */
+  formatTick?: (n: number) => string;
+  /** Pad a sparse daily series to the last N days. */
+  fillDays?: number;
+  control?: ReactNode;
+  allowDecimals?: boolean;
+  className?: string;
 };
 
 export function OverviewChart({
   title,
   description,
+  total,
   data,
   valueLabel = "Value",
-  emptyMessage = "Not enough data yet — check back after more activity.",
+  emptyMessage = "Not enough data yet. Check back after more activity.",
   formatValue = (n) => String(n),
+  formatTick,
+  fillDays,
+  control,
+  allowDecimals = true,
+  className = "",
 }: Props) {
   const hasData = data.some((d) => d.value > 0);
+  const series = fillDays ? padDays(data, fillDays) : data;
 
   return (
-    <Card>
-      <CardHeader>
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        {description && (
-          <p className="mt-token-1 text-xs text-muted-foreground">{description}</p>
-        )}
-      </CardHeader>
-      <CardBody>
+    <section className={`dash-card flex flex-col p-5 sm:p-6 ${className}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-foreground">{title}</p>
+          {total ? (
+            <p className="mt-1 text-[1.75rem] font-bold tracking-tight text-foreground">
+              <AnimatedValue value={total} />
+            </p>
+          ) : null}
+          {description ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+        {control}
+      </div>
+      <div className="relative mt-4 min-h-[15rem] flex-1">
         {!hasData ? (
-          <p className="py-token-8 text-center text-sm text-muted-foreground">
+          <p className="absolute inset-0 flex items-center justify-center text-center text-sm text-muted-foreground">
             {emptyMessage}
           </p>
         ) : (
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={data}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="overviewFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop
-                      offset="0%"
-                      stopColor="var(--color-accent)"
-                      stopOpacity={0.35}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor="var(--color-accent)"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  stroke="var(--color-border)"
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
-                  tickFormatter={(v: string) =>
-                    v.length >= 10 ? v.slice(5) : v
-                  }
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={48}
-                  tickFormatter={(v: number) => formatValue(v)}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--color-card)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                  formatter={(value) => [
-                    formatValue(Number(value ?? 0)),
-                    valueLabel,
-                  ]}
-                  labelFormatter={(label) => String(label)}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="var(--color-accent)"
-                  strokeWidth={2}
-                  fill="url(#overviewFill)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <BarTrend
+            data={series}
+            valueLabel={valueLabel}
+            formatValue={formatValue}
+            formatTick={formatTick}
+            allowDecimals={allowDecimals}
+          />
         )}
-      </CardBody>
-    </Card>
+      </div>
+    </section>
   );
 }

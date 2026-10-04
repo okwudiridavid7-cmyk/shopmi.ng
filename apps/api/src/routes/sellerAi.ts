@@ -6,6 +6,7 @@ import { requireAuth } from "../auth/middleware";
 import { requireTenantFromMembership } from "../tenant/middleware";
 import { tenantWhere } from "../tenant/tenantContext";
 import { isAiFeaturesEnabled } from "../lib/platformSettings";
+import { planAllows } from "../lib/plans";
 import {
   getDescriptionQueue,
   type DescriptionJobPayload,
@@ -43,7 +44,7 @@ sellerAiRouter.get("/features", async (_req, res, next) => {
 });
 
 /**
- * Enqueue AI description — returns immediately with job id.
+ * Enqueue AI description - returns immediately with job id.
  * Poll GET /api/seller/ai/jobs/:id for result.
  */
 sellerAiRouter.post("/description", async (req, res, next) => {
@@ -51,6 +52,13 @@ sellerAiRouter.post("/description", async (req, res, next) => {
     if (!(await isAiFeaturesEnabled())) {
       return res.status(403).json({
         error: "AI features are disabled by the platform administrator",
+      });
+    }
+
+    if (!(await planAllows(req.tenant!.tenantId, "ai"))) {
+      return res.status(403).json({
+        error: "AI listing help is available on paid plans.",
+        code: "PLAN_FEATURE",
       });
     }
 

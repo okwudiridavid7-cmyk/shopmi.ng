@@ -4,15 +4,20 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
 import { requireTenantFromSlugParam } from "../tenant/middleware";
+import { platformShopUrl } from "../lib/customDomains";
 import {
+  findVerifiedDomainTenant,
+  isShopAvailable,
   resolveTenantFromHost,
   tenantWhere,
   TenantIsolationError,
+  UNAVAILABLE_SHOP_STATUSES,
 } from "../tenant/tenantContext";
 import { toProductPublic, toTenantPublic } from "../lib/serialize";
 import { toShopBannerPublic, toShopCategoryPublic } from "../lib/shopSerialize";
 import { getSellerTrust } from "../lib/sellerTrust";
 import { attachReviewAggregates } from "../lib/reviewAggregates";
+import { cached, CACHE_KEYS, setPublicCache } from "../lib/cache";
 
 /**
  * Public storefront API: /api/shops/:slug/...
@@ -56,46 +61,56 @@ shopsRouter.get("/resolve-host", async (req, res, next) => {
     if (!hostname || apexHosts.has(hostname) || hostname === `www.${shopBaseHost}`) {
       return res.json({ tenant: null, platform: true });
     }
+    const byDomain = await findVerifiedDomainTenant(hostname);
+    if (byDomain && !byDomain.domainAllowed) {
+      return res.json({
+        tenant: null,
+        platform: false,
+        redirect: platformShopUrl(byDomain.slug),
+      });
+    }
     const ctx = await resolveTenantFromHost(host);
     const tenant = await prisma.tenant.findUnique({
       where: { id: ctx.tenantId },
     });
-    if (!tenant || tenant.status === "suspended") {
+    if (!tenant || !isShopAvailable(tenant.status)) {
       return res.status(404).json({ error: "Shop not found" });
     }
     return res.json({ tenant: toTenantPublic(tenant), platform: false });
   } catch (err) {
     if (err instanceof TenantIsolationError) {
-      return res.status(err.status).json({ error: err.message });
+      return res.status(err.status).json({ error: err.message, code: err.code });
     }
     return next(err);
   }
 });
 
-/** Marketplace shop discovery — active / verified-friendly shops. */
+/** Marketplace shop discovery - active / verified-friendly shops. */
 shopsRouter.get("/", async (req, res, next) => {
   try {
     const limit = Math.min(
       24,
       Math.max(1, Number.parseInt(String(req.query.limit ?? "12"), 10) || 12)
     );
-    const tenants = await prisma.tenant.findMany({
-      where: {
-        status: { in: ["active", "pending_verification"] },
-        products: { some: { status: "active" } },
-      },
-      orderBy: [{ verifiedBadge: "desc" }, { createdAt: "desc" }],
-      take: limit,
-      include: {
-        _count: { select: { products: { where: { status: "active" } } } },
-      },
-    });
-    return res.json({
-      shops: tenants.map((t) => ({
+    const shops = await cached(CACHE_KEYS.shops(limit), 60, async () => {
+      const tenants = await prisma.tenant.findMany({
+        where: {
+          status: { in: ["active", "pending_verification"] },
+          products: { some: { status: "active" } },
+        },
+        orderBy: [{ verifiedBadge: "desc" }, { createdAt: "desc" }],
+        take: limit,
+        include: {
+          _count: { select: { products: { where: { status: "active" } } } },
+        },
+      });
+      return tenants.map((t) => ({
         ...toTenantPublic(t),
         productCount: t._count.products,
-      })),
+      }));
     });
+    setPublicCache(res, 60);
+    return res.json({ shops });
   } catch (err) {
     return next(err);
   }
@@ -113,7 +128,7 @@ shopsRouter.get(
       const tenant = await prisma.tenant.findUnique({
         where: { id: req.tenant!.tenantId },
       });
-      if (!tenant || tenant.status === "suspended") {
+      if (!tenant || !isShopAvailable(tenant.status)) {
         return res.status(404).json({ error: "Shop not found" });
       }
 
@@ -255,7 +270,7 @@ shopsRouter.get(
       const relatedWhere: Prisma.ProductWhereInput = {
         status: "active",
         id: { not: product.id },
-        tenant: { status: { not: "suspended" } },
+        tenant: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
         OR: [
           ...(product.categoryId
             ? [{ categoryId: product.categoryId }]

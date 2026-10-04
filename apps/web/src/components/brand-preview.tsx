@@ -21,7 +21,7 @@ export type BrandPreviewProps = {
 };
 
 /**
- * Live mini storefront preview — constrained brand application only:
+ * Live mini storefront preview - constrained brand application only:
  * shop header bar, CTAs, accent accents. Page bg / body text stay neutral.
  */
 export function BrandPreview({
@@ -101,9 +101,6 @@ export function BrandPreview({
         <div className="flex items-center gap-token-2 text-xs">
           <span className="rounded-sm border border-border bg-muted px-token-2 py-0.5 font-medium text-foreground">
             Featured
-          </span>
-          <span className="text-muted-foreground">
-            Neutral body text stays readable
           </span>
         </div>
 

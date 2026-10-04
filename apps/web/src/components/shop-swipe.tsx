@@ -10,7 +10,7 @@ type ShopCard = Pick<TenantPublic, "id" | "name" | "slug" | "verifiedBadge"> & {
 
 /**
  * Brief shop-to-shop carousel transition (~800ms), then reveal children.
- * Snappy — skips when prefers-reduced-motion.
+ * Snappy - skips when prefers-reduced-motion.
  */
 export function ShopEntryTransition({
   targetSlug,

@@ -23,8 +23,7 @@ export default function SupportPage() {
             We’re here to help
           </MarketingHeading>
           <p className="mt-token-3 text-sm text-muted-foreground sm:text-base">
-            Stuck on verification, a payout, or an order? Start here — we route
-            you to the right workspace or inbox.
+            Get help with orders, payouts, and verification.
           </p>
         </div>
 
@@ -63,7 +62,7 @@ export default function SupportPage() {
         <div className="mx-auto mt-10 max-w-xl rounded-lg border border-border bg-muted/40 p-token-6 text-center">
           <p className="text-sm text-muted-foreground">
             Still need a human? Email{" "}
-            <a className="font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark" href={`mailto:${email}`}>
+            <a className="font-medium text-accent-strong transition hover:opacity-80 dark:text-accent-on-dark" href={`mailto:${email}`}>
               {email}
             </a>{" "}
             or use the {appName} contact form.

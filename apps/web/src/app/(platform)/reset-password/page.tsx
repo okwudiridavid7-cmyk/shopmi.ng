@@ -3,8 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { defaultDashboardForRole } from "@/lib/auth-redirect";
 import { useAuth } from "@/hooks/use-auth";
-import { Button, Label } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { TextLink } from "@/components/ui/text-link";
 import { AuthSplitLayout } from "@/components/auth-split";
@@ -30,12 +32,16 @@ function ResetForm() {
       return;
     }
     try {
-      await apiFetch("/api/auth/reset-password", {
-        method: "POST",
-        body: JSON.stringify({ token, password }),
-      });
+      const res = await apiFetch<{ user: { role: string } }>(
+        "/api/auth/reset-password",
+        {
+          method: "POST",
+          body: JSON.stringify({ token, password }),
+        }
+      );
       await refresh();
-      router.push("/explore");
+      const role = res.user?.role;
+      router.push(role && role !== "buyer" ? defaultDashboardForRole(role) : "/explore");
     } catch (error) {
       setErr(error instanceof Error ? error.message : "Reset failed.");
     } finally {
@@ -47,7 +53,7 @@ function ResetForm() {
     return (
       <AuthSplitLayout
         title="Invalid link"
-        subtitle="This reset URL is missing a token."
+        subtitle="This reset link is incomplete."
       >
         <TextLink href="/forgot-password">Request a new link</TextLink>
       </AuthSplitLayout>
@@ -57,12 +63,13 @@ function ResetForm() {
   return (
     <AuthSplitLayout
       title="Choose a new password"
-      subtitle="Use at least 8 characters. You’ll be signed in afterward."
+      subtitle="Use at least 8 characters."
     >
       <form onSubmit={onSubmit} className="space-y-5">
         <Label>
           <span className="text-sm font-medium">New password</span>
           <PasswordInput
+            placeholder="At least 8 characters"
             name="password"
             required
             minLength={8}
@@ -72,6 +79,7 @@ function ResetForm() {
         <Label>
           <span className="text-sm font-medium">Confirm password</span>
           <PasswordInput
+            placeholder="Type the password again"
             name="confirm"
             required
             minLength={8}

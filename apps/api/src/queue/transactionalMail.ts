@@ -44,7 +44,7 @@ export async function enqueueTransactionalMail(
 ): Promise<{ queued: boolean }> {
   if (!env.resendApiKey) {
     console.warn(
-      `[email] RESEND_API_KEY missing — skip ${payload.kind} → ${payload.to}`
+      `[email] RESEND_API_KEY missing - skip ${payload.kind} → ${payload.to}`
     );
     return { queued: false };
   }
@@ -52,8 +52,8 @@ export async function enqueueTransactionalMail(
   try {
     const q = getTransactionalMailQueue();
     await q.add(payload.kind, payload, {
-      jobId: payload.idempotencyKey,
-      // Soft throttle duplicates of the same idempotency key
+      // BullMQ rejects ":" in custom ids; duplicates of the same key are still collapsed.
+      jobId: payload.idempotencyKey?.replace(/:/g, "-"),
     });
     return { queued: true };
   } catch (err) {
@@ -102,7 +102,7 @@ export function startTransactionalMailWorker(): Worker<TransactionalMailJobPaylo
       const allowed = await assertRecipientThrottle(to, kind, 20);
       if (!allowed) {
         console.info(
-          `[email] throttled ${kind} → ${to} (cooldown) — skipping duplicate`
+          `[email] throttled ${kind} → ${to} (cooldown) - skipping duplicate`
         );
         return;
       }

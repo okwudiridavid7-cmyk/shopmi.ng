@@ -1,4 +1,4 @@
-/** Nested marketplace taxonomy — Wave 6. Slugs are stable; names are our own wording. */
+/** Nested marketplace taxonomy - Wave 6. Slugs are stable; names are our own wording. */
 
 export type CategorySeedNode = {
   name: string;

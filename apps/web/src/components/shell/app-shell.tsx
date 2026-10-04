@@ -6,13 +6,14 @@ import type { TenantPublic } from "@vendors/shared-types";
 import { apiFetch } from "@/lib/api";
 import { SiteHeader } from "./site-header";
 import { PlatformFooter, ShopFooter } from "./footers";
+import { isUnderPath } from "@/lib/utils";
 
 export type ShellMode = "platform" | "seller" | "buyer" | "admin" | "shop";
 
 function modeFromPath(pathname: string): ShellMode {
-  if (pathname.startsWith("/seller")) return "seller";
-  if (pathname.startsWith("/buyer")) return "buyer";
-  if (pathname.startsWith("/admin")) return "admin";
+  if (isUnderPath(pathname, "/seller")) return "seller";
+  if (isUnderPath(pathname, "/buyer")) return "buyer";
+  if (isUnderPath(pathname, "/admin")) return "admin";
   if (pathname.startsWith("/shops/")) return "shop";
   return "platform";
 }

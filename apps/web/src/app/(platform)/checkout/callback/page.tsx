@@ -15,6 +15,7 @@ import {
   clearCheckoutQueue,
   readCheckoutQueue,
 } from "@/lib/multi-checkout";
+import { shopReturnKey } from "@/lib/cart-handoff";
 
 type Phase =
   | "verifying"
@@ -33,6 +34,12 @@ function CallbackInner() {
   const [paidOrders, setPaidOrders] = useState<
     { slug: string; reference: string }[]
   >([]);
+  const [shopReturn, setShopReturn] = useState<string | null>(null);
+
+  useEffect(() => {
+    const slug = shop || order?.tenant?.slug;
+    if (slug) setShopReturn(sessionStorage.getItem(shopReturnKey(slug)));
+  }, [shop, order]);
 
   useEffect(() => {
     if (!reference) {
@@ -109,7 +116,7 @@ function CallbackInner() {
       <div className="mx-auto max-w-lg space-y-6">
         <PageHeader
           title="Payment check"
-          description="We couldn’t confirm this payment yet."
+          description="We couldn’t confirm this payment."
           icon={ShoppingBag}
         />
         <p className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">
@@ -150,11 +157,10 @@ function CallbackInner() {
         </div>
         <div className="space-y-2">
           <h1 className="text-xl font-bold tracking-tight">
-            Settling next vendor…
+            Continuing to next shop…
           </h1>
           <p className="text-sm text-muted-foreground">
-            Payment {step} of {total} confirmed. Redirecting to Paystack for the
-            next shop so each seller is paid separately.
+            Payment {step} of {total} confirmed. Redirecting to Paystack…
           </p>
         </div>
       </div>
@@ -176,7 +182,7 @@ function CallbackInner() {
         }
         description={
           multi && paid
-            ? `${paidOrders.length || 1} shop order${(paidOrders.length || 1) === 1 ? "" : "s"} settled.`
+            ? `${paidOrders.length || 1} shop order${(paidOrders.length || 1) === 1 ? "" : "s"} paid.`
             : `Order ${order.id.slice(0, 8)}… · ${order.status}`
         }
         icon={paid ? CheckCircle2 : ShoppingBag}
@@ -194,9 +200,9 @@ function CallbackInner() {
         <p className="mt-2 text-sm text-muted-foreground">
           {paid
             ? multi
-              ? "Thanks — each vendor was paid in a separate Paystack settlement."
-              : "Thanks — your order is confirmed."
-            : "We’re still confirming with Paystack. Refresh in a moment if this doesn’t update."}
+              ? "Thanks! Your orders are confirmed."
+              : "Thanks! Your order is confirmed."
+            : "Confirming your payment with Paystack…"}
         </p>
 
         {paidOrders.length > 1 ? (
@@ -226,6 +232,11 @@ function CallbackInner() {
       </div>
 
       <div className="flex flex-wrap gap-4">
+        {shopReturn ? (
+          <TextLink href={shopReturn} tone="muted" arrow="left">
+            Back to {new URL(shopReturn).host}
+          </TextLink>
+        ) : null}
         <TextLink href="/buyer" tone="muted">
           Buyer dashboard
         </TextLink>

@@ -10,7 +10,7 @@ type BadgeVariant =
 
 const variants: Record<BadgeVariant, string> = {
   default: "bg-muted text-foreground",
-  accent: "bg-accent text-accent-foreground",
+  accent: "bg-accent-strong text-accent-foreground",
   success: "bg-success/15 text-success",
   warning: "bg-warning-muted text-warning",
   danger: "bg-danger/15 text-danger",

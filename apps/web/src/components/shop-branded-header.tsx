@@ -15,7 +15,7 @@ import {
 } from "@/lib/theme";
 
 /**
- * Shop page header — brand color on the bar only.
+ * Shop page header - brand color on the bar only.
  * Page background and body text use platform neutrals.
  */
 export function ShopBrandedHeader({

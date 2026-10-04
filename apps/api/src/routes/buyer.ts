@@ -6,6 +6,7 @@ import { requireAuth } from "../auth/middleware";
 import { toOrderPublic, toProductPublic, toUserPublic } from "../lib/serialize";
 import { getInvoiceFilePath } from "../services/orders";
 import { hashPassword, verifyPassword } from "../auth/password";
+import { isShopAvailable } from "../tenant/tenantContext";
 
 export const buyerRouter = Router();
 export const ordersRouter = Router();
@@ -144,7 +145,29 @@ buyerRouter.get("/orders/:id", async (req, res, next) => {
     if (!order) {
       return res.status(404).json({ error: "Order not found" });
     }
-    return res.json({ order: toOrderPublic(order) });
+    const shop = await prisma.tenant.findUnique({
+      where: { id: order.tenantId },
+      select: {
+        status: true,
+        email: true,
+        phone: true,
+        themeSettings: true,
+        owner: { select: { email: true } },
+      },
+    });
+    const theme = (shop?.themeSettings as { whatsappUrl?: unknown } | null) ?? {};
+    return res.json({
+      order: toOrderPublic(order),
+      /** Buyers can reach the seller even when the storefront is unavailable. */
+      shopContact: shop
+        ? {
+            available: isShopAvailable(shop.status),
+            email: shop.email || shop.owner.email,
+            phone: shop.phone,
+            whatsappUrl: typeof theme.whatsappUrl === "string" ? theme.whatsappUrl : null,
+          }
+        : null,
+    });
   } catch (err) {
     return next(err);
   }

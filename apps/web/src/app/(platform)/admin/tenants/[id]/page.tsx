@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { TrustBadge } from "@/components/shell/trust-badge";
+import { AdminTenantPlanCard } from "@/components/dashboard/admin/admin-tenant-plan-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
@@ -38,7 +39,6 @@ export default function AdminTenantDetailPage() {
       <EmptyState
         kind="not_found"
         title="Shop not found"
-        description="This shop may have been removed."
         actionLabel="Back to shops"
         actionHref="/admin/tenants"
       />
@@ -109,15 +109,15 @@ export default function AdminTenantDetailPage() {
           <CardBody className="space-y-2 text-sm">
             <p>
               <span className="text-muted-foreground">Location: </span>
-              {tenant.location || "—"}
+              {tenant.location || "-"}
             </p>
             <p>
               <span className="text-muted-foreground">Plan: </span>
-              {tenant.plan?.name ?? "—"}
+              {tenant.plan?.name ?? "-"}
             </p>
             <p>
               <span className="text-muted-foreground">Custom domain: </span>
-              {tenant.customDomain || "—"}
+              {tenant.customDomain || "-"}
             </p>
             <p>
               <span className="text-muted-foreground">Products: </span>
@@ -142,7 +142,7 @@ export default function AdminTenantDetailPage() {
             </p>
           </CardHeader>
           <CardBody className="space-y-2 text-sm">
-            <p>{tenant.owner.name || "—"}</p>
+            <p>{tenant.owner.name || "-"}</p>
             <p>{tenant.owner.email}</p>
             <p>{tenant.owner.phone || "No phone"}</p>
             <p className="capitalize text-muted-foreground">
@@ -152,13 +152,15 @@ export default function AdminTenantDetailPage() {
         </Card>
       </div>
 
+      <AdminTenantPlanCard tenant={tenant} />
+
       <Card className="overflow-hidden rounded-2xl">
         <CardHeader className="bg-muted/30">
           <p className="text-sm font-semibold text-foreground">Recent orders</p>
         </CardHeader>
         <CardBody>
           {tenant.recentOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No orders yet.</p>
+            <p className="text-sm text-muted-foreground">No orders yet</p>
           ) : (
             <ul className="divide-y divide-border text-sm">
               {tenant.recentOrders.map((o) => (
@@ -192,7 +194,7 @@ export default function AdminTenantDetailPage() {
         <CardBody className="space-y-4">
           {tenant.verificationRequests.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No verification requests submitted.
+              No verification requests
             </p>
           ) : (
             tenant.verificationRequests.map((r) => (
@@ -204,7 +206,7 @@ export default function AdminTenantDetailPage() {
                   {r.status} · {new Date(r.createdAt).toLocaleString()}
                 </p>
                 {r.note && (
-                  <p className="mt-1 text-muted-foreground">Note: {r.note}</p>
+                  <p className="mt-1 text-muted-foreground">Reviewer note: {r.note}</p>
                 )}
                 <ul className="mt-2 space-y-1">
                   {r.submittedDocs.map((d) => (
@@ -213,7 +215,7 @@ export default function AdminTenantDetailPage() {
                         href={d.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark"
+                        className="font-medium text-accent-strong transition hover:opacity-80 dark:text-accent-on-dark"
                       >
                         {d.name}
                       </a>

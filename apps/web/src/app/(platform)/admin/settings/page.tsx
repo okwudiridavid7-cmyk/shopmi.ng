@@ -32,7 +32,8 @@ import { apiFetch } from "@/lib/api";
 const SETTING_META: {
   key: string;
   label: string;
-  description: string;
+  description?: string;
+  placeholder?: string;
   type: "boolean" | "text" | "email" | "number";
   defaultValue: string;
   icon: LucideIcon;
@@ -40,42 +41,42 @@ const SETTING_META: {
 }[] = [
   {
     key: "app_name",
+    placeholder: "Shopmi.ng",
     label: "Site / project name",
-    description:
-      "Live site-wide: navbar, emails, legal pages, tab title. Change here — not in .env.",
     type: "text",
     defaultValue: "",
     icon: Sparkles,
   },
   {
     key: "web_url",
+    placeholder: "https://shopmi.ng",
     label: "Production URL",
-    description:
-      "Public site URL used in emails, legal copy, and share links (e.g. https://shopmi.ng).",
+    description: "e.g. https://shopmi.ng",
     type: "text",
     defaultValue: "",
     icon: Globe,
   },
   {
     key: "support_email",
+    placeholder: "support@shopmi.ng",
     label: "Support email",
-    description: "Contact address for sellers and buyers.",
     type: "email",
     defaultValue: "support@shopmi.ng",
     icon: Mail,
   },
   {
     key: "trial_days",
+    placeholder: "3",
     label: "Trial days",
-    description: "Default trial length for new shops (no redeploy).",
     type: "number",
     defaultValue: "3",
     icon: Timer,
   },
   {
     key: "commission_percent",
+    placeholder: "5",
     label: "Commission %",
-    description: "Platform commission percentage (Shopmi Service Fee on checkout).",
+    description: "Platform fee on each order.",
     type: "number",
     defaultValue: "5",
     icon: Percent,
@@ -83,8 +84,7 @@ const SETTING_META: {
   {
     key: "billing_enabled",
     label: "Billing / pricing enabled",
-    description:
-      "When off, the public pricing page and pricing links are hidden site-wide.",
+    description: "Shows the pricing page and plan links.",
     type: "boolean",
     defaultValue: "true",
     icon: CreditCard,
@@ -92,8 +92,7 @@ const SETTING_META: {
   {
     key: "verification_required",
     label: "Verification required",
-    description:
-      "When on, unverified shops cannot accept Paystack checkout (enforced in API).",
+    description: "Only verified shops can accept payments.",
     type: "boolean",
     defaultValue: "false",
     icon: Wrench,
@@ -101,8 +100,7 @@ const SETTING_META: {
   {
     key: "email_verification_required",
     label: "Email verification required",
-    description:
-      "When on, buyers must verify email before checkout. Verification emails still send on signup either way.",
+    description: "Buyers must verify their email before checkout.",
     type: "boolean",
     defaultValue: "false",
     icon: Mail,
@@ -110,7 +108,6 @@ const SETTING_META: {
   {
     key: "ai_features_enabled",
     label: "AI features enabled",
-    description: "Seller AI description / image tools.",
     type: "boolean",
     defaultValue: "true",
     icon: Bot,
@@ -118,42 +115,42 @@ const SETTING_META: {
   {
     key: "watermark_default_on",
     label: "Watermark default on",
-    description: "Default watermark toggle for new product tooling.",
+    description: "Watermark new product images by default.",
     type: "boolean",
     defaultValue: "true",
     icon: Droplets,
   },
   {
     key: "platform_logo_url",
+    placeholder: "https://cdn.example.com/logo.png",
     label: "Wide logo URL",
-    description:
-      "Replaces the text logo in the navbar and footer. Upload below or paste a URL.",
     type: "text",
     defaultValue: "",
     icon: Image,
   },
   {
     key: "platform_logo_square_url",
+    placeholder: "https://cdn.example.com/icon.png",
     label: "Square logo / favicon URL",
-    description: "Used as the browser favicon and compact mark.",
     type: "text",
     defaultValue: "",
     icon: Image,
   },
   {
     key: "whatsapp_url",
+    placeholder: "https://wa.me/2348012345678",
     label: "Floating WhatsApp",
-    description:
-      "wa.me link or phone number. Shown as a floating button on the marketplace.",
+    description: "wa.me link or phone number",
     type: "text",
     defaultValue: "",
     icon: MessageCircle,
   },
   {
     key: "homepage_banners",
+    placeholder: "[{\"id\": \"spring\", \"imageUrl\": \"https://...\", \"title\": \"New season\", \"ctaText\": \"Shop now\", \"ctaUrl\": \"/explore\", \"active\": true}]",
     label: "Homepage banners (JSON)",
     description:
-      "Array of { id, imageUrl, title, subtitle, ctaText, ctaUrl, scrollSpeed, active, displayOrder }. Leave empty to use the built-in marketplace banner.",
+      "Array of { id, imageUrl, title, subtitle, ctaText, ctaUrl, scrollSpeed, active, displayOrder }",
     type: "text",
     defaultValue: "[]",
     icon: Image,
@@ -161,8 +158,8 @@ const SETTING_META: {
   },
   {
     key: "homepage_ticker",
+    placeholder: "{\"text\": \"Free delivery this week\", \"speed\": 12, \"backgroundColor\": \"#111111\", \"textColor\": \"#ffffff\"}",
     label: "Announcement ticker (JSON)",
-    description: "Ticker strip config shown above the marketplace header.",
     type: "text",
     defaultValue: "",
     icon: Link2,
@@ -170,9 +167,8 @@ const SETTING_META: {
   },
   {
     key: "chatbot_html",
+    placeholder: "Paste the embed code from your chat provider",
     label: "Custom chatbot embed",
-    description:
-      "Paste Smartsupp or similar embed HTML/script. Injected on the marketplace.",
     type: "text",
     defaultValue: "",
     icon: Bot,
@@ -219,7 +215,6 @@ export default function AdminSettingsPage() {
       setConfirmOpen(false);
       toast({
         title: "Settings saved",
-        description: "Live values updated across the platform.",
         tone: "success",
       });
     } catch (err) {
@@ -247,7 +242,6 @@ export default function AdminSettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Platform settings"
-        description="Site name, logos, and URL are live from this page — no .env change or redeploy. Secrets (Paystack, Google, JWT) stay in .env."
         icon={Wrench}
       />
 
@@ -287,9 +281,11 @@ export default function AdminSettingsPage() {
                           }
                         />
                       </span>
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        {meta.description}
-                      </span>
+                      {meta.description ? (
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {meta.description}
+                        </span>
+                      ) : null}
                     </span>
                   </label>
                 );
@@ -315,6 +311,7 @@ export default function AdminSettingsPage() {
                               ? "number"
                               : "text"
                         }
+                        placeholder={meta.placeholder}
                         value={values[meta.key] ?? ""}
                         onChange={(e) =>
                           setValues((v) => ({
@@ -361,9 +358,11 @@ export default function AdminSettingsPage() {
                           }}
                         />
                       ) : null}
-                      <span className="text-xs text-muted-foreground">
-                        {meta.description}
-                      </span>
+                      {meta.description ? (
+                        <span className="text-xs text-muted-foreground">
+                          {meta.description}
+                        </span>
+                      ) : null}
                     </Label>
                   </div>
                 );
@@ -385,6 +384,7 @@ export default function AdminSettingsPage() {
                     <Textarea
                       rows={meta.key === "chatbot_html" ? 6 : 8}
                       className="font-mono text-xs"
+                      placeholder={meta.placeholder}
                       value={values[meta.key] ?? ""}
                       onChange={(e) =>
                         setValues((v) => ({
@@ -393,9 +393,11 @@ export default function AdminSettingsPage() {
                         }))
                       }
                     />
-                    <span className="text-xs text-muted-foreground">
-                      {meta.description}
-                    </span>
+                    {meta.description ? (
+                      <span className="text-xs text-muted-foreground">
+                        {meta.description}
+                      </span>
+                    ) : null}
                   </Label>
                 );
               })}
@@ -411,6 +413,7 @@ export default function AdminSettingsPage() {
                     <Label key={key}>
                       <span>{key}</span>
                       <Input
+                        placeholder="Value"
                         value={values[key] ?? ""}
                         onChange={(e) =>
                           setValues((v) => ({ ...v, [key]: e.target.value }))
@@ -449,10 +452,7 @@ export default function AdminSettingsPage() {
           </>
         }
       >
-        <p>
-          These values are read live by checkout, AI tools, onboarding trial
-          length, and emails. Confirm you want to update them now.
-        </p>
+        <p>These changes take effect immediately.</p>
       </Modal>
     </div>
   );

@@ -33,7 +33,7 @@ export default function AdminContactInquiriesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Contact inquiries"
-        description="Search platform and shop contact submissions for support and DSAR requests. Rows expire after about 180 days."
+        description="Search platform and shop contact submissions."
         icon={MessageSquare}
       />
 
@@ -78,7 +78,6 @@ export default function AdminContactInquiriesPage() {
         <EmptyState
           kind="empty_filtered"
           title="No inquiries match"
-          description="Try an email filter or broader search."
         />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
@@ -145,8 +144,7 @@ export default function AdminContactInquiriesPage() {
       >
         <p className="text-sm text-muted-foreground">
           Permanently remove this contact submission
-          {deleteTarget ? ` from ${deleteTarget.email}` : ""}. This is logged
-          for audit.
+          {deleteTarget ? ` from ${deleteTarget.email}` : ""}?
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button

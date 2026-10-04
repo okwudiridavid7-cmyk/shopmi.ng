@@ -18,6 +18,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { apiFetch } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import {
   useSellerBranding,
   useSellerShop,
@@ -36,6 +37,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function SellerWebsitePage() {
+  const { toast } = useToast();
   const shopQ = useSellerShop();
   const brandingQ = useSellerBranding();
   const qc = useQueryClient();
@@ -95,7 +97,7 @@ export default function SellerWebsitePage() {
   const [chatbotHtml, setChatbotHtml] = useState("");
   const [contactFormEnabled, setContactFormEnabled] = useState(true);
 
-  const [msg, setMsg] = useState<string | null>(null);
+  const [, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -163,7 +165,7 @@ export default function SellerWebsitePage() {
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "shop"] });
-      setMsg("Legal pages saved");
+      toast({ title: "Legal pages saved", tone: "success" });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -192,7 +194,7 @@ export default function SellerWebsitePage() {
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "shop"] });
-      setMsg("Contact & preferences saved");
+      toast({ title: "Contact & preferences saved", tone: "success" });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -216,7 +218,7 @@ export default function SellerWebsitePage() {
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "branding"] });
-      setMsg("Brand colors saved");
+      toast({ title: "Brand colors saved", tone: "success" });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -244,19 +246,14 @@ export default function SellerWebsitePage() {
       <PageHeader
         title="Website"
         description={
-          <>
-            Set up your shop&apos;s identity, legal pages, and contact details —
-            everything buyers see on your storefront.
-            {shopQ.data?.slug ? (
-              <>
-                {" "}
-                Storefront:{" "}
-                <TextLink href={`/shops/${shopQ.data.slug}`}>
-                  /shops/{shopQ.data.slug}
-                </TextLink>
-              </>
-            ) : null}
-          </>
+          shopQ.data?.slug ? (
+            <>
+              Storefront:{" "}
+              <TextLink href={`/shops/${shopQ.data.slug}`}>
+                /shops/{shopQ.data.slug}
+              </TextLink>
+            </>
+          ) : undefined
         }
         icon={Globe}
       />
@@ -273,7 +270,7 @@ export default function SellerWebsitePage() {
             }}
             className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
               tab === t.id
-                ? "bg-accent/15 text-accent"
+                ? "bg-accent/15 text-accent-strong dark:text-accent-on-dark"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -282,27 +279,19 @@ export default function SellerWebsitePage() {
         ))}
       </nav>
 
-      {msg && (
-        <p className="text-sm text-emerald-700 dark:text-emerald-400">{msg}</p>
-      )}
       {err && <p className="text-sm text-danger">{err}</p>}
 
       {tab === "branding" && (
         <div className="space-y-token-8">
           <section className="space-y-token-4">
             <h2 className="font-display text-lg">Logo builder</h2>
-            <p className="text-sm text-muted-foreground">
-              Pick an icon, color, and font — or upload your own logo on the{" "}
-              <TextLink href="/seller/branding">Branding</TextLink>{" "}
-              page.
-            </p>
             <LogoBuilder
               shopName={shopName}
               value={logoBuilder}
               onChange={setLogoBuilder}
               onGenerated={() => {
                 void qc.invalidateQueries({ queryKey: ["seller", "branding"] });
-                setMsg("Logo saved to your shop");
+                toast({ title: "Logo saved to your shop", tone: "success" });
               }}
             />
           </section>
@@ -317,7 +306,7 @@ export default function SellerWebsitePage() {
               <CardBody>
                 <form onSubmit={saveColors} className="space-y-token-4">
                   <Label>
-                    <span>Primary (header & CTAs)</span>
+                    <span>Primary</span>
                     <Input
                       type="color"
                       value={primaryColor}
@@ -449,6 +438,7 @@ export default function SellerWebsitePage() {
             <span>Street address</span>
             <Textarea
               rows={2}
+              placeholder="e.g. 12 Admiralty Way, Lekki Phase 1"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
@@ -458,6 +448,7 @@ export default function SellerWebsitePage() {
               <span>Phone</span>
               <InputWithIcon
                 icon={<Phone />}
+                placeholder="+234 xxx xxx xxxx"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
               />
@@ -467,6 +458,7 @@ export default function SellerWebsitePage() {
               <InputWithIcon
                 icon={<Mail />}
                 type="email"
+                placeholder="hello@yourshop.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -484,8 +476,7 @@ export default function SellerWebsitePage() {
             </span>
           </Label>
           <p className="text-xs text-muted-foreground">
-            Requires a valid shop email above. Without an email, the form
-            returns an error instead of forwarding to platform support.
+            Requires a shop email.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             {(
@@ -517,8 +508,7 @@ export default function SellerWebsitePage() {
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Platform default:{" "}
-              {shopQ.data?.watermarkPlatformDefault ? "On" : "Off"}. Override
-              for your shop below.
+              {shopQ.data?.watermarkPlatformDefault ? "On" : "Off"}
             </p>
             <Label className="mt-3 flex items-center gap-2">
               <input
@@ -561,10 +551,6 @@ export default function SellerWebsitePage() {
               <p className="text-sm font-semibold text-foreground">
                 Storefront sections
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Toggle Promo Products and New Arrivals on your live shop page.
-                Both are off by default.
-              </p>
             </CardHeader>
             <CardBody>
               <StorefrontSectionToggles />
@@ -595,7 +581,7 @@ export default function SellerWebsitePage() {
                 }),
               });
               await qc.invalidateQueries({ queryKey: ["seller", "shop"] });
-              setMsg("Widgets saved");
+              toast({ title: "Widgets saved", tone: "success" });
             } catch (e) {
               setErr(e instanceof Error ? e.message : "Save failed");
             } finally {
@@ -605,7 +591,7 @@ export default function SellerWebsitePage() {
           className="max-w-xl space-y-token-5"
         >
           <Label>
-            <span>About us (footer)</span>
+            <span>About us</span>
             <Textarea
               rows={4}
               value={about}
@@ -624,6 +610,7 @@ export default function SellerWebsitePage() {
           <Label>
             <span>Ticker text</span>
             <Input
+              placeholder="e.g. Free delivery in Lagos on orders over ₦20,000"
               value={tickerText}
               onChange={(e) => setTickerText(e.target.value)}
             />
@@ -634,6 +621,7 @@ export default function SellerWebsitePage() {
               type="number"
               min={4}
               max={30}
+              placeholder="12"
               value={tickerSpeed}
               onChange={(e) => setTickerSpeed(Number(e.target.value) || 12)}
             />
@@ -660,15 +648,17 @@ export default function SellerWebsitePage() {
             <span>WhatsApp (wa.me or number)</span>
             <InputWithIcon
               icon={<MessageCircle />}
+              placeholder="https://wa.me/2348012345678"
               value={whatsappUrl}
               onChange={(e) => setWhatsappUrl(e.target.value)}
             />
           </Label>
           <Label>
-            <span>Custom chatbot embed (Smartsupp, etc.)</span>
+            <span>Custom chatbot embed</span>
             <Textarea
               rows={6}
               className="font-mono text-xs"
+              placeholder="Paste the embed code from your chat provider"
               value={chatbotHtml}
               onChange={(e) => setChatbotHtml(e.target.value)}
             />
@@ -683,6 +673,7 @@ export default function SellerWebsitePage() {
 }
 
 function StorefrontSectionToggles() {
+  const { toast } = useToast();
   const brandingQ = useSellerBranding();
   const qc = useQueryClient();
   const [promo, setPromo] = useState(false);
@@ -718,7 +709,7 @@ function StorefrontSectionToggles() {
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "branding"] });
-      setMsg("Storefront sections saved");
+      toast({ title: "Storefront sections saved", tone: "success" });
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -734,7 +725,7 @@ function StorefrontSectionToggles() {
           checked={promo}
           onChange={(e) => setPromo(e.target.checked)}
         />
-        Show Promo Products (items with compare-at price)
+        Show Promo Products
       </label>
       <label className="flex items-center gap-token-2 text-sm">
         <input
@@ -751,6 +742,7 @@ function StorefrontSectionToggles() {
             type="number"
             min={1}
             max={365}
+            placeholder="30"
             value={days}
             onChange={(e) => setDays(Number(e.target.value) || 30)}
           />

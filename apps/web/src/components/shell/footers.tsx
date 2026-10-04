@@ -7,6 +7,8 @@ import type { SocialLinks } from "@vendors/shared-types";
 import { useAppName, usePlatformBranding } from "@/hooks/use-branding";
 import { BrandMark } from "@/components/brand-mark";
 import { ShopLogoFallback } from "@/components/shop-logo-fallback";
+import { ThemeCycleToggle } from "@/components/theme-cycle-toggle";
+import { useCookieConsent } from "@/components/cookie-consent";
 import { useToast } from "@/components/ui/toast";
 
 export type ShopFooterProps = {
@@ -24,6 +26,19 @@ export type ShopFooterProps = {
 };
 
 type SocialKey = keyof SocialLinks;
+
+function CookieSettingsButton() {
+  const { openPreferences } = useCookieConsent();
+  return (
+    <button
+      type="button"
+      onClick={openPreferences}
+      className="underline-offset-4 transition-colors hover:text-white hover:underline"
+    >
+      Cookie settings
+    </button>
+  );
+}
 
 function socialHref(key: SocialKey, value: string): string {
   if (value.startsWith("http")) return value;
@@ -96,10 +111,10 @@ const SOCIAL_META: { key: SocialKey; label: string }[] = [
 
 const PLATFORM_PRODUCT = [
   { href: "/explore", label: "Marketplace" },
+  { href: "/buyers", label: "For buyers" },
+  { href: "/sellers", label: "For sellers" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/signup", label: "Create account" },
-  { href: "/onboarding", label: "Start selling" },
-  { href: "/cart", label: "Cart" },
+  { href: "/onboarding", label: "Create your shop" },
   { href: "/buyer/favorites", label: "Favorites" },
 ] as const;
 
@@ -108,16 +123,17 @@ const PLATFORM_RESOURCES = [
   { href: "/support", label: "Support" },
   { href: "/contact", label: "Contact" },
   { href: "/privacy", label: "Privacy Policy" },
+  { href: "/cookies", label: "Cookie Policy" },
 ] as const;
 
 const PLATFORM_COMPANY = [
-  { href: "/about", label: "About" },
+  { href: "/#about", label: "About" },
   { href: "/terms", label: "Terms of Service" },
   { href: "/buyer/orders", label: "Your orders" },
   { href: "/login", label: "Sign in" },
 ] as const;
 
-/** Always-dark footer shell — independent of page theme. */
+/** Always-dark footer shell - independent of page theme. */
 const FOOTER_SHELL =
   "mt-auto border-t border-white/10 bg-[#0a0a0b] text-zinc-100";
 
@@ -161,7 +177,7 @@ function NewsletterBlock({ appName }: { appName: string }) {
       setEmail("");
       toast({
         title: "You're on the list",
-        description: "We'll send product updates — no spam.",
+        description: "We'll send product updates. No spam.",
         tone: "success",
       });
     }, 400);
@@ -274,10 +290,15 @@ export function PlatformFooter() {
         </div>
 
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
-          <p className="text-sm text-zinc-500">
-            © {year} {appName}. All rights reserved.
-          </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
+            <p>
+              © {year} {appName}. All rights reserved.
+            </p>
+            <CookieSettingsButton />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ThemeCycleToggle onBrand />
+            <span aria-hidden className="mx-1 h-5 w-px bg-white/15" />
             <SocialSquare href="https://github.com" label="GitHub">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M12 2C6.477 2 2 6.486 2 12.021c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.009-.866-.014-1.7-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.467-1.11-1.467-.908-.62.069-.608.069-.608 1.003.071 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.339-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.56 9.56 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0 0 22 12.021C22 6.486 17.523 2 12 2z" />
@@ -305,7 +326,57 @@ export function PlatformFooter() {
   );
 }
 
-/** Individual shop storefront footer — always dark, shop-branded. */
+export type ShopFooterTone = "dark" | "light" | "brand";
+
+const SHOP_FOOTER_TONES: Record<
+  ShopFooterTone,
+  {
+    shell: string;
+    heading: string;
+    muted: string;
+    hover: string;
+    line: string;
+    faint: string;
+    social: string;
+    logo: string;
+  }
+> = {
+  dark: {
+    shell: "border-t border-white/10 bg-[#0a0a0b] text-zinc-100",
+    heading: "text-white",
+    muted: "text-zinc-400",
+    hover: "hover:text-white",
+    line: "border-white/10",
+    faint: "text-zinc-500",
+    social: "border-white/15 text-zinc-400 hover:border-white/30 hover:text-white",
+    logo: "border-white/15",
+  },
+  light: {
+    shell: "border-t border-border bg-card text-foreground",
+    heading: "text-foreground",
+    muted: "text-muted-foreground",
+    hover: "hover:text-foreground",
+    line: "border-border",
+    faint: "text-muted-foreground",
+    social:
+      "border-border text-muted-foreground hover:border-[color-mix(in_srgb,var(--color-foreground)_40%,transparent)] hover:text-foreground",
+    logo: "border-border",
+  },
+  brand: {
+    shell:
+      "border-t-[3px] border-foreground bg-[var(--shop-brand)] text-[color:var(--shop-brand-fg)]",
+    heading: "text-[color:var(--shop-brand-fg)]",
+    muted: "text-[color:var(--shop-brand-fg)] opacity-80",
+    hover: "hover:opacity-100 hover:underline",
+    line: "border-black/15",
+    faint: "text-[color:var(--shop-brand-fg)] opacity-70",
+    social:
+      "border-2 border-foreground bg-card text-foreground shadow-[var(--pop-shadow-sm)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none",
+    logo: "border-2 border-foreground",
+  },
+};
+
+/** Individual shop storefront footer - shop-branded; tone follows the store theme. */
 export function ShopFooter({
   shopName,
   slug,
@@ -316,9 +387,12 @@ export function ShopFooter({
   socialLinks,
   platformName = "Marketplace",
   aboutText,
-}: ShopFooterProps) {
+  tone = "dark",
+  container = "max-w-6xl",
+}: ShopFooterProps & { tone?: ShopFooterTone; container?: string }) {
   const year = new Date().getFullYear();
   const base = `/shops/${slug}`;
+  const t = SHOP_FOOTER_TONES[tone];
 
   const storeLinks = [
     { href: base, label: "Home" },
@@ -341,9 +415,19 @@ export function ShopFooter({
     return typeof v === "string" && v.trim().length > 0;
   });
 
+  const linkList = (links: { href: string; label: string }[]) => (
+    <nav className={`mt-4 flex flex-col gap-2.5 text-sm ${t.muted}`}>
+      {links.map((l) => (
+        <Link key={l.href + l.label} href={l.href} className={`transition ${t.hover}`}>
+          {l.label}
+        </Link>
+      ))}
+    </nav>
+  );
+
   return (
-    <footer className={FOOTER_SHELL}>
-      <div className="mx-auto w-full max-w-6xl px-6 py-12 sm:py-14">
+    <footer className={`mt-auto ${t.shell}`}>
+      <div className={`mx-auto w-full ${container} px-6 py-12 sm:py-14`}>
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12">
           <div className="space-y-4 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-3">
@@ -352,44 +436,33 @@ export function ShopFooter({
                 <img
                   src={logoUrl}
                   alt=""
-                  className="h-10 w-10 rounded-lg border border-white/15 object-cover"
+                  className={`h-10 w-10 rounded-lg border object-cover ${t.logo}`}
                 />
               ) : (
-                <span className="rounded-lg border border-white/15 p-1.5">
+                <span className={`rounded-lg border p-1.5 ${t.logo}`}>
                   <ShopLogoFallback />
                 </span>
               )}
-              <p className="font-display text-lg text-white">{shopName}</p>
+              <p className={`font-display text-lg ${t.heading}`}>{shopName}</p>
             </div>
             {aboutText?.trim() ? (
-              <p className="text-sm leading-relaxed text-zinc-400">
+              <p className={`text-sm leading-relaxed ${t.muted}`}>
                 {aboutText.trim()}
               </p>
-            ) : (
-              <p className="text-sm leading-relaxed text-zinc-400">
-                Independent shop on {platformName}. Secure checkout, clear
-                policies, and real fulfillment.
-              </p>
-            )}
+            ) : null}
             {(address || phone || email) && (
-              <ul className="space-y-2 text-sm text-zinc-400">
+              <ul className={`space-y-2 text-sm ${t.muted}`}>
                 {address && <li className="whitespace-pre-line">{address}</li>}
                 {email && (
                   <li>
-                    <a
-                      href={`mailto:${email}`}
-                      className="transition hover:text-white"
-                    >
+                    <a href={`mailto:${email}`} className={`transition ${t.hover}`}>
                       {email}
                     </a>
                   </li>
                 )}
                 {phone && (
                   <li>
-                    <a
-                      href={`tel:${phone}`}
-                      className="transition hover:text-white"
-                    >
+                    <a href={`tel:${phone}`} className={`transition ${t.hover}`}>
                       {phone}
                     </a>
                   </li>
@@ -399,47 +472,60 @@ export function ShopFooter({
           </div>
 
           <div>
-            <FooterHeading>Store</FooterHeading>
-            <FooterNav links={storeLinks} />
+            <p className={`text-sm font-semibold ${t.heading}`}>Store</p>
+            {linkList(storeLinks)}
           </div>
 
           <div>
-            <FooterHeading>Buying help</FooterHeading>
-            <FooterNav links={helpLinks} />
+            <p className={`text-sm font-semibold ${t.heading}`}>Buying help</p>
+            {linkList(helpLinks)}
           </div>
 
-          <div>
-            <FooterHeading>Social</FooterHeading>
-            {socials.length > 0 ? (
+          {socials.length > 0 ? (
+            <div>
+              <p className={`text-sm font-semibold ${t.heading}`}>Social</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {socials.map(({ key, label }) => (
-                  <SocialSquare
+                  <a
                     key={key}
                     href={socialHref(key, socialLinks![key]!.trim())}
-                    label={label}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={label}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border transition ${t.social}`}
                   >
                     <SocialGlyph name={key} />
-                  </SocialSquare>
+                  </a>
                 ))}
               </div>
-            ) : (
-              <p className="mt-4 text-sm text-zinc-500">
-                Social links appear when this shop adds them.
-              </p>
-            )}
-            <p className="mt-6 text-sm text-zinc-500">
-              Pay securely at checkout. Accepted methods depend on this shop’s
-              settings.
-            </p>
-          </div>
+            </div>
+          ) : null}
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
-          <p className="text-sm text-zinc-500">
-            {shopName} © {year}. Powered by {platformName}.
-          </p>
+        <div
+          className={`mt-12 flex flex-col items-start justify-between gap-4 border-t pt-6 sm:flex-row sm:items-center ${t.line}`}
+        >
+          <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm ${t.faint}`}>
+            <p>
+              {shopName} © {year}. Powered by {platformName}.
+            </p>
+            <ShopCookieButton hover={t.hover} />
+          </div>
         </div>
       </div>
     </footer>
+  );
+}
+
+function ShopCookieButton({ hover }: { hover: string }) {
+  const { openPreferences } = useCookieConsent();
+  return (
+    <button
+      type="button"
+      onClick={openPreferences}
+      className={`underline-offset-4 transition-colors hover:underline ${hover}`}
+    >
+      Cookie settings
+    </button>
   );
 }

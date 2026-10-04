@@ -15,7 +15,7 @@ export function contactEmailInner(opts: {
   const { body } = opts;
   return `
       <p style="color:#8a5a00;font-size:13px;border:1px solid #f0d9a0;background:#fff8e8;padding:10px 12px;border-radius:6px;">
-        Untrusted user content — treat links and attachments with care. Reply using your own judgment.
+        Untrusted user content. Treat links and attachments with care. Reply using your own judgment.
       </p>
       ${opts.headingHtml}
       <p><strong>From:</strong> ${escapeHtml(body.name)} &lt;${escapeHtml(body.email)}&gt;</p>

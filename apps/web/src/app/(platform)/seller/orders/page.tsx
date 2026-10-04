@@ -67,7 +67,6 @@ export default function SellerOrdersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Orders"
-        description="Orders for this shop — update fulfillment status from the detail view."
         icon={ShoppingBag}
         actions={
           <Button
@@ -115,7 +114,6 @@ export default function SellerOrdersPage() {
             <EmptyState
               kind="empty_filtered"
               title="No orders match these filters"
-              description="Try a wider date range or clear the status filter."
               actionLabel="Clear filters"
               onAction={() => setFilters(emptyOrderFilters)}
             />

@@ -39,7 +39,7 @@ export function clearCheckoutQueue() {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
-/** Begin multi-shop checkout — pending[0] is the shop about to pay. */
+/** Begin multi-shop checkout - pending[0] is the shop about to pay. */
 export function beginCheckoutQueue(shopSlugs: string[]) {
   const pending = shopSlugs.filter(Boolean);
   writeCheckoutQueue({

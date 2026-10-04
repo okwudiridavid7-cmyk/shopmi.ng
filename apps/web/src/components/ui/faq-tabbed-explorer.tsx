@@ -52,7 +52,7 @@ function buildFaq(appName: string): FAQItem[] {
       category: "general",
       question: "What does the verified badge mean?",
       answer:
-        "A verified shop has passed platform review. It is a trust signal, not a guarantee of product quality — always read the listing carefully.",
+        "A verified shop has passed platform review.",
     },
     {
       id: "g4",
@@ -79,7 +79,7 @@ function buildFaq(appName: string): FAQItem[] {
       category: "buying",
       question: "Where do I track my orders?",
       answer:
-        "Open Your orders from the account menu (or /buyer/orders). You’ll see status updates and can open the invoice for each purchase.",
+        "Open Your orders from the account menu. You’ll see status updates and can open the invoice for each purchase.",
     },
     {
       id: "b4",
@@ -99,7 +99,7 @@ function buildFaq(appName: string): FAQItem[] {
       id: "s2",
       category: "selling",
       question: "Do I get my own shop website?",
-      answer: `Yes. Every seller gets a branded shop page on ${appName} with products, contact, FAQ, and checkout — ready to share with customers.`,
+      answer: `Yes. Every seller gets a branded shop page on ${appName} with products, contact, FAQ, and checkout, ready to share with customers.`,
     },
     {
       id: "s3",
@@ -127,14 +127,14 @@ function buildFaq(appName: string): FAQItem[] {
       category: "payments",
       question: "What payment methods are accepted?",
       answer:
-        "Paystack supports cards and local Nigerian payment options available on their checkout. Exact methods depend on Paystack’s current offerings.",
+        "Paystack supports cards and local Nigerian payment options.",
     },
     {
       id: "p3",
       category: "payments",
       question: "Are there platform fees?",
       answer:
-        "Sellers may see a Shopmi service fee on successful orders. See Pricing for current plans.",
+        "A Shopmi service fee applies to successful orders. See Pricing for plans.",
     },
     {
       id: "p4",
@@ -155,7 +155,7 @@ function buildFaq(appName: string): FAQItem[] {
       category: "account",
       question: "Do I need to verify my email?",
       answer:
-        "Yes when email verification is enabled. Check your inbox for a verify link after signup — it keeps your account secure and unlocks order updates.",
+        "Yes. Check your inbox for a verify link after signup. It keeps your account secure and unlocks order updates.",
     },
     {
       id: "a3",
@@ -225,9 +225,6 @@ export function FaqTabbedExplorer() {
               <h2 className="text-xl font-semibold capitalize text-foreground sm:text-2xl">
                 {activeTab} questions
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Answers related to {activeTab} on {appName}.
-              </p>
             </div>
 
             <Accordion

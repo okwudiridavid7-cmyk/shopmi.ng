@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import NumberFlow from "@number-flow/react";
-import { Briefcase, CheckCheck, Package, Server } from "lucide-react";
+import { Check, CheckCheck } from "lucide-react";
 import { motion } from "motion/react";
 import type { PlanPublic } from "@vendors/shared-types";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -34,10 +34,7 @@ function planMeta(p: PlanPublic) {
     typeof f.description === "string" ? f.description : null;
   const recommended = f.recommended === true;
   const cta = f.cta === "demo" ? "demo" : "select";
-  const includes = Array.isArray(f.includes)
-    ? (f.includes as unknown[]).filter((x): x is string => typeof x === "string")
-    : [];
-  return { benefits, description, recommended, cta, includes };
+  return { benefits, description, recommended, cta };
 }
 
 function pricedForInterval(
@@ -54,7 +51,53 @@ function pricedForInterval(
   };
 }
 
-const FEATURE_ICONS = [Briefcase, Package, Server] as const;
+function PlanPrice({
+  plan,
+  priced,
+  interval,
+}: {
+  plan: PlanPublic;
+  priced: ReturnType<typeof pricedForInterval>;
+  interval: (typeof INTERVALS)[number];
+}) {
+  const priceClass = "text-3xl font-semibold text-foreground xl:text-[1.75rem]";
+  if (plan.price === 0) {
+    return (
+      <div>
+        <p className="h-5" aria-hidden />
+        <div className="flex h-10 items-center gap-1">
+          <span className={priceClass}>Free</span>
+          <span className="text-sm text-muted-foreground">forever</span>
+        </div>
+        <p className="mt-1 h-4 text-xs font-medium text-muted-foreground">No card needed</p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <p className="h-5 text-sm text-muted-foreground line-through">
+        {priced.discountPct > 0 ? formatMoney(priced.full, plan.currency) : null}
+      </p>
+      <div className="flex h-10 items-center gap-1 whitespace-nowrap">
+        <NumberFlow
+          value={priced.discounted}
+          format={{
+            style: "currency",
+            currency: plan.currency || "NGN",
+            maximumFractionDigits: 0,
+          }}
+          className={priceClass}
+        />
+        <span className="text-sm text-muted-foreground">
+          /{interval.id === "monthly" ? "month" : interval.id === "biannual" ? "6 mo" : "year"}
+        </span>
+      </div>
+      <p className="mt-1 h-4 text-xs font-medium text-accent-strong dark:text-accent-on-dark">
+        {priced.save > 0 ? `Save ${formatMoney(priced.save, plan.currency)}` : null}
+      </p>
+    </div>
+  );
+}
 
 function PricingSwitch({
   value,
@@ -83,14 +126,21 @@ function PricingSwitch({
               {selected && (
                 <motion.span
                   layoutId="pricing-switch"
-                  className="absolute left-0 top-0 h-10 w-full rounded-full border-2 border-accent bg-gradient-to-t from-accent-deep via-accent to-accent shadow-sm shadow-accent/40 sm:h-12"
+                  className="absolute left-0 top-0 h-10 w-full rounded-full bg-accent-strong sm:h-12"
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
               )}
               <span className="relative flex items-center gap-2 text-sm sm:text-base">
                 {opt.label}
                 {opt.saveLabel ? (
-                  <span className="hidden rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent sm:inline dark:text-accent-on-dark">
+                  <span
+                    className={cn(
+                      "hidden rounded-full px-2 py-0.5 text-xs font-semibold sm:inline",
+                      selected
+                        ? "bg-white text-accent-strong"
+                        : "bg-[color-mix(in_oklab,var(--color-accent)_15%,transparent)] text-accent-strong dark:text-accent-on-dark"
+                    )}
+                  >
                     {opt.saveLabel}
                   </span>
                 ) : null}
@@ -108,6 +158,12 @@ export type PricingSectionProps = {
   appName?: string;
   loading?: boolean;
   error?: boolean;
+  id?: string;
+  className?: string;
+  headingAs?: "h1" | "h2";
+  eyebrow?: ReactNode;
+  compareHref?: string;
+  assurances?: string[];
 };
 
 export default function PricingSection({
@@ -115,6 +171,12 @@ export default function PricingSection({
   appName = "Shopmi.ng",
   loading = false,
   error = false,
+  id,
+  className,
+  headingAs = "h1",
+  eyebrow,
+  compareHref = "#compare",
+  assurances,
 }: PricingSectionProps) {
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const pricingRef = useRef<HTMLDivElement>(null);
@@ -125,6 +187,9 @@ export default function PricingSection({
     () => [...plans].sort((a, b) => a.price - b.price),
     [plans]
   );
+  const freePlan = sorted.find((p) => p.price === 0);
+  const topPlan = [...sorted].reverse().find((p) => p.price > 0);
+  const trialDays = sorted.find((p) => p.trialDays > 0)?.trialDays ?? 0;
 
   const revealVariants = {
     visible: (i: number) => ({
@@ -145,38 +210,23 @@ export default function PricingSection({
 
   return (
     <div
-      className="relative mx-auto min-h-[70vh] bg-background px-4 pb-16 pt-12 sm:pt-16"
+      id={id}
+      className={cn(
+        "relative mx-auto min-h-[70vh] bg-background px-4 pb-16 pt-12 sm:pt-16",
+        className
+      )}
       ref={pricingRef}
     >
-      <div
-        className="pointer-events-none absolute left-[10%] right-[10%] top-0 z-0 h-[70%] w-[80%]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at center, rgba(255,130,46,0.35) 0%, transparent 70%)",
-          opacity: 0.55,
-          mixBlendMode: "multiply",
-        }}
-        aria-hidden
-      />
-
       <div className="relative z-10 mx-auto mb-6 max-w-3xl text-center">
+        {eyebrow ? <div className="mb-5 flex justify-center">{eyebrow}</div> : null}
         <TimelineContent
-          as="h1"
+          as={headingAs}
           animationNum={0}
           timelineRef={pricingRef}
           customVariants={revealVariants}
-          className="mb-4 text-3xl font-semibold text-foreground sm:text-4xl md:text-5xl"
+          className="mb-4 text-3xl font-semibold text-foreground [text-wrap:balance] sm:text-4xl md:text-5xl"
         >
-          Plans that work best for your{" "}
-          <TimelineContent
-            as="span"
-            animationNum={1}
-            timelineRef={pricingRef}
-            customVariants={revealVariants}
-            className="inline-block rounded-xl border border-dashed border-accent bg-accent/10 px-2 py-1 capitalize text-foreground"
-          >
-            shop
-          </TimelineContent>
+          Plans that work best for your shop
         </TimelineContent>
 
         <TimelineContent
@@ -186,8 +236,13 @@ export default function PricingSection({
           customVariants={revealVariants}
           className="mx-auto w-[90%] text-sm text-muted-foreground sm:w-[75%] sm:text-base"
         >
-          Grow on {appName} with a free trial — no card required. Longer billing
-          terms unlock bigger savings.
+          {trialDays > 0
+            ? `Every new shop on ${appName} gets ${trialDays} days of ${topPlan?.name ?? "every feature"} free. `
+            : ""}
+          {freePlan
+            ? `After that, pick a plan or keep selling on ${freePlan.name}. `
+            : ""}
+          Longer billing terms save more.
         </TimelineContent>
       </div>
 
@@ -202,7 +257,7 @@ export default function PricingSection({
         <p className="mt-4 text-center">
           <Link
             href="/onboarding"
-            className="text-sm font-semibold text-accent hover:underline dark:text-accent-on-dark"
+            className="text-sm font-semibold text-accent-strong hover:underline dark:text-accent-on-dark"
           >
             Start free trial (No card required)
           </Link>
@@ -210,12 +265,9 @@ export default function PricingSection({
       </TimelineContent>
 
       {loading ? (
-        <div className="relative z-10 mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-[28rem] animate-pulse rounded-2xl bg-muted/60"
-            />
+        <div className="relative z-10 mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-[28rem] animate-pulse rounded-2xl bg-muted" />
           ))}
         </div>
       ) : error ? (
@@ -223,7 +275,12 @@ export default function PricingSection({
           Could not load plans. Try again shortly.
         </p>
       ) : (
-        <div className="relative z-10 mx-auto grid max-w-7xl gap-4 py-8 md:grid-cols-3">
+        <div
+          className={cn(
+            "relative z-10 mx-auto grid max-w-7xl gap-4 py-8 md:grid-cols-2",
+            sorted.length >= 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"
+          )}
+        >
           {sorted.map((plan, index) => {
             const meta = planMeta(plan);
             const priced = pricedForInterval(plan.price, activeInterval);
@@ -232,15 +289,10 @@ export default function PricingSection({
               meta.benefits.length > 0
                 ? meta.benefits
                 : [`Up to ${plan.productLimit ?? "unlimited"} products`];
-            const includeList =
-              meta.includes.length > 0
-                ? meta.includes
-                : [
-                    popular
-                      ? "Everything in lower plans, plus:"
-                      : "Plan includes:",
-                    ...benefitList.slice(0, 3),
-                  ];
+            const inheritsFrom = benefitList[0]?.startsWith("Everything in")
+              ? benefitList[0]
+              : null;
+            const featureList = inheritsFrom ? benefitList.slice(1) : benefitList;
 
             return (
               <TimelineContent
@@ -254,7 +306,7 @@ export default function PricingSection({
                   className={cn(
                     "relative h-full overflow-hidden border-border",
                     popular
-                      ? "bg-accent/5 ring-2 ring-accent dark:bg-accent/10"
+                      ? "bg-[color-mix(in_oklab,var(--color-accent)_6%,var(--color-card))] ring-2 ring-accent"
                       : "bg-card"
                   )}
                 >
@@ -264,46 +316,19 @@ export default function PricingSection({
                         {plan.name}
                       </h3>
                       {popular ? (
-                        <span className="h-fit shrink-0 rounded-full bg-accent px-3 py-1 text-sm font-medium text-white">
+                        <span className="h-fit shrink-0 rounded-full bg-accent-strong px-3 py-1 text-sm font-medium text-white">
                           Popular
                         </span>
                       ) : null}
                     </div>
                     <p className="mb-4 min-h-[2.5rem] text-sm text-muted-foreground">
-                      {meta.description ??
-                        `Sell on ${appName} with this plan.`}
+                      {meta.description}
                     </p>
-                    <div className="flex flex-wrap items-baseline gap-1">
-                      {priced.discountPct > 0 ? (
-                        <span className="mr-1 text-sm text-muted-foreground line-through">
-                          {formatMoney(priced.full, plan.currency)}
-                        </span>
-                      ) : null}
-                      <span className="text-3xl font-semibold text-foreground sm:text-4xl">
-                        <NumberFlow
-                          value={priced.discounted}
-                          format={{
-                            style: "currency",
-                            currency: plan.currency || "NGN",
-                            maximumFractionDigits: 0,
-                          }}
-                          className="text-3xl font-semibold sm:text-4xl"
-                        />
-                      </span>
-                      <span className="text-muted-foreground">
-                        /
-                        {activeInterval.id === "monthly"
-                          ? "month"
-                          : activeInterval.id === "biannual"
-                            ? "6 mo"
-                            : "year"}
-                      </span>
-                    </div>
-                    {priced.save > 0 ? (
-                      <p className="mt-1 text-xs font-medium text-accent dark:text-accent-on-dark">
-                        Save {formatMoney(priced.save, plan.currency)}
-                      </p>
-                    ) : null}
+                    <PlanPrice
+                      plan={plan}
+                      priced={priced}
+                      interval={activeInterval}
+                    />
                   </CardHeader>
 
                   <CardContent className="pt-0">
@@ -311,10 +336,10 @@ export default function PricingSection({
                       <Link
                         href="/contact?intent=demo"
                         className={cn(
-                          "mb-6 block w-full rounded-xl p-4 text-center text-lg font-semibold text-white shadow-lg",
+                          "mb-6 block w-full rounded-xl p-4 text-center text-lg font-semibold transition hover:brightness-90",
                           popular
-                            ? "border border-accent bg-gradient-to-t from-accent-deep to-accent shadow-accent/30"
-                            : "border border-neutral-700 bg-gradient-to-t from-neutral-900 to-neutral-600 shadow-neutral-900/30"
+                            ? "bg-accent-strong text-white"
+                            : "bg-foreground text-background"
                         )}
                       >
                         Book a Demo
@@ -323,42 +348,25 @@ export default function PricingSection({
                       <Link
                         href={`/onboarding?plan=${plan.slug}`}
                         className={cn(
-                          "mb-6 block w-full rounded-xl p-4 text-center text-lg font-semibold text-white shadow-lg",
+                          "mb-6 block w-full rounded-xl p-4 text-center text-lg font-semibold transition hover:brightness-90",
                           popular
-                            ? "border border-accent bg-gradient-to-t from-accent-deep to-accent shadow-accent/30"
-                            : "border border-neutral-700 bg-gradient-to-t from-neutral-900 to-neutral-600 shadow-neutral-900/30"
+                            ? "bg-accent-strong text-white"
+                            : "bg-foreground text-background"
                         )}
                       >
                         Get started
                       </Link>
                     )}
 
-                    <ul className="space-y-2 py-5 font-medium">
-                      {benefitList.slice(0, 3).map((text, featureIndex) => {
-                        const Icon =
-                          FEATURE_ICONS[featureIndex % FEATURE_ICONS.length]!;
-                        return (
-                          <li key={text} className="flex items-center">
-                            <span className="mr-3 mt-0.5 grid place-content-center text-foreground">
-                              <Icon size={20} />
-                            </span>
-                            <span className="text-sm text-muted-foreground">
-                              {text}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-
                     <div className="space-y-3 border-t border-border pt-4">
                       <h4 className="mb-3 text-base font-medium text-foreground">
-                        {includeList[0]}
+                        {inheritsFrom ? `${inheritsFrom}, plus:` : "Includes:"}
                       </h4>
                       <ul className="space-y-2 font-medium">
-                        {includeList.slice(1).map((feature) => (
+                        {featureList.map((feature) => (
                           <li key={feature} className="flex items-center">
-                            <span className="mr-3 mt-0.5 grid h-6 w-6 place-content-center rounded-full border border-accent bg-accent/10">
-                              <CheckCheck className="h-4 w-4 text-accent" />
+                            <span className="mr-3 mt-0.5 grid h-6 w-6 shrink-0 place-content-center rounded-full border border-accent bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]">
+                              <CheckCheck className="h-4 w-4 text-accent-strong dark:text-accent-on-dark" />
                             </span>
                             <span className="text-sm text-muted-foreground">
                               {feature}
@@ -375,14 +383,25 @@ export default function PricingSection({
         </div>
       )}
 
+      {assurances?.length ? (
+        <ul className="relative z-10 mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          {assurances.map((line) => (
+            <li key={line} className="flex items-center gap-1.5">
+              <Check className="h-4 w-4 text-success" aria-hidden />
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       <p className="relative z-10 mt-4 text-center text-sm text-muted-foreground">
         Need an in-depth look at plans?{" "}
-        <Link
-          href="/contact?intent=compare"
+        <a
+          href={compareHref}
           className="font-semibold text-foreground underline-offset-2 hover:underline"
         >
-          Compare features
-        </Link>
+          Compare plans
+        </a>
       </p>
     </div>
   );

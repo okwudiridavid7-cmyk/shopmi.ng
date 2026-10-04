@@ -33,7 +33,7 @@ export default function AdminVerificationPage() {
     <div className="space-y-6">
       <PageHeader
         title="Verification queue"
-        description="Review shop documents. Approve flips verified badge + active status."
+        description="Review shop documents."
         icon={ShieldCheck}
         actions={
           <div className="w-full min-w-[12rem] max-w-[14rem]">
@@ -65,11 +65,6 @@ export default function AdminVerificationPage() {
         <EmptyState
           kind="empty"
           title="Queue is empty"
-          description={
-            status === "pending"
-              ? "No pending verification requests right now."
-              : "No requests for this filter."
-          }
         />
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -114,7 +109,7 @@ export default function AdminVerificationPage() {
                       href={d.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark"
+                      className="font-medium text-accent-strong transition hover:opacity-80 dark:text-accent-on-dark"
                     >
                       {d.name}
                     </a>
@@ -122,7 +117,7 @@ export default function AdminVerificationPage() {
                 ))}
               </ul>
               {r.note && (
-                <p className="text-muted-foreground">Note: {r.note}</p>
+                <p className="text-muted-foreground">Reviewer note: {r.note}</p>
               )}
             </li>
           ))}
@@ -193,8 +188,6 @@ export default function AdminVerificationPage() {
                       setRejectTarget(null);
                       toast({
                         title: "Request rejected",
-                        description:
-                          "Seller notified by email when configured.",
                         tone: "default",
                       });
                     },

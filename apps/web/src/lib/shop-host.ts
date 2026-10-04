@@ -1,7 +1,7 @@
 /**
  * Host parsing for subdomain routing.
  * Apex vs shop-subdomain detection must stay in sync with
- * GET /api/shops/resolve-host (see README — Middleware).
+ * GET /api/shops/resolve-host (see README - Middleware).
  */
 
 const DEFAULT_SHOP_BASE = "localhost:3000";
@@ -18,11 +18,16 @@ export const PLATFORM_ONLY_PREFIXES = [
   "/cart",
   "/checkout",
   "/about",
+  "/buyers",
+  "/sellers",
   "/support",
-  "/privacy",
-  "/terms",
   "/hello",
   "/pricing",
+  "/explore",
+  "/contact/confirm",
+  "/forgot-password",
+  "/reset-password",
+  "/cookies",
 ] as const;
 
 export function getHostname(host: string): string {
@@ -49,7 +54,7 @@ function platformHostname(): string {
   }
 }
 
-/** True for marketplace apex — never rewrite these hosts. */
+/** True for marketplace apex - never rewrite these hosts. */
 export function isApexPlatformHost(host: string): boolean {
   const hostname = getHostname(host);
   if (!hostname) return true;
@@ -87,6 +92,29 @@ export function extractShopSubdomain(host: string): string | null {
   const label = sub.includes(".") ? (sub.split(".")[0] ?? "") : sub;
   if (!label || label === "www") return null;
   return label;
+}
+
+/**
+ * A seller's own domain (not the marketplace, not a shop subdomain). Platform
+ * cookies aren't available here, so carts stay in the browser until checkout.
+ */
+export function isCustomDomainHost(host: string): boolean {
+  const hostname = getHostname(host);
+  if (!hostname || isApexPlatformHost(host)) return false;
+  if (extractShopSubdomain(host)) return false;
+  if (hostname.endsWith(".lvh.me")) return false;
+  return true;
+}
+
+/** Marketplace origin, e.g. https://shopmi.ng. */
+export function platformOrigin(): string {
+  const raw =
+    process.env.NEXT_PUBLIC_WEB_URL ?? process.env.WEB_URL ?? DEFAULT_WEB_URL;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return DEFAULT_WEB_URL;
+  }
 }
 
 export function isPlatformOnlyPath(pathname: string): boolean {

@@ -7,6 +7,7 @@ import {
   MARKETPLACE_TAXONOMY,
   type CategorySeedNode,
 } from "./taxonomy";
+import { upsertPlans } from "./plans";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -20,7 +21,7 @@ const DEFAULT_SETTINGS: { key: string; value: string }[] = [
   { key: "verification_required", value: "false" },
   { key: "ai_features_enabled", value: "true" },
   { key: "watermark_default_on", value: "true" },
-  { key: "trial_days", value: "3" },
+  { key: "trial_days", value: "14" },
   { key: "commission_percent", value: "5" },
   /** When false, hide public pricing and plan CTAs site-wide. */
   { key: "billing_enabled", value: "true" },
@@ -35,7 +36,7 @@ const DEFAULT_SETTINGS: { key: string; value: string }[] = [
           "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1920&q=80",
         title: "Independent shops. Real checkout.",
         subtitle:
-          "Find makers and retailers with branded storefronts — pay once, track your order.",
+          "Find makers and retailers with branded storefronts. Pay once, track your order.",
         ctaText: "Start browsing",
         ctaUrl: "#marketplace",
         scrollSpeed: 6,
@@ -46,126 +47,11 @@ const DEFAULT_SETTINGS: { key: string; value: string }[] = [
   },
 ];
 
-/** Shared seller basics — every paid tier includes these. */
-const BASIC_SELLER_FEATURES = {
-  ai: true,
-  campaigns: true,
-  whatsapp: true,
-  invoices: true,
-  storefront: true,
-  orders: true,
-  products: true,
-} as const;
-
 const BRANDS = [
   { name: "Generic", slug: "generic" },
   { name: "Acme", slug: "acme" },
   { name: "Nova", slug: "nova" },
   { name: "Pulse", slug: "pulse" },
-];
-
-/**
- * Public pricing tiers (monthly NGN). Longer intervals are discounted on the
- * pricing page: 6 months ≈ 15% off, yearly ≈ 30% off (cheapest).
- * New shops default to Yomi with a free trial (no card required).
- */
-const PLANS = [
-  {
-    name: "Yomi",
-    slug: "yomi",
-    price: 3000,
-    currency: "NGN",
-    productLimit: 50,
-    trialDays: 3,
-    featureFlags: {
-      ...BASIC_SELLER_FEATURES,
-      customDomain: false,
-      analytics: "basic",
-      staffAccounts: 1,
-      storeLocations: 1,
-      description:
-        "For new sellers launching their first storefront and catalog.",
-      benefits: [
-        "Add & manage products",
-        "Business website / storefront",
-        "Invoices & receipts",
-        "Order management",
-        "Campaigns & WhatsApp tools",
-        "AI listing help",
-        "1 staff account",
-      ],
-      limitations: [
-        "No custom domain",
-        "Basic analytics only",
-        "1 store location",
-      ],
-      recommended: false,
-      cta: "select",
-    },
-  },
-  {
-    name: "Lemi",
-    slug: "lemi",
-    price: 7500,
-    currency: "NGN",
-    productLimit: 200,
-    trialDays: 3,
-    featureFlags: {
-      ...BASIC_SELLER_FEATURES,
-      customDomain: true,
-      analytics: "business",
-      staffAccounts: 3,
-      storeLocations: 1,
-      pixels: true,
-      description:
-        "For growing shops that need a domain, team access, and deeper insights.",
-      benefits: [
-        "Everything in Yomi",
-        "Custom domain",
-        "3 staff accounts",
-        "Business analytics",
-        "Facebook Pixel & Google Analytics",
-        "Priority email support",
-      ],
-      limitations: ["1 store location", "No wholesale pricing"],
-      recommended: false,
-      cta: "select",
-    },
-  },
-  {
-    name: "Dami",
-    slug: "dami",
-    price: 15000,
-    currency: "NGN",
-    productLimit: null as number | null,
-    trialDays: 3,
-    featureFlags: {
-      ...BASIC_SELLER_FEATURES,
-      customDomain: true,
-      analytics: "advanced",
-      staffAccounts: 10,
-      storeLocations: 3,
-      pixels: true,
-      wholesale: true,
-      shipmentTracking: true,
-      pos: true,
-      description:
-        "For established sellers running multi-location or high-volume shops.",
-      benefits: [
-        "Everything in Lemi",
-        "Unlimited products",
-        "10 staff accounts",
-        "3 store locations",
-        "Wholesale pricing",
-        "Shipment tracking",
-        "POS software",
-        "Dedicated onboarding",
-      ],
-      limitations: [] as string[],
-      recommended: true,
-      cta: "demo",
-    },
-  },
 ];
 
 const LEGACY_PLAN_SLUGS = ["free", "starter", "pro"] as const;
@@ -331,30 +217,7 @@ async function main() {
     });
   }
 
-  for (const plan of PLANS) {
-    await prisma.plan.upsert({
-      where: { slug: plan.slug },
-      create: {
-        name: plan.name,
-        slug: plan.slug,
-        price: plan.price,
-        currency: plan.currency,
-        productLimit: plan.productLimit,
-        featureFlags: plan.featureFlags,
-        trialDays: plan.trialDays,
-        active: true,
-      },
-      update: {
-        name: plan.name,
-        price: plan.price,
-        currency: plan.currency,
-        productLimit: plan.productLimit,
-        featureFlags: plan.featureFlags,
-        trialDays: plan.trialDays,
-        active: true,
-      },
-    });
-  }
+  await upsertPlans(prisma);
 
   // Remap tenants on legacy free/starter/pro → Yomi/Lemi/Dami, then deactivate legacy.
   const yomi = await prisma.plan.findUnique({ where: { slug: "yomi" } });

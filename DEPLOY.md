@@ -148,8 +148,20 @@ Rebuild web after changing any `NEXT_PUBLIC_*` value.
 | `GOOGLE_*` | callback `https://api.shopmi.ng/api/auth/google/callback` |
 | `CONTACT_CAPTCHA_BYPASS` | `false` |
 | `SHOP_CONTACT_CONFIRM_REQUIRED` | keep `false` until confirm UX fixed |
+| `RENDER_API_KEY` | Render account API key. Lets the API attach seller custom domains to `shopmi-web` and issue TLS |
+| `RENDER_WEB_SERVICE_ID` | `srv-…` id of `shopmi-web` (from its dashboard URL) |
+| `CUSTOM_DOMAIN_CNAME_TARGET` | optional, defaults to `shopmi-web.onrender.com` |
+| `CUSTOM_DOMAIN_A_RECORD` | optional, defaults to `216.24.57.1` (Render's root-domain IP) |
+| `GO54_API_EMAIL` | GO54 (WhoGoHost) reseller account email. Enables domain search and purchase |
+| `GO54_API_KEY` | Domains Reseller API key from the GO54 client area |
+| `GO54_API_URL` | optional, defaults to the live WhoGoHost Domains Reseller endpoint |
+| `GO54_NAMESERVERS` | optional, defaults to `nsa.whogohost.com,nsb.whogohost.com` |
 
-Worker must share `DATABASE_URL`, `REDIS_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, and the same JWT/app URLs.
+Without the two `RENDER_*` keys, sellers can still verify DNS, but each domain has to be added to `shopmi-web` in the Render dashboard by hand before it gets a certificate.
+
+Without the two `GO54_*` keys, the Buy domain page shows as unavailable in production (connecting an existing domain still works). Registrations are paid from the GO54 reseller wallet, so keep it funded, and whitelist the API and worker outbound IPs in the GO54 reseller settings. Retail prices per domain ending are set in Admin → Domains.
+
+Worker must share `DATABASE_URL`, `REDIS_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `GO54_*`, and the same JWT/app URLs.
 
 ---
 

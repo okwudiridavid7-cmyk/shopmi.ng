@@ -56,7 +56,6 @@ export default function SellerNotificationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Notifications"
-        description="Get a WhatsApp ping when a buyer pays. Requires platform WhatsApp env keys; otherwise messages are logged only."
         icon={Bell}
       />
 
@@ -68,20 +67,15 @@ export default function SellerNotificationsPage() {
         </CardHeader>
         <CardBody>
           <form onSubmit={save} className="space-y-6">
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:bg-muted/40">
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:bg-muted/40">
               <input
                 type="checkbox"
                 checked={whatsappOrdersEnabled}
                 onChange={(e) => setWhatsappOrdersEnabled(e.target.checked)}
-                className="mt-1 h-4 w-4 accent-[var(--color-accent)]"
+                className="h-4 w-4 accent-[var(--color-accent)]"
               />
-              <span>
-                <span className="block text-sm font-medium text-foreground">
-                  WhatsApp order alerts
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Notify the shop owner number on paid orders
-                </span>
+              <span className="text-sm font-medium text-foreground">
+                WhatsApp order alerts
               </span>
             </label>
             <Label>
@@ -90,7 +84,7 @@ export default function SellerNotificationsPage() {
                 icon={<Phone />}
                 value={whatsappNumber}
                 onChange={(e) => setWhatsappNumber(e.target.value)}
-                placeholder="+234…"
+                placeholder="+234 xxx xxx xxxx"
               />
             </Label>
             {error && (

@@ -15,6 +15,8 @@ import {
 import { attachReviewAggregates } from "../lib/reviewAggregates";
 import { getCatalogStats } from "../lib/catalogStats";
 import { catalogStatsLimiter } from "../lib/catalogStatsRateLimit";
+import { UNAVAILABLE_SHOP_STATUSES } from "../tenant/tenantContext";
+import { cached, CACHE_KEYS, setPublicCache } from "../lib/cache";
 
 export const catalogRouter = Router();
 
@@ -24,13 +26,21 @@ catalogRouter.get("/categories", async (req, res, next) => {
       req.query.tree === "1" ||
       req.query.tree === "true" ||
       req.query.format === "tree";
-    const categories = await prisma.category.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    });
+    const load = () =>
+      prisma.category.findMany({
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      });
+    setPublicCache(res, 300);
     if (asTree) {
-      return res.json({ categories: buildCategoryTree(categories) });
+      const tree = await cached(CACHE_KEYS.categoriesTree, 300, async () =>
+        buildCategoryTree(await load())
+      );
+      return res.json({ categories: tree });
     }
-    return res.json({ categories: categories.map(toCategoryPublic) });
+    const flat = await cached(CACHE_KEYS.categoriesFlat, 300, async () =>
+      (await load()).map(toCategoryPublic)
+    );
+    return res.json({ categories: flat });
   } catch (err) {
     return next(err);
   }
@@ -52,13 +62,22 @@ catalogRouter.get("/categories/breadcrumb", async (req, res, next) => {
 /** Distinct free-text brand names from active products (plus legacy Brand table). */
 catalogRouter.get("/brands", async (_req, res, next) => {
   try {
+    const brands = await cached(CACHE_KEYS.brands, 300, loadBrands);
+    setPublicCache(res, 300);
+    return res.json({ brands });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+async function loadBrands() {
     const [legacy, distinctNames] = await Promise.all([
       prisma.brand.findMany({ orderBy: { name: "asc" } }),
       prisma.product.findMany({
         where: {
           status: "active",
           brandName: { not: null },
-          tenant: { status: { not: "suspended" } },
+          tenant: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
         },
         select: { brandName: true },
         distinct: ["brandName"],
@@ -83,14 +102,8 @@ catalogRouter.get("/brands", async (_req, res, next) => {
       byKey.set(key, { id: `name:${slug || key}`, name, slug: slug || key });
     }
 
-    const brands = [...byKey.values()].sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
-    return res.json({ brands });
-  } catch (err) {
-    return next(err);
-  }
-});
+    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
 
 const listSchema = z.object({
   category: z.string().optional(),
@@ -115,7 +128,7 @@ catalogRouter.get("/products", async (req, res, next) => {
     const query = listSchema.parse(req.query);
     const where: Prisma.ProductWhereInput = {
       status: "active",
-      tenant: { status: { not: "suspended" } },
+      tenant: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
     };
 
     if (query.category) {
@@ -229,7 +242,7 @@ catalogRouter.get("/products/:id", async (req, res, next) => {
       where: {
         id: req.params.id,
         status: "active",
-        tenant: { status: { not: "suspended" } },
+        tenant: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
       },
       include: {
         category: true,
@@ -252,16 +265,22 @@ catalogRouter.get("/products/:id", async (req, res, next) => {
 
 catalogRouter.get("/locations", async (_req, res, next) => {
   try {
-    const rows = await prisma.product.findMany({
-      where: { status: "active", location: { not: null } },
-      select: { location: true },
-      distinct: ["location"],
-      orderBy: { location: "asc" },
-      take: 100,
+    const locations = await cached(CACHE_KEYS.locations, 300, async () => {
+      const rows = await prisma.product.findMany({
+        where: {
+          status: "active",
+          location: { not: null },
+          tenant: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
+        },
+        select: { location: true },
+        distinct: ["location"],
+        orderBy: { location: "asc" },
+        take: 100,
+      });
+      return rows.map((r) => r.location).filter(Boolean);
     });
-    return res.json({
-      locations: rows.map((r) => r.location).filter(Boolean),
-    });
+    setPublicCache(res, 300);
+    return res.json({ locations });
   } catch (err) {
     return next(err);
   }
@@ -277,9 +296,58 @@ catalogRouter.get("/stats", catalogStatsLimiter, async (_req, res, next) => {
   }
 });
 
+/** Public shop slugs and product ids for the web sitemap. */
+catalogRouter.get("/sitemap", async (_req, res, next) => {
+  try {
+    const data = await cached(CACHE_KEYS.sitemap, 3600, async () => {
+      const [shops, products] = await Promise.all([
+        prisma.tenant.findMany({
+          where: {
+            status: { in: ["active", "pending_verification"] },
+            products: { some: { status: "active" } },
+          },
+          select: { slug: true, createdAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 5000,
+        }),
+        prisma.product.findMany({
+          where: {
+            status: "active",
+            tenant: { status: { in: ["active", "pending_verification"] } },
+          },
+          select: { id: true, updatedAt: true, tenant: { select: { slug: true } } },
+          orderBy: { updatedAt: "desc" },
+          take: 20000,
+        }),
+      ]);
+      return {
+        shops: shops.map((s) => ({ slug: s.slug, updatedAt: s.createdAt.toISOString() })),
+        products: products.map((p) => ({
+          id: p.id,
+          shop: p.tenant.slug,
+          updatedAt: p.updatedAt.toISOString(),
+        })),
+      };
+    });
+    setPublicCache(res, 3600);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 /** Public marketplace homepage banners (platform_settings.homepage_banners). */
 catalogRouter.get("/homepage-banners", async (_req, res, next) => {
   try {
+    const banners = await cached(CACHE_KEYS.homepageBanners, 120, loadHomepageBanners);
+    setPublicCache(res, 30);
+    return res.json({ banners });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+async function loadHomepageBanners() {
     const row = await prisma.platformSetting.findUnique({
       where: { key: "homepage_banners" },
     });
@@ -314,9 +382,5 @@ catalogRouter.get("/homepage-banners", async (_req, res, next) => {
         displayOrder: typeof b.displayOrder === "number" ? b.displayOrder : i,
       }))
       .filter((b) => b.imageUrl);
-
-    return res.json({ banners: active });
-  } catch (err) {
-    return next(err);
-  }
-});
+    return active;
+}

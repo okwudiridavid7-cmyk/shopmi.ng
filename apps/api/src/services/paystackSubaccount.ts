@@ -29,7 +29,7 @@ export async function ensurePaystackSubaccount(
   }
 ): Promise<string | null> {
   if (!env.paystackSecretKey) {
-    console.warn("[paystack] no secret key — skip subaccount create");
+    console.warn("[paystack] no secret key - skip subaccount create");
     return null;
   }
 
@@ -48,7 +48,7 @@ export async function ensurePaystackSubaccount(
 
   if (!bankCode || !accountNumber) {
     console.info(
-      `[paystack] tenant ${tenant.slug} verified but missing settlement bank — subaccount deferred`
+      `[paystack] tenant ${tenant.slug} verified but missing settlement bank - subaccount deferred`
     );
     return null;
   }
@@ -82,7 +82,7 @@ export async function ensurePaystackSubaccount(
       settlement_bank: bankCode,
       account_number: accountNumber,
       percentage_charge: percentageCharge,
-      description: `Shopmi seller — ${tenant.slug}`,
+      description: `Shopmi seller - ${tenant.slug}`,
     }),
   });
 

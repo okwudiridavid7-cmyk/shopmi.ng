@@ -40,7 +40,6 @@ export default function AdminTenantsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Shops"
-        description="All tenants — search, filter, suspend, and verify."
         icon={Store}
       />
 
@@ -81,11 +80,6 @@ export default function AdminTenantsPage() {
         <EmptyState
           kind={q || status ? "empty_filtered" : "shops"}
           title={q || status ? "No shops match" : undefined}
-          description={
-            q || status
-              ? "Try a different search or status filter."
-              : undefined
-          }
         />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-sm">
@@ -127,7 +121,7 @@ export default function AdminTenantsPage() {
                     <TrustBadge verified={t.verifiedBadge} />
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {t.plan?.name ?? "—"}
+                    {t.plan?.name ?? "-"}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {new Date(t.createdAt).toLocaleDateString()}

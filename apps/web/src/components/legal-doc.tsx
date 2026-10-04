@@ -86,14 +86,22 @@ function renderBody(text: string, keyPrefix: string): ReactNode {
   return nodes;
 }
 
-export function LegalDoc({ title, body }: { title: string; body: string }) {
+export function LegalDoc({
+  title,
+  body,
+  actions,
+}: {
+  title: string;
+  body: string;
+  actions?: ReactNode;
+}) {
   const blocks = body.split(/\n\n+/).filter(Boolean);
 
   // Drop duplicate title line if body starts with the same policy name.
   let start = 0;
   if (
     blocks[0] &&
-    /privacy policy|terms of service|terms of sale/i.test(blocks[0]) &&
+    /privacy policy|terms of service|terms of sale|cookie policy/i.test(blocks[0]) &&
     blocks[0].length < 80
   ) {
     start = 1;
@@ -104,12 +112,13 @@ export function LegalDoc({ title, body }: { title: string; body: string }) {
   return (
     <article className="mx-auto max-w-3xl space-y-token-5 px-token-4 py-12 sm:px-token-6 sm:py-16">
       <header className="space-y-token-3 border-b border-border pb-token-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-strong dark:text-accent-on-dark">
           Legal
         </p>
         <h1 className="font-display text-3xl text-foreground sm:text-4xl">
           {title}
         </h1>
+        {actions ? <div className="pt-token-2">{actions}</div> : null}
       </header>
       <div className="space-y-token-4 text-sm leading-relaxed text-muted-foreground">
         {rest.map((block, i) => renderBlock(block, i))}

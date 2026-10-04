@@ -72,7 +72,7 @@ export default function SellerVerificationPage() {
     <div className="mx-auto max-w-xl space-y-6">
       <PageHeader
         title="Shop verification"
-        description="Submit ID or business documents for review. Unverified shops show a warning to buyers."
+        description="Submit ID or business documents for review."
         icon={BadgeCheck}
       />
 
@@ -81,8 +81,7 @@ export default function SellerVerificationPage() {
           <CardBody className="space-y-2">
             <VerifiedBadge />
             <p className="text-sm text-muted-foreground">
-              Your shop is verified. Buyers will see the badge on your
-              storefront.
+              Your shop is verified.
             </p>
           </CardBody>
         </Card>
@@ -90,8 +89,7 @@ export default function SellerVerificationPage() {
         <div className="space-y-2">
           {verificationRequired && (
             <p className="rounded-xl border border-warning/40 bg-warning-muted px-3 py-2 text-sm text-warning">
-              Platform setting: verification is required before your shop can
-              accept payments.
+              Verification is required before your shop can accept payments.
             </p>
           )}
         </div>
@@ -109,14 +107,14 @@ export default function SellerVerificationPage() {
               Status: <strong className="capitalize">{request.status}</strong>
             </p>
             {request.note && (
-              <p className="mt-2 text-muted-foreground">Note: {request.note}</p>
+              <p className="mt-2 text-muted-foreground">Reviewer note: {request.note}</p>
             )}
             <ul className="mt-2 list-disc pl-5 text-muted-foreground">
               {request.submittedDocs.map((d) => (
                 <li key={d.url}>
                   <a
                     href={d.url}
-                    className="font-medium text-accent transition hover:text-accent-deep dark:text-accent-on-dark"
+                    className="font-medium text-accent-strong transition hover:opacity-80 dark:text-accent-on-dark"
                     target="_blank"
                     rel="noreferrer"
                   >

@@ -43,7 +43,7 @@ const DRIFT_AMP = 5.5;
 /** Extra detune (percent) at the peak of a tap impulse, and how long that impulse takes to settle. */
 const SWELL = 4.5;
 const SWELL_MS = 620;
-/** Drift periods — coprime so the path never visibly repeats. */
+/** Drift periods - coprime so the path never visibly repeats. */
 const DRIFT_X_MS = 24_000;
 const DRIFT_Y_MS = 31_000;
 /** How far the moving layer overhangs the box, and the travel that overhang can absorb. */
@@ -74,7 +74,7 @@ function grating(pitch: number, duty: number, cx: number, cy: number) {
 }
 
 /**
- * Two rulings of concentric rings — one anchored, one pulled by the pointer — whose interference draws
+ * Two rulings of concentric rings - one anchored, one pulled by the pointer - whose interference draws
  * moiré fringes across the section. Content goes in as children and renders above the field. The field
  * is decorative: hidden from assistive tech and transparent to clicks.
  */

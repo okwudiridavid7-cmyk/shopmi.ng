@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAppName, usePlatformBranding } from "@/hooks/use-branding";
 import { Button } from "@/components/ui/button";
 import PricingSection from "@/components/ui/pricing-section";
+import { PlanComparison, PricingCta, PricingFaq } from "@/components/pricing-details";
 
 const outlineSmClass =
   "inline-flex items-center justify-center gap-1.5 rounded-sm border border-border bg-card px-token-3 py-token-1 text-xs font-medium text-foreground shadow-sm transition hover:bg-muted";
@@ -32,16 +33,12 @@ export default function PricingPage() {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-6 py-20 text-center">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Pricing unavailable
+          Create your shop
         </h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Plan billing is currently turned off. You can still start selling —
-          contact support if you need a custom arrangement.
-        </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link
             href="/onboarding"
-            className="inline-flex items-center justify-center rounded-md bg-accent px-token-6 py-token-3 text-sm font-medium text-white shadow-sm transition hover:bg-accent-deep"
+            className="inline-flex items-center justify-center rounded-md bg-accent-strong px-token-6 py-token-3 text-sm font-medium text-white shadow-sm transition hover:brightness-90"
           >
             Start free trial
           </Link>
@@ -83,6 +80,14 @@ export default function PricingPage() {
         loading={isLoading}
         error={Boolean(error)}
       />
+
+      {data?.plans?.length ? (
+        <>
+          <PlanComparison plans={data.plans} />
+          <PricingFaq plans={data.plans} />
+        </>
+      ) : null}
+      <PricingCta />
     </div>
   );
 }

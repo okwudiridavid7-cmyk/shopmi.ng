@@ -13,7 +13,7 @@ const STEPS = [
   {
     id: "nav-sell",
     title: "Open a shop",
-    body: "Sell takes you through account, shop, and first product setup.",
+    body: "Set up your account, shop, and first product in a few steps.",
   },
   {
     id: "nav-buyer",
@@ -101,7 +101,7 @@ export function Walkthrough() {
               if (step >= STEPS.length - 1) finish();
               else setStep((s) => s + 1);
             }}
-            className="rounded-md bg-accent px-4 py-2 text-sm text-accent-foreground"
+            className="rounded-md bg-accent-strong px-4 py-2 text-sm text-accent-foreground"
           >
             {step >= STEPS.length - 1 ? "Done" : "Next"}
           </button>

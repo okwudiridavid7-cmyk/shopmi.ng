@@ -27,7 +27,7 @@ type MultiProps = {
   className?: string;
 };
 
-/** Soft pill selectors — single or multi (checkbox-style for currencies). */
+/** Soft pill selectors - single or multi (checkbox-style for currencies). */
 export function PillChoice(props: SingleProps | MultiProps) {
   const { label, required, options, className } = props;
 
@@ -60,7 +60,7 @@ export function PillChoice(props: SingleProps | MultiProps) {
               className={cn(
                 "inline-flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-medium transition",
                 selected
-                  ? "bg-accent text-white shadow-sm"
+                  ? "bg-accent-strong text-white shadow-sm"
                   : "bg-muted text-foreground hover:bg-muted/80"
               )}
             >
@@ -69,7 +69,7 @@ export function PillChoice(props: SingleProps | MultiProps) {
                   className={cn(
                     "flex h-4 w-4 items-center justify-center rounded border",
                     selected
-                      ? "border-white bg-white text-accent"
+                      ? "border-white bg-white text-accent-strong dark:text-accent-on-dark"
                       : "border-muted-foreground/40"
                   )}
                   aria-hidden

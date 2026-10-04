@@ -13,9 +13,6 @@ export function FaviconSync() {
   const icon = adminIcon || DEFAULT_FAVICON;
 
   useEffect(() => {
-    if (data?.appName) {
-      document.title = data.appName;
-    }
     let link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
     if (!link) {
       link = document.createElement("link");
@@ -34,7 +31,7 @@ export function FaviconSync() {
       document.head.appendChild(apple);
     }
     apple.href = icon;
-  }, [icon, data?.appName, resolvedTheme]);
+  }, [icon, resolvedTheme]);
 
   return null;
 }

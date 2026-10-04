@@ -43,8 +43,8 @@ function buildPrompt(input: DescriptionInput): string {
 
 Title: ${input.title}
 Platform category: ${input.categoryName ?? "General"}
-Shop category: ${input.shopCategoryName ?? "—"}
-Brand: ${input.brandName ?? "—"}
+Shop category: ${input.shopCategoryName ?? "-"}
+Brand: ${input.brandName ?? "-"}
 Location/region: ${input.location ?? "Nigeria"}
 ${input.price != null ? `Price: ${input.currency ?? "NGN"} ${input.price}` : ""}
 ${attrs ? `Additional attributes:\n${attrs}` : ""}
@@ -62,7 +62,7 @@ export async function generateProductDescription(
   const fallback = buildFallback(input);
 
   if (!env.anthropicApiKey) {
-    console.warn("[ai] ANTHROPIC_API_KEY not set — using template description");
+    console.warn("[ai] ANTHROPIC_API_KEY not set - using template description");
     return fallback;
   }
 

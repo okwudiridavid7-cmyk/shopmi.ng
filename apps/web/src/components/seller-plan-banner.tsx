@@ -4,40 +4,69 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TextLink } from "@/components/ui/text-link";
 import { usePlatformBranding } from "@/hooks/use-branding";
+import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "seller-plan-banner-dismissed";
 
-type BannerKind = "trial" | "limit" | null;
+/** Show the paid-plan renewal notice this many days before it ends. */
+const RENEWAL_NOTICE_DAYS = 5;
+
+type BannerKind = "lapsed" | "paused" | "ending" | "limit" | "trial" | null;
 
 /**
- * Dismissible trial / product-limit banner.
- * Hidden entirely when platform billing is off.
+ * Dismissible plan banner: lapsed storefront, paused products, renewal,
+ * product limit, trial. Hidden entirely when platform billing is off.
  */
 export function SellerPlanBanner({
   trialActive,
-  trialDaysLeft,
-  productCount,
+  daysLeft,
+  planName,
+  paidUntil,
+  lapsed,
+  liveCount,
+  pausedCount,
   productLimit,
 }: {
   trialActive: boolean;
-  trialDaysLeft: number;
-  productCount: number;
+  daysLeft: number;
+  planName: string | null;
+  paidUntil: string | null;
+  lapsed: boolean;
+  liveCount: number;
+  pausedCount: number;
   productLimit: number | null;
 }) {
   const billingEnabled =
     usePlatformBranding().data?.billingEnabled !== false;
 
   const nearLimit =
-    productLimit != null && productCount >= Math.max(1, productLimit - 2);
-  const atLimit = productLimit != null && productCount >= productLimit;
+    productLimit != null && liveCount >= Math.max(1, productLimit - 2);
+  const atLimit = productLimit != null && liveCount >= productLimit;
+  const ending = !!paidUntil && daysLeft > 0 && daysLeft <= RENEWAL_NOTICE_DAYS;
 
-  const kind: BannerKind =
-    atLimit || nearLimit ? "limit" : trialActive ? "trial" : null;
-  const reasonKey = kind
-    ? kind === "trial"
-      ? `trial:${trialDaysLeft}`
-      : `limit:${productCount}/${productLimit}`
-    : null;
+  const kind: BannerKind = lapsed
+    ? "lapsed"
+    : pausedCount > 0
+      ? "paused"
+      : ending
+        ? "ending"
+        : atLimit || nearLimit
+          ? "limit"
+          : trialActive
+            ? "trial"
+            : null;
+  const reasonKey =
+    kind === "lapsed"
+      ? null
+      : kind === "paused"
+        ? `paused:${pausedCount}`
+        : kind === "ending"
+          ? `ending:${paidUntil}:${daysLeft}`
+          : kind === "limit"
+            ? `limit:${liveCount}/${productLimit}`
+            : kind === "trial"
+              ? `trial:${daysLeft}`
+              : null;
 
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
 
@@ -46,9 +75,8 @@ export function SellerPlanBanner({
     setDismissedKey(sessionStorage.getItem(STORAGE_KEY));
   }, []);
 
-  if (!billingEnabled) return null;
-  if (!kind || !reasonKey) return null;
-  if (dismissedKey === reasonKey) return null;
+  if (!billingEnabled || !kind) return null;
+  if (reasonKey && dismissedKey === reasonKey) return null;
 
   function dismiss() {
     if (!reasonKey) return;
@@ -56,31 +84,63 @@ export function SellerPlanBanner({
     setDismissedKey(reasonKey);
   }
 
+  const days = `${daysLeft} day${daysLeft === 1 ? "" : "s"}`;
+
   return (
     <div
       role="status"
-      className="flex flex-wrap items-start justify-between gap-token-3 rounded-md border border-accent/30 bg-accent/10 px-token-4 py-token-3 text-sm"
+      className={cn(
+        "flex flex-wrap items-start justify-between gap-token-3 rounded-md border px-token-4 py-token-3 text-sm",
+        kind === "lapsed"
+          ? "border-danger bg-[color-mix(in_oklab,var(--color-danger)_8%,transparent)]"
+          : "border-accent bg-[color-mix(in_oklab,var(--color-accent)_10%,transparent)]"
+      )}
     >
       <div className="space-y-token-1">
-        {kind === "trial" ? (
+        {kind === "lapsed" ? (
           <p className="text-foreground">
-            <strong className="font-semibold">Trial active.</strong>{" "}
-            {trialDaysLeft} day{trialDaysLeft === 1 ? "" : "s"} left —{" "}
-            <TextLink href="/seller/plan">view plans</TextLink>.
+            <strong className="font-semibold">Your storefront is unavailable.</strong> Your plan
+            has ended, so shoppers can’t see your shop. You can still fulfil existing orders.{" "}
+            <TextLink href="/seller/plan">Renew</TextLink>.
+          </p>
+        ) : kind === "paused" ? (
+          <p className="text-foreground">
+            <strong className="font-semibold">
+              {pausedCount} product{pausedCount === 1 ? " is" : "s are"} paused.
+            </strong>{" "}
+            {planName ?? "Your plan"} allows {productLimit} live products, so the
+            rest are hidden from shoppers. Nothing was deleted.{" "}
+            <TextLink href="/seller/products">Review products</TextLink>.
+          </p>
+        ) : kind === "ending" ? (
+          <p className="text-foreground">
+            <strong className="font-semibold">
+              {planName ?? "Your plan"} ends in {days}.
+            </strong>{" "}
+            Renew to keep your current limits and features.{" "}
+            <TextLink href="/seller/plan">Renew plan</TextLink>.
+          </p>
+        ) : kind === "trial" ? (
+          <p className="text-foreground">
+            <strong className="font-semibold">Trial active.</strong> {days} left on{" "}
+            {planName ?? "your plan"}.{" "}
+            <TextLink href="/seller/plan">What happens next</TextLink>.
           </p>
         ) : (
           <p className="text-foreground">
             <strong className="font-semibold">
               {atLimit ? "Product limit reached." : "Nearing product limit."}
             </strong>{" "}
-            {productCount}/{productLimit} products used —{" "}
-            <TextLink href="/seller/plan">upgrade plan</TextLink>.
+            {liveCount}/{productLimit} live products.{" "}
+            <TextLink href="/seller/plan">See plans</TextLink>.
           </p>
         )}
       </div>
-      <Button variant="ghost" size="sm" onClick={dismiss} aria-label="Dismiss">
-        Dismiss
-      </Button>
+      {reasonKey ? (
+        <Button variant="ghost" size="sm" onClick={dismiss} aria-label="Dismiss">
+          Dismiss
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -31,7 +31,7 @@ healthRouter.get("/hello", requireAuth, async (req, res, next) => {
         tenantPayload = toTenantPublic(membership.tenant);
       }
     } catch {
-      // No membership yet — still a valid authenticated hello.
+      // No membership yet - still a valid authenticated hello.
     }
 
     const greetAs =

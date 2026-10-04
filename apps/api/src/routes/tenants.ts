@@ -7,6 +7,7 @@ import { requireTenantFromMembership } from "../tenant/middleware";
 import { tenantWhere } from "../tenant/tenantContext";
 import { toTenantPublic } from "../lib/serialize";
 import { isReservedSlug } from "../lib/slugify";
+import { cached, CACHE_KEYS, setPublicCache } from "../lib/cache";
 
 const createTenantSchema = z.object({
   name: z.string().min(2).max(100),
@@ -59,6 +60,15 @@ function parseTicker(raw: string | null): {
 /** Public: shop base domain + branding for chrome / onboarding. */
 tenantsRouter.get("/config", async (_req, res, next) => {
   try {
+    const body = await cached(CACHE_KEYS.tenantsConfig, 120, loadPublicConfig);
+    setPublicCache(res, 30);
+    return res.json(body);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+async function loadPublicConfig() {
     const [
       verificationRequired,
       trialDays,
@@ -86,7 +96,7 @@ tenantsRouter.get("/config", async (_req, res, next) => {
       getPlatformSetting("chatbot_html", ""),
       getPlatformSetting("web_url", env.webUrl),
     ]);
-    return res.json({
+    return {
       shopBaseDomain: env.shopBaseDomain,
       verificationRequired,
       trialDays,
@@ -106,11 +116,8 @@ tenantsRouter.get("/config", async (_req, res, next) => {
         billingEnabled,
         commissionPercent,
       },
-    });
-  } catch (err) {
-    return next(err);
-  }
-});
+    };
+}
 
 /** Public: check slug availability. */
 tenantsRouter.get("/slug-available", async (req, res, next) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useCookieConsent } from "@/components/cookie-consent";
 
 export function ChatWidgets({
   whatsappUrl,
@@ -9,8 +10,12 @@ export function ChatWidgets({
   whatsappUrl?: string | null;
   chatbotHtml?: string | null;
 }) {
+  const { hasConsent } = useCookieConsent();
+  // Third-party chat embeds set their own cookies - load only after functional consent.
+  const chatAllowed = hasConsent("functional");
+
   useEffect(() => {
-    if (!chatbotHtml?.trim()) return;
+    if (!chatAllowed || !chatbotHtml?.trim()) return;
     const host = document.createElement("div");
     host.id = "vendors-chatbot-host";
     host.innerHTML = chatbotHtml;
@@ -27,7 +32,7 @@ export function ChatWidgets({
     return () => {
       host.remove();
     };
-  }, [chatbotHtml]);
+  }, [chatAllowed, chatbotHtml]);
 
   if (!whatsappUrl?.trim()) return null;
 

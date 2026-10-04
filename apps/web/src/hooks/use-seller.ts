@@ -5,12 +5,14 @@ import type {
   BrandPublic,
   CategoryPublic,
   OrderPublic,
+  PlanPublic,
   ProductImageAsset,
   ProductPublic,
   SellerAnalytics,
   SellerStats,
   ShopCategoryPublic,
   ShopThemeSettings,
+  StoreThemeId,
   TeamMemberPublic,
   TenantPublic,
 } from "@vendors/shared-types";
@@ -36,8 +38,19 @@ export type SellerPlanInfo = {
     trialDays: number;
   } | null;
   productCount: number;
+  /** Published products; this is what the plan limit counts. */
+  liveCount: number;
+  /** Hidden by the system because the shop is over its plan limit. */
+  pausedCount: number;
   trialActive: boolean;
   trialDaysLeft: number;
+  /** End of the paid period, when on a paid plan with an end date. */
+  planExpiresAt: string | null;
+  /** Days until the trial or paid period ends; 0 when it doesn't end. */
+  daysLeft: number;
+  /** Plan ended with no free plan to fall back to: storefront hidden. */
+  lapsed: boolean;
+  plans: PlanPublic[];
 };
 
 export type SellerShop = TenantPublic & {
@@ -61,6 +74,7 @@ export type SellerBranding = {
   promoProductsEnabled?: boolean;
   newArrivalsEnabled?: boolean;
   newArrivalsDays?: number;
+  storeTheme?: StoreThemeId;
   shopName: string;
   slug: string;
 };
@@ -184,15 +198,101 @@ export function useSellerTeam() {
   });
 }
 
+export type SellerDomainRecord = {
+  purpose: "routing" | "ownership";
+  type: "A" | "CNAME" | "TXT";
+  name: string;
+  fqdn: string;
+  value: string;
+};
+
+export type SellerDomainInfo = {
+  customDomain: string | null;
+  /** plan: saved but the current plan doesn't include custom domains. */
+  status: "none" | "plan" | "pending" | "securing" | "live";
+  planAllowed: boolean;
+  records: SellerDomainRecord[];
+  verifiedAt: string | null;
+  checkedAt: string | null;
+  note: string | null;
+  platformUrl: string;
+  /** Hostname for ALIAS/ANAME records on root domains. */
+  aliasTarget: string;
+  liveUrl: string | null;
+  check: {
+    ownership: boolean;
+    routing: boolean;
+    found: { txt: string[]; cname: string[]; a: string[]; aaaa: string[] };
+  } | null;
+};
+
 export function useSellerDomain() {
   return useQuery({
     queryKey: ["seller", "domain"] as const,
-    queryFn: async () =>
-      apiFetch<{
-        customDomain: string | null;
-        cnameTarget: string;
-        instructions: string;
-      }>("/api/seller/domain"),
+    queryFn: async () => apiFetch<SellerDomainInfo>("/api/seller/domain"),
+  });
+}
+
+export type OwnedDomain = {
+  id: string;
+  domain: string;
+  tld: string;
+  status: "pending_payment" | "registering" | "active" | "failed" | "expired" | "cancelled";
+  free: boolean;
+  registeredAt: string | null;
+  expiresAt: string | null;
+  connected: boolean;
+  renewPrice: number | null;
+  autoRenews: boolean;
+  canRenew: boolean;
+  problem: string | null;
+};
+
+export type DomainContactDefaults = {
+  firstName: string;
+  lastName: string;
+  company: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  stateCode: string;
+  country: string;
+};
+
+export type DomainStoreInfo = {
+  /** False when domain purchases are switched off (no registrar configured). */
+  available: boolean;
+  planAllowed: boolean;
+  freeEligible: boolean;
+  freeTld: string;
+  tlds: { tld: string; price: number; renewPrice: number }[];
+  owned: OwnedDomain[];
+  contactDefaults: DomainContactDefaults;
+};
+
+export type DomainOption = {
+  domain: string;
+  tld: string;
+  available: boolean;
+  price: number;
+  renewPrice: number;
+  free: boolean;
+};
+
+export type DomainSearchResult = {
+  query: string;
+  exact: DomainOption;
+  results: DomainOption[];
+  suggestions: DomainOption[];
+};
+
+export function useDomainStore() {
+  return useQuery({
+    queryKey: ["seller", "domain-store"] as const,
+    queryFn: async () => apiFetch<DomainStoreInfo>("/api/seller/domain/store"),
+    refetchInterval: (q) =>
+      q.state.data?.owned.some((d) => d.status === "registering") ? 5000 : false,
   });
 }
 
@@ -234,7 +334,7 @@ export function useSellerShopCategories() {
   });
 }
 
-/** @deprecated Prefer focused hooks — kept for transitional imports. */
+/** @deprecated Prefer focused hooks - kept for transitional imports. */
 export function useSellerDashboard() {
   return useQuery({
     queryKey: queryKeys.seller.dashboard,

@@ -4,7 +4,9 @@ import Link from "next/link";
 import { Heart, ShoppingCart, Star } from "lucide-react";
 import type { ProductPublic } from "@vendors/shared-types";
 import { VerifiedBadge } from "@/components/shell/trust-badge";
-import { formatMoney, productImageUrl } from "@/lib/api";
+import { formatMoney, productImageUrl, resolveMediaUrl } from "@/lib/api";
+import { useStoreTheme } from "@/components/store-themes/context";
+import { ThemedProductCard } from "@/components/store-themes/product-cards";
 
 const NEW_BADGE_DAYS = 30;
 
@@ -19,7 +21,7 @@ export type ProductCardProps = {
   shopVerified?: boolean | null;
   reviewCount?: number;
   avgRating?: number | null;
-  /** ISO date — used for neutral “New” badge when not on sale. */
+  /** ISO date - used for neutral “New” badge when not on sale. */
   createdAt?: string | null;
   favorited?: boolean;
   onFavoriteToggle?: () => void;
@@ -27,6 +29,9 @@ export type ProductCardProps = {
   onAddToCart?: () => void;
   addToCartBusy?: boolean;
   className?: string;
+  /** Second photo - themed cards swap to it on hover. */
+  secondImageUrl?: string | null;
+  stockQty?: number | null;
 };
 
 function isRecentProduct(createdAt?: string | null): boolean {
@@ -37,7 +42,7 @@ function isRecentProduct(createdAt?: string | null): boolean {
 }
 
 /**
- * Product card — image, title, prominent price, muted meta.
+ * Product card - image, title, prominent price, muted meta.
  * Max one priority badge (discount % wins; else “New”). Stars only when reviewCount > 0.
  */
 export function ProductCard(
@@ -87,14 +92,42 @@ function ProductCardView({
   onAddToCart,
   addToCartBusy,
   className = "",
+  secondImageUrl,
+  stockQty,
 }: ProductCardProps) {
+  const { id: themeId } = useStoreTheme();
+  if (themeId !== "classic") {
+    return (
+      <ThemedProductCard
+        variant={themeId}
+        href={href}
+        imageUrl={imageUrl}
+        secondImageUrl={secondImageUrl}
+        title={title}
+        price={price}
+        compareAtPrice={compareAtPrice}
+        currency={currency}
+        shopName={shopName}
+        reviewCount={reviewCount}
+        avgRating={avgRating}
+        stockQty={stockQty}
+        isNew={isRecentProduct(createdAt)}
+        favorited={favorited}
+        onFavoriteToggle={onFavoriteToggle}
+        favoriteBusy={favoriteBusy}
+        onAddToCart={onAddToCart}
+        addToCartBusy={addToCartBusy}
+        className={className}
+      />
+    );
+  }
   const onSale =
     compareAtPrice != null && compareAtPrice > price && price > 0;
   const pctOff = onSale
     ? Math.round(((compareAtPrice! - price) / compareAtPrice!) * 100)
     : 0;
   const showRating = reviewCount > 0 && avgRating != null;
-  /** Discount wins; otherwise one neutral “New” badge — never stack. */
+  /** Discount wins; otherwise one neutral “New” badge - never stack. */
   const priorityBadge =
     onSale && pctOff > 0
       ? ({ kind: "discount" as const, label: `−${pctOff}%` })
@@ -110,7 +143,7 @@ function ProductCardView({
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <img loading="lazy" decoding="async"
               src={imageUrl}
               alt={title}
               className="h-full w-full object-cover motion-safe:transition motion-safe:duration-300 motion-safe:group-hover:scale-[1.03]"
@@ -121,7 +154,7 @@ function ProductCardView({
             </div>
           )}
           {priorityBadge?.kind === "discount" && (
-            <span className="absolute left-token-3 top-token-3 rounded-md bg-accent px-token-2 py-0.5 text-xs font-semibold text-accent-foreground shadow-sm">
+            <span className="absolute left-token-3 top-token-3 rounded-md bg-accent-strong px-token-2 py-0.5 text-xs font-semibold text-accent-foreground shadow-sm">
               {priorityBadge.label}
             </span>
           )}
@@ -136,7 +169,7 @@ function ProductCardView({
             {title}
           </h3>
           <div className="flex flex-wrap items-baseline gap-token-2">
-            <p className="text-base font-semibold text-accent">
+            <p className="text-base font-semibold text-accent-strong dark:text-accent-on-dark">
               {formatMoney(price, currency)}
             </p>
             {onSale && (
@@ -227,6 +260,8 @@ export function ProductCardFromProduct({
     <ProductCardView
       href={href}
       imageUrl={productImageUrl(product.images)}
+      secondImageUrl={product.images[1] ? resolveMediaUrl(product.images[1]) : null}
+      stockQty={product.stockQty}
       title={product.title}
       price={product.price}
       compareAtPrice={product.compareAtPrice}

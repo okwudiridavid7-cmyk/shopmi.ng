@@ -37,7 +37,7 @@ type Props = {
 
 /**
  * Site-wide empty / soft-error state.
- * Backed by EmptyState04 (marquee + condition icons). Never pass raw API messages —
+ * Backed by EmptyState04 (marquee + condition icons). Never pass raw API messages -
  * use `kind` from `classifyQueryError` or domain presets (`products`, `orders`, …).
  */
 export function EmptyState({
@@ -118,7 +118,7 @@ const NO_TENANT_LINKS: ErrorPageLink[] = [
   },
 ];
 
-/** Map a query failure to the shared error page — never leak API strings. */
+/** Map a query failure to the shared error page - never leak API strings. */
 export function QueryErrorState({
   error,
   onRetry,
@@ -171,7 +171,7 @@ export function QueryErrorState({
       }
       description={
         classified === "no_tenant"
-          ? "You’re signed in as a seller, but you don’t have a shop yet. Create one to continue, or browse the marketplace."
+          ? "Create a shop to continue."
           : undefined
       }
       links={classified === "no_tenant" ? NO_TENANT_LINKS : undefined}

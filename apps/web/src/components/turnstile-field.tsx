@@ -109,7 +109,7 @@ export function TurnstileField({
         widgetIdRef.current = null;
       }
     };
-    // onToken intentionally omitted — parent should pass stable setter
+    // onToken intentionally omitted - parent should pass stable setter
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteKey, theme]);
 

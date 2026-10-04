@@ -5,7 +5,7 @@ type SectionHeaderProps = {
   actions?: React.ReactNode;
 };
 
-/** Shared marketplace section header — display title + optional muted line. */
+/** Shared marketplace section header - display title + optional muted line. */
 export function SectionHeader({
   title,
   description,

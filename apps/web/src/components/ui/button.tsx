@@ -11,7 +11,7 @@ type Size = "sm" | "md" | "lg";
 
 const variantClass: Record<Variant, string> = {
   primary:
-    "bg-accent text-white shadow-sm hover:bg-accent-deep focus-visible:ring-2 focus-visible:ring-ring",
+    "bg-accent-strong text-white shadow-sm hover:brightness-90 focus-visible:ring-2 focus-visible:ring-ring",
   secondary:
     "bg-muted text-foreground shadow-sm hover:bg-border/60 focus-visible:ring-2 focus-visible:ring-ring",
   outline:
@@ -27,6 +27,11 @@ const sizeClass: Record<Size, string> = {
   md: "px-token-4 py-token-2 text-sm rounded-md",
   lg: "px-token-6 py-token-3 text-sm rounded-md",
 };
+
+/** Button styling for links and other non-button elements. */
+export function buttonClasses(variant: Variant = "primary", size: Size = "md", className = "") {
+  return `inline-flex items-center justify-center gap-token-2 font-medium transition disabled:opacity-60 motion-safe:active:scale-[0.98] ${variantClass[variant]} ${sizeClass[size]} ${className}`;
+}
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
@@ -52,7 +57,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type={type}
         disabled={disabled}
-        className={`inline-flex items-center justify-center gap-token-2 font-medium transition disabled:opacity-60 motion-safe:active:scale-[0.98] ${variantClass[variant]} ${sizeClass[size]} ${className}`}
+        className={buttonClasses(variant, size, className)}
         {...rest}
       >
         {children}

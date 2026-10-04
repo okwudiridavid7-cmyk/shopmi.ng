@@ -1,13 +1,14 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { Mail, User } from "lucide-react";
 import type { AuthTokensResponse } from "@vendors/shared-types";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { markWalkthroughPending } from "@/components/walkthrough";
-import { Button, Label } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { PasswordStrengthField } from "@/components/ui/password-strength";
 import { TextLink } from "@/components/ui/text-link";
@@ -18,15 +19,20 @@ import { GoogleContinueButton } from "@/components/google-button";
 
 function SignupAccountForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { refresh } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
-  const role = searchParams.get("role") === "seller" ? "seller" : "buyer";
+  const wantsSeller = searchParams.get("role") === "seller";
   const [countryCode, setCountryCode] = useState("NG");
   const [stateCode, setStateCode] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    if (wantsSeller) router.replace("/onboarding");
+  }, [wantsSeller, router]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,7 +50,7 @@ function SignupAccountForm() {
           name: form.get("name"),
           email: form.get("email"),
           password: password || form.get("password"),
-          role,
+          role: "buyer",
           countryCode: "NG",
           stateCode: stateCode || undefined,
           location: locationLabel || undefined,
@@ -52,7 +58,7 @@ function SignupAccountForm() {
       });
       markWalkthroughPending();
       await refresh();
-      window.location.assign(role === "seller" ? "/onboarding" : "/explore");
+      window.location.assign("/explore");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
@@ -60,21 +66,16 @@ function SignupAccountForm() {
     }
   }
 
+  if (wantsSeller) return null;
+
   return (
     <AuthSplitLayout
-      title={
-        role === "seller"
-          ? "Create your seller account"
-          : "Create your buyer account"
-      }
-      subtitle="We’ll only need your Nigerian state for now."
+      title="Create your buyer account"
+      subtitle="Save favourites, track orders and check out faster."
     >
       {!emailMode ? (
         <div className="space-y-4">
-          <GoogleContinueButton
-            role={role}
-            returnTo={role === "seller" ? "/onboarding" : "/explore"}
-          />
+          <GoogleContinueButton role="buyer" returnTo="/explore" />
           <Button
             type="button"
             variant="outline"
@@ -86,15 +87,12 @@ function SignupAccountForm() {
             Continue with email
           </Button>
           <p className="text-center text-sm text-muted-foreground lg:text-left">
-            Want a different role?{" "}
-            <TextLink href="/signup">Choose again</TextLink>
+            Selling instead?{" "}
+            <TextLink href="/onboarding">Open a shop</TextLink>
           </p>
         </div>
       ) : (
-        <SettingsCard
-          title="Continue with email"
-          description="Manage your account details to get started."
-        >
+        <SettingsCard title="Continue with email">
           <form onSubmit={onSubmit} className="space-y-5">
             <Label>
               <span className="text-sm font-medium">Full name</span>
@@ -112,6 +110,7 @@ function SignupAccountForm() {
               <span className="text-sm font-medium">Email</span>
               <InputWithIcon
                 icon={<Mail />}
+                placeholder="you@example.com"
                 name="email"
                 type="email"
                 required
@@ -159,8 +158,8 @@ function SignupAccountForm() {
             Other sign-up options
           </button>
           <p className="mt-3 text-center text-sm text-muted-foreground lg:text-left">
-            Want a different role?{" "}
-            <TextLink href="/signup">Choose again</TextLink>
+            Selling instead?{" "}
+            <TextLink href="/onboarding">Open a shop</TextLink>
           </p>
         </SettingsCard>
       )}

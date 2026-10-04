@@ -79,6 +79,7 @@ export function toTenantPublic(tenant: Tenant): TenantPublic {
     termsText: tenant.termsText,
     privacyText: tenant.privacyText,
     trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null,
+    planExpiresAt: tenant.planExpiresAt?.toISOString() ?? null,
     planId: tenant.planId,
     createdAt: tenant.createdAt.toISOString(),
   };

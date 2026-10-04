@@ -1,10 +1,12 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { env } from "./config/env";
 import { isCorsOriginAllowed, parseAllowedOrigins } from "./lib/corsOrigin";
+import { isVerifiedCustomDomain } from "./lib/customDomains";
 import { authRouter } from "./auth/routes";
 import { tenantsRouter } from "./routes/tenants";
 import { shopsRouter } from "./routes/shops";
@@ -32,6 +34,7 @@ import { sellerAiRouter } from "./routes/sellerAi";
 import { sellerToolsRouter, logoPublicRouter } from "./routes/sellerTools";
 import { sellerAnalyticsRouter } from "./routes/sellerAnalytics";
 import { adminRouter } from "./routes/admin";
+import { adminDomainsRouter, sellerDomainStoreRouter } from "./routes/domainStore";
 import { contactRouter } from "./routes/contact";
 import { plansRouter } from "./routes/plans";
 import {
@@ -51,6 +54,7 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+app.use(compression());
 app.use(
   cors({
     origin(origin, cb) {
@@ -60,13 +64,23 @@ app.use(
         shopBaseDomain: env.shopBaseDomain,
         allowedOrigins: parseAllowedOrigins(env.allowedOrigins),
       });
-      return cb(null, allowed);
+      if (allowed || !origin) return cb(null, allowed);
+      let hostname: string;
+      try {
+        hostname = new URL(origin).hostname;
+      } catch {
+        return cb(null, false);
+      }
+      isVerifiedCustomDomain(hostname)
+        .then((ok) => cb(null, ok))
+        .catch(() => cb(null, false));
     },
     credentials: true,
+    maxAge: 86400,
   })
 );
 
-// Paystack webhook needs raw body for HMAC — mount before json parser
+// Paystack webhook needs raw body for HMAC - mount before json parser
 app.use("/api/paystack", paystackRouter);
 
 // REM-09: tighter body limit for contact before the global 2mb parser
@@ -74,7 +88,10 @@ app.use("/api/contact", express.json({ limit: "32kb" }), contactRouter);
 
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
-app.use("/uploads", express.static(path.resolve(env.uploadsDir)));
+app.use(
+  "/uploads",
+  express.static(path.resolve(env.uploadsDir), { maxAge: "30d", immutable: true })
+);
 
 app.use(healthRouter);
 app.use("/api/geo", geoRouter);
@@ -94,8 +111,10 @@ app.use("/api/seller/tools", sellerToolsRouter);
 app.use("/api/seller/analytics", sellerAnalyticsRouter);
 app.use("/api/logo", logoPublicRouter);
 app.use("/api/admin/verification-requests", adminVerificationRouter);
+app.use("/api/admin", adminDomainsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/seller/team", sellerTeamRouter);
+app.use("/api/seller/domain", sellerDomainStoreRouter);
 app.use("/api/seller/domain", sellerDomainRouter);
 app.use("/api/seller/notifications", sellerNotificationsRouter);
 app.use("/api/seller/plan", sellerPlanRouter);

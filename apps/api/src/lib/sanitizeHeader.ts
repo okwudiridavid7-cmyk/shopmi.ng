@@ -1,6 +1,6 @@
 /**
  * Reject email-header values that contain CRLF or other ASCII controls
- * (header-injection / subject smuggling). Does not silently strip — callers
+ * (header-injection / subject smuggling). Does not silently strip - callers
  * should return 400 to the client when this throws.
  */
 export class HeaderInjectionError extends Error {

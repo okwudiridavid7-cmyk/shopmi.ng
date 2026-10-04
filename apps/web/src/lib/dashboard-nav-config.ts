@@ -1,9 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BadgeCheck,
+  Bell,
   CreditCard,
+  Earth,
   Globe,
   Heart,
+  LayoutTemplate,
   LayoutDashboard,
   Megaphone,
   Package,
@@ -108,6 +111,13 @@ export const SELLER_NAV_GROUPS: NavGroup[] = [
     label: "Storefront",
     items: [
       {
+        id: "themes",
+        href: "/seller/themes",
+        label: "Themes",
+        icon: LayoutTemplate,
+        keywords: ["template", "layout", "design", "look", "store theme"],
+      },
+      {
         id: "website",
         href: "/seller/website",
         label: "Website",
@@ -140,6 +150,13 @@ export const SELLER_NAV_GROUPS: NavGroup[] = [
         ],
       },
       {
+        id: "domain",
+        href: "/seller/domain",
+        label: "Domain",
+        icon: Earth,
+        keywords: ["custom domain", "buy domain", "com.ng", "dns", "url"],
+      },
+      {
         id: "branding",
         href: "/seller/branding",
         label: "Branding",
@@ -150,6 +167,13 @@ export const SELLER_NAV_GROUPS: NavGroup[] = [
         href: "/seller/campaigns",
         label: "Campaigns",
         icon: Megaphone,
+      },
+      {
+        id: "notifications",
+        href: "/seller/notifications",
+        label: "Notifications",
+        icon: Bell,
+        keywords: ["whatsapp", "alerts", "order alerts"],
       },
     ],
   },
@@ -243,11 +267,18 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         icon: CreditCard,
         keywords: ["pricing", "subscriptions"],
       },
+      {
+        id: "domains",
+        href: "/admin/domains",
+        label: "Domains",
+        icon: Earth,
+        keywords: ["registrar", "com.ng", "domain prices"],
+      },
     ],
   },
 ];
 
-/** @deprecated Prefer navGroupsForMode — flat list for command palette / legacy. */
+/** @deprecated Prefer navGroupsForMode - flat list for command palette / legacy. */
 export const BUYER_NAV: NavItem[] = BUYER_NAV_GROUPS.flatMap((g) => g.items);
 export const SELLER_NAV: NavItem[] = SELLER_NAV_GROUPS.flatMap((g) => g.items);
 export const ADMIN_NAV: NavItem[] = ADMIN_NAV_GROUPS.flatMap((g) => g.items);

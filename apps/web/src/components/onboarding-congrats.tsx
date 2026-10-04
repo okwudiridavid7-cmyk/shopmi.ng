@@ -13,7 +13,7 @@ type Props = {
 };
 
 /**
- * Post-onboarding congratulations — setup store, dashboard demo, or first product.
+ * Post-onboarding congratulations - setup store, dashboard demo, or first product.
  */
 export function OnboardingCongrats({
   open,
@@ -103,7 +103,7 @@ export function OnboardingCongrats({
                 Add your first product
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                List something and start selling today.
+                List something and start taking orders today.
               </span>
             </span>
           </Link>

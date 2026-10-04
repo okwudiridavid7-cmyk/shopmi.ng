@@ -21,7 +21,7 @@ export function parseProductImageAssets(raw: unknown): ProductImageAsset[] {
   return out;
 }
 
-/** Public/display URLs — respects per-product watermark toggle. */
+/** Public/display URLs - respects per-product watermark toggle. */
 export function resolveProductDisplayImages(
   raw: unknown,
   watermarkEnabled: boolean

@@ -21,7 +21,7 @@ export function themeDropdownItems(setTheme: (v: string) => void): DropdownItem[
   ];
 }
 
-/** @deprecated Navbar toggle removed in Wave 3 — use account dropdown instead. */
+/** @deprecated Navbar toggle removed in Wave 3 - use account dropdown instead. */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -52,7 +52,7 @@ export function ThemeToggle() {
             onClick={() => setTheme(opt.value)}
             className={`rounded-sm px-token-2 py-token-1 text-xs font-medium transition-colors motion-safe:active:scale-95 ${
               active
-                ? "bg-accent text-accent-foreground shadow-sm"
+                ? "bg-accent-strong text-accent-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
             aria-pressed={active}

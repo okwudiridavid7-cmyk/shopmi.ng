@@ -1,10 +1,11 @@
 import { Router, raw } from "express";
 import { fulfillPaidOrder, verifyPaystackSignature } from "../services/orders";
+import { fulfillDomainPayment, PAYMENT_PREFIX } from "../services/domains";
 
 export const paystackRouter = Router();
 
 /**
- * Paystack webhook — verify HMAC signature; never trust client-side payment success.
+ * Paystack webhook - verify HMAC signature; never trust client-side payment success.
  * Mounted with express.raw for this path only (see index.ts).
  */
 paystackRouter.post(
@@ -28,11 +29,15 @@ paystackRouter.post(
 
       const event = JSON.parse(rawBody.toString("utf8")) as {
         event: string;
-        data: { reference: string; status: string };
+        data: { reference: string; status: string; amount?: number };
       };
 
       if (event.event === "charge.success" && event.data?.reference) {
-        await fulfillPaidOrder(event.data.reference);
+        if (event.data.reference.startsWith(PAYMENT_PREFIX)) {
+          await fulfillDomainPayment(event.data.reference, event.data.amount);
+        } else {
+          await fulfillPaidOrder(event.data.reference);
+        }
       }
 
       return res.sendStatus(200);

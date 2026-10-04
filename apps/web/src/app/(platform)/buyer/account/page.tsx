@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Lock, Mail, Phone, User } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { useComingSoon } from "@/components/coming-soon";
 import { EmptyState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { TextLink } from "@/components/ui/text-link";
+import { useToast } from "@/components/ui/toast";
 import {
   useBuyerMe,
   useChangePassword,
@@ -24,17 +26,17 @@ export default function BuyerAccountPage() {
   const updateProfile = useUpdateBuyerProfile();
   const changePassword = useChangePassword();
   const qc = useQueryClient();
+  const comingSoon = useComingSoon();
+  const { toast } = useToast();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [orderEmails, setOrderEmails] = useState(true);
-  const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [profileErr, setProfileErr] = useState<string | null>(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
   const [passwordErr, setPasswordErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,7 +50,6 @@ export default function BuyerAccountPage() {
 
   async function saveProfile(e: FormEvent) {
     e.preventDefault();
-    setProfileMsg(null);
     setProfileErr(null);
     try {
       const res = await updateProfile.mutateAsync({
@@ -59,7 +60,7 @@ export default function BuyerAccountPage() {
       });
       setAuthUser(res.user);
       await qc.invalidateQueries({ queryKey: queryKeys.buyer.me });
-      setProfileMsg("Profile saved");
+      toast({ title: "Profile saved", tone: "success" });
     } catch (err) {
       setProfileErr(err instanceof Error ? err.message : "Save failed");
     }
@@ -67,13 +68,12 @@ export default function BuyerAccountPage() {
 
   async function savePassword(e: FormEvent) {
     e.preventDefault();
-    setPasswordMsg(null);
     setPasswordErr(null);
     try {
       await changePassword.mutateAsync({ currentPassword, newPassword });
       setCurrentPassword("");
       setNewPassword("");
-      setPasswordMsg("Password updated");
+      toast({ title: "Password updated", tone: "success" });
     } catch (err) {
       setPasswordErr(
         err instanceof Error ? err.message : "Could not change password"
@@ -141,7 +141,7 @@ export default function BuyerAccountPage() {
                   icon={<Phone />}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+234…"
+                  placeholder="+234 xxx xxx xxxx"
                 />
               </Label>
               <Label>
@@ -150,7 +150,7 @@ export default function BuyerAccountPage() {
                   icon={<Phone />}
                   value={whatsappNumber}
                   onChange={(e) => setWhatsappNumber(e.target.value)}
-                  placeholder="+234…"
+                  placeholder="+234 xxx xxx xxxx"
                 />
               </Label>
             </div>
@@ -171,36 +171,24 @@ export default function BuyerAccountPage() {
             </p>
           </CardHeader>
           <CardBody className="max-w-md space-y-4">
-            <label className="flex items-start gap-3 rounded-xl border border-border p-4 text-sm transition hover:bg-muted/40">
+            <label className="flex items-center gap-3 rounded-xl border border-border p-4 text-sm transition hover:bg-muted/40">
               <input
                 type="checkbox"
                 checked={orderEmails}
                 onChange={(e) => setOrderEmails(e.target.checked)}
-                className="mt-1 h-4 w-4 accent-[var(--color-accent)]"
+                className="h-4 w-4 accent-[var(--color-accent)]"
               />
-              <span>
-                <span className="font-medium text-foreground">
-                  Order emails
-                </span>
-                <span className="mt-1 block text-muted-foreground">
-                  Receive email updates when your order status changes.
-                </span>
-              </span>
+              <span className="font-medium text-foreground">Order emails</span>
             </label>
-            <label className="flex items-start gap-3 rounded-xl border border-border p-4 text-sm opacity-70">
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border p-4 text-sm transition hover:bg-muted/40">
               <input
                 type="checkbox"
-                disabled
                 checked={false}
-                className="mt-1 h-4 w-4"
+                onChange={() => comingSoon("WhatsApp notifications")}
+                className="h-4 w-4 accent-[var(--color-accent)]"
               />
-              <span>
-                <span className="font-medium text-foreground">
-                  WhatsApp order alerts
-                </span>
-                <span className="mt-1 block text-muted-foreground">
-                  Coming soon — WhatsApp notifications aren’t enabled yet.
-                </span>
+              <span className="font-medium text-foreground">
+                WhatsApp order alerts
               </span>
             </label>
           </CardBody>
@@ -210,11 +198,6 @@ export default function BuyerAccountPage() {
           {profileErr && (
             <p className="text-sm text-red-700 dark:text-red-400">
               {profileErr}
-            </p>
-          )}
-          {profileMsg && (
-            <p className="text-sm text-emerald-700 dark:text-emerald-400">
-              {profileMsg}
             </p>
           )}
           <Button
@@ -245,6 +228,7 @@ export default function BuyerAccountPage() {
                   <InputWithIcon
                     icon={<Lock />}
                     type="password"
+                    placeholder="Your current password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     required
@@ -256,6 +240,7 @@ export default function BuyerAccountPage() {
                   <InputWithIcon
                     icon={<Lock />}
                     type="password"
+                    placeholder="At least 8 characters"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
@@ -267,11 +252,6 @@ export default function BuyerAccountPage() {
               {passwordErr && (
                 <p className="text-sm text-red-700 dark:text-red-400">
                   {passwordErr}
-                </p>
-              )}
-              {passwordMsg && (
-                <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                  {passwordMsg}
                 </p>
               )}
               <Button

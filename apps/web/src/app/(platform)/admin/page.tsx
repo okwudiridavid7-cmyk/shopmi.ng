@@ -88,7 +88,7 @@ export default function AdminOverviewPage() {
   const periodLabel = selectedDay ?? period;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-stagger>
       <AdminHero
         firstName={firstName}
         roleBadge="Administrator"
@@ -96,44 +96,38 @@ export default function AdminOverviewPage() {
         onSelectedDayChange={setSelectedDay}
         trailing={
           selectedDay ? null : (
-            <AdminPeriodToggle value={period} onChange={setPeriod} />
+            <AdminPeriodToggle tone="onInk" value={period} onChange={setPeriod} />
           )
         }
         metrics={
-          <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" data-stagger>
+            <AdminHeroMetric
+              featured
+              label={`GMV (${periodLabel})`}
+              value={gmv}
+              hint={`${data.paidOrderCount} paid orders`}
+              icon={<Banknote className="h-4 w-4" aria-hidden />}
+            />
             <AdminHeroMetric
               label="Total shops"
               value={String(data.tenantCount)}
-              hint="Marketplace shops"
-              icon={<Store className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-accent-soft text-accent dark:text-accent-on-dark"
+              icon={<Store className="h-4 w-4" aria-hidden />}
             />
             <AdminHeroMetric
               label="Total users"
               value={String(data.userCount)}
-              hint="Buyers + sellers"
-              icon={<Users className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-info-muted text-info"
-            />
-            <AdminHeroMetric
-              label={`GMV (${periodLabel})`}
-              value={gmv}
-              hint={`${data.paidOrderCount} paid orders`}
-              icon={<Banknote className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-success-muted text-success"
+              icon={<Users className="h-4 w-4" aria-hidden />}
             />
             <AdminHeroMetric
               label="Pending verifications"
               value={String(data.pendingVerifications)}
-              hint="Awaiting review"
-              icon={<Clock className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-warning-muted text-warning"
+              icon={<Clock className="h-4 w-4" aria-hidden />}
             />
           </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-stagger>
         <AdminMetricCard
           label="Buyers"
           value={String(data.buyerCount ?? 0)}
@@ -174,6 +168,7 @@ export default function AdminOverviewPage() {
             }
             data={signupChart}
             valueLabel="Signups"
+            fillDays={selectedDay || period === "today" ? undefined : period === "week" ? 7 : 30}
             periodControl={
               selectedDay ? undefined : (
                 <AdminPeriodToggle value={period} onChange={setPeriod} />

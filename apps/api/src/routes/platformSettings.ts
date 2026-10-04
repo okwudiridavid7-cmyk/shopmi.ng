@@ -2,9 +2,16 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { requireAuth, requireRoles } from "../auth/middleware";
+import { CACHE_KEYS, invalidateCache } from "../lib/cache";
+import { invalidatePlatformSettings } from "../lib/platformSettings";
+
+async function afterSettingsWrite(): Promise<void> {
+  invalidatePlatformSettings();
+  await invalidateCache(CACHE_KEYS.tenantsConfig, CACHE_KEYS.homepageBanners);
+}
 
 /**
- * platform_settings — super-admin editable, no redeploy required.
+ * platform_settings - super-admin editable, no redeploy required.
  *
  * SEPARATE FROM .env SECRETS:
  * - .env holds secrets that must NOT be click-editable: JWT secrets, Google OAuth
@@ -50,6 +57,7 @@ platformSettingsRouter.get("/:key", async (req, res, next) => {
     if (!setting) {
       return res.status(404).json({ error: "Setting not found" });
     }
+    await afterSettingsWrite();
     return res.json({ setting });
   } catch (err) {
     return next(err);
@@ -90,6 +98,7 @@ platformSettingsRouter.put("/", async (req, res, next) => {
         })
       )
     );
+    await afterSettingsWrite();
     return res.json({ settings });
   } catch (err) {
     if (err instanceof z.ZodError) {

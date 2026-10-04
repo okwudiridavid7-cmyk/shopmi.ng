@@ -1,5 +1,5 @@
 /**
- * Public shop URLs — prefer subdomain when SHOP_BASE_DOMAIN is set,
+ * Public shop URLs - prefer subdomain when SHOP_BASE_DOMAIN is set,
  * fall back to path-style `/shops/{slug}` on plain localhost.
  */
 

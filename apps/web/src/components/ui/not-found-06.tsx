@@ -39,7 +39,7 @@ export type ErrorPageProps = {
   status?: number;
   title?: string;
   description?: string;
-  /** Suggested destinations — defaults from `kind`. */
+  /** Suggested destinations - defaults from `kind`. */
   links?: ErrorPageLink[];
   /** Primary CTA below the grid. */
   primaryHref?: string;
@@ -67,7 +67,7 @@ const KIND: Record<ErrorPageKind, KindConfig> = {
     icon: OctagonX,
     title: "Page not found",
     description:
-      "That link doesn’t exist or may have moved. Try one of these instead.",
+      "That link doesn’t exist or may have moved.",
     links: [
       {
         icon: Home,
@@ -102,7 +102,7 @@ const KIND: Record<ErrorPageKind, KindConfig> = {
     icon: Lock,
     title: "You don’t have access",
     description:
-      "This area needs a different account or permission. Sign in again or head somewhere public.",
+      "This area needs a different account or permission.",
     links: [
       {
         icon: Home,
@@ -125,7 +125,7 @@ const KIND: Record<ErrorPageKind, KindConfig> = {
       {
         icon: LifeBuoy,
         title: "Support",
-        description: "Help getting unstuck",
+        description: "Get help from us",
         href: "/support",
       },
     ],
@@ -137,7 +137,7 @@ const KIND: Record<ErrorPageKind, KindConfig> = {
     icon: ServerCrash,
     title: "Something went wrong",
     description:
-      "We hit an unexpected error on our side. You can try again, or visit a safer page.",
+      "We hit an unexpected error on our side.",
     links: [
       {
         icon: Home,
@@ -160,7 +160,7 @@ const KIND: Record<ErrorPageKind, KindConfig> = {
       {
         icon: HelpCircle,
         title: "FAQs",
-        description: "While we sort this out",
+        description: "Common questions answered",
         href: "/faq",
       },
     ],
@@ -183,13 +183,13 @@ const KIND: Record<ErrorPageKind, KindConfig> = {
       {
         icon: LifeBuoy,
         title: "Support",
-        description: "If this keeps happening",
+        description: "Get help from us",
         href: "/support",
       },
       {
         icon: HelpCircle,
         title: "FAQs",
-        description: "Troubleshooting tips",
+        description: "Common questions answered",
         href: "/faq",
       },
       {
@@ -207,7 +207,7 @@ const KIND: Record<ErrorPageKind, KindConfig> = {
     icon: AlertTriangle,
     title: "We couldn’t complete that",
     description:
-      "Something didn’t work as expected. Pick a destination below or go home.",
+      "Something didn’t work as expected.",
     links: [
       {
         icon: Home,

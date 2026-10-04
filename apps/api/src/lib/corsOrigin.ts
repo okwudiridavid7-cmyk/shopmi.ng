@@ -19,7 +19,7 @@ function hostnameOf(urlOrHost: string): string {
 
 /**
  * Whether a browser Origin is allowed to call the API with credentials.
- * Missing Origin (non-browser / same-origin proxies) remains allowed — same
+ * Missing Origin (non-browser / same-origin proxies) remains allowed - same
  * as the previous middleware behavior.
  */
 export function isCorsOriginAllowed(
@@ -65,7 +65,7 @@ export function isCorsOriginAllowed(
     return true;
   }
 
-  // Dev-only hosts — never in production.
+  // Dev-only hosts - never in production.
   if (!cfg.isProd) {
     if (
       host === "localhost" ||
@@ -75,7 +75,7 @@ export function isCorsOriginAllowed(
     ) {
       return true;
     }
-    // Local shop base like "localhost:3000" — allow subdomain-style only in non-prod
+    // Local shop base like "localhost:3000" - allow subdomain-style only in non-prod
     if (
       shopBase === "localhost" ||
       shopBase === "127.0.0.1" ||

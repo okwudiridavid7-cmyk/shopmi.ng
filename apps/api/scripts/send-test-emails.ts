@@ -56,7 +56,7 @@ const SAMPLES: {
       reference: "ord_test_buyer_001",
       orderId: "ord_test",
       itemsHtml:
-        "<p style='margin:0'>Adire Wrap Dress × 1 — NGN 17,000.00</p>",
+        "<p style='margin:0'>Adire Wrap Dress × 1 - NGN 17,000.00</p>",
       orderUrl: "https://shopmi.ng/buyer/orders",
     },
   },
@@ -67,7 +67,7 @@ const SAMPLES: {
       totalLabel: "NGN 17,000.00",
       buyerEmail: "okwudiridavid7@gmail.com",
       itemsHtml:
-        "<p style='margin:0'>Adire Wrap Dress × 1 — NGN 17,000.00</p>",
+        "<p style='margin:0'>Adire Wrap Dress × 1 - NGN 17,000.00</p>",
       ordersUrl: "https://shopmi.ng/seller/orders",
     },
   },
@@ -84,8 +84,17 @@ const SAMPLES: {
     data: {
       name: "Ada",
       shopName: "Greenfield Crafts",
-      reason: "ID photo was blurry — please upload a clearer scan.",
+      reason: "ID photo was blurry - please upload a clearer scan.",
       verificationUrl: "https://shopmi.ng/seller/verification",
+    },
+  },
+  {
+    kind: "team_invite",
+    data: {
+      shopName: "Greenfield Crafts",
+      inviterName: "Ada",
+      roleLabel: "staff member",
+      setPasswordUrl: "https://shopmi.ng/reset-password?token=test-token",
     },
   },
 ];

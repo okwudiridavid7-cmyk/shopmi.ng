@@ -41,7 +41,7 @@ const bodySchema = z.object({
   phone: z.string().max(40).optional(),
   subject: z.string().min(3).max(160),
   message: z.string().min(10).max(5000),
-  /** Honeypot — must stay empty (REM-08 lite). */
+  /** Honeypot - must stay empty (REM-08 lite). */
   website: z.string().max(200).optional(),
   /** Cloudflare Turnstile token (REM-14). */
   captchaToken: z.string().max(4096).optional(),
@@ -319,10 +319,10 @@ contactRouter.post(
         return res.status(404).json({ error: "Shop not found" });
       }
 
-      const theme =
-        tenant.themeSettings && typeof tenant.themeSettings === "object"
-          ? (tenant.themeSettings as Record<string, unknown>)
-          : {};
+    const theme =
+      tenant.themeSettings && typeof tenant.themeSettings === "object"
+        ? (tenant.themeSettings as Record<string, unknown>)
+        : {};
 
       if (!isShopContactFormEnabled(theme)) {
         logContactEvent({

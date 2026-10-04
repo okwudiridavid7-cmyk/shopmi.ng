@@ -88,7 +88,7 @@ export function MarketplacePagination({
                 onClick={() => onPageChange(item)}
                 className={`min-w-[2rem] rounded-md px-token-2 py-token-1 text-sm transition ${
                   item === page
-                    ? "bg-accent font-medium text-accent-foreground"
+                    ? "bg-accent-strong font-medium text-accent-foreground"
                     : "text-foreground hover:bg-muted"
                 }`}
               >

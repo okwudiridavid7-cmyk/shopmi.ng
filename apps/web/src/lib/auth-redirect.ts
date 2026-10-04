@@ -1,6 +1,6 @@
 import type { UserRole } from "@vendors/shared-types";
 
-/** Safe internal path for post-login redirects — blocks open redirects. */
+/** Safe internal path for post-login redirects - blocks open redirects. */
 export function safeReturnTo(value: string | null | undefined): string | null {
   if (!value) return null;
   if (!value.startsWith("/") || value.startsWith("//")) return null;

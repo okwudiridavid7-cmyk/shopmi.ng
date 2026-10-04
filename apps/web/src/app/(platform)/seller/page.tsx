@@ -25,7 +25,7 @@ import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
 import { SellerPlanBanner } from "@/components/seller-plan-banner";
 import { TextLink } from "@/components/ui/text-link";
-import { formatMoney } from "@/lib/api";
+import { formatMoney, formatMoneyCompact } from "@/lib/api";
 import { firstNameFromUser } from "@/lib/auth-redirect";
 import { buildPublicShopUrl, shopPathUrl } from "@/lib/shop-url";
 import { useAuth } from "@/hooks/use-auth";
@@ -58,16 +58,11 @@ export default function SellerOverviewPage() {
     [a?.salesOverTime]
   );
 
-  const revenueSpark = useMemo(
-    () => chartData.map((row) => ({ value: row.value })),
-    [chartData]
-  );
-
   const planHint = plan.data
     ? plan.data.trialActive
       ? `Trial · ${plan.data.trialDaysLeft}d left`
       : plan.data.plan?.name ?? "Plan"
-    : "—";
+    : "-";
 
   if (analytics.isError && !a) {
     return (
@@ -88,8 +83,15 @@ export default function SellerOverviewPage() {
   const productCount =
     a?.totals.productCount ?? stats.data?.productCount ?? 0;
 
+  const periodName = selectedDay ?? period;
+  const avgOrder =
+    (a?.totals.orderCount ?? 0) > 0
+      ? formatMoney((a?.totals.revenue ?? 0) / a!.totals.orderCount, currency)
+      : formatMoney(0, currency);
+  const productLimit = plan.data?.plan?.productLimit ?? null;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-stagger>
       <AdminHero
         firstName={firstName}
         subtitle="Here's what's happening in your shop today."
@@ -103,42 +105,39 @@ export default function SellerOverviewPage() {
         onSelectedDayChange={setSelectedDay}
         trailing={
           selectedDay ? null : (
-            <AdminPeriodToggle value={period} onChange={setPeriod} />
+            <AdminPeriodToggle tone="onInk" value={period} onChange={setPeriod} />
           )
         }
         metrics={
-          <div className="grid grid-cols-2 divide-y divide-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" data-stagger>
             <AdminHeroMetric
+              featured
               label="Today's revenue"
               value={formatMoney(today?.totals.revenue ?? 0, currency)}
-              hint="Paid sales today"
-              icon={<ShoppingBag className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-success-muted text-success"
+              icon={<ShoppingBag className="h-4 w-4" aria-hidden />}
             />
             <AdminHeroMetric
               label="Today's orders"
               value={String(today?.totals.orderCount ?? 0)}
-              hint="Paid today"
-              icon={<Package className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-info-muted text-info"
+              icon={<Package className="h-4 w-4" aria-hidden />}
             />
             <AdminHeroMetric
               label="Live products"
               value={String(productCount)}
-              hint="In your catalogue"
-              icon={<Package className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-accent-soft text-accent dark:text-accent-on-dark"
+              icon={<Package className="h-4 w-4" aria-hidden />}
             />
             <AdminHeroMetric
               label="Plan"
               value={planHint}
               hint={
-                plan.data?.plan?.productLimit != null
-                  ? `${plan.data.productCount}/${plan.data.plan.productLimit} listings`
-                  : "Your subscription"
+                productLimit != null
+                  ? `${plan.data!.liveCount}/${productLimit} live`
+                  : undefined
               }
-              icon={<CreditCard className="h-3.5 w-3.5" aria-hidden />}
-              chipClass="bg-warning-muted text-warning"
+              progress={
+                productLimit ? (plan.data?.liveCount ?? 0) / productLimit : undefined
+              }
+              icon={<CreditCard className="h-4 w-4" aria-hidden />}
             />
           </div>
         }
@@ -147,24 +146,57 @@ export default function SellerOverviewPage() {
       {plan.data && (
         <SellerPlanBanner
           trialActive={plan.data.trialActive}
-          trialDaysLeft={plan.data.trialDaysLeft}
-          productCount={plan.data.productCount}
-          productLimit={plan.data.plan?.productLimit ?? null}
+          daysLeft={plan.data.daysLeft}
+          paidUntil={plan.data.planExpiresAt}
+          lapsed={plan.data.lapsed}
+          planName={plan.data.plan?.name ?? null}
+          liveCount={plan.data.liveCount}
+          pausedCount={plan.data.pausedCount}
+          productLimit={productLimit}
         />
       )}
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <OverviewChart
+          className="xl:col-span-2"
+          title="Revenue"
+          total={formatMoney(a?.totals.revenue ?? 0, currency)}
+          description={`Paid sales · ${periodName}`}
+          data={chartData}
+          valueLabel="Revenue"
+          formatValue={(n) => formatMoney(n, currency)}
+          formatTick={(n) => formatMoneyCompact(n, currency)}
+          fillDays={selectedDay || period === "today" ? undefined : period === "week" ? 7 : 30}
+          emptyMessage="No revenue yet"
+        />
+        <QuickActions
+          actions={[
+            {
+              href: "/seller/products",
+              label: "Add product",
+              icon: Package,
+              variant: "primary",
+            },
+            {
+              href: plan.data?.tenant?.slug
+                ? buildPublicShopUrl(plan.data.tenant.slug)
+                : "/seller/website",
+              label: "View store",
+              icon: ExternalLink,
+              external: !!plan.data?.tenant?.slug,
+            },
+            { href: "/seller/orders", label: "Orders", icon: ShoppingBag },
+            { href: "/seller/branding", label: "Branding", icon: Palette },
+            { href: "/seller/settings", label: "Settings", icon: Settings },
+          ]}
+        />
+      </div>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Period insights
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <AdminMetricCard
-            label={`Revenue (${selectedDay ?? period})`}
-            value={formatMoney(a?.totals.revenue ?? 0, a?.currency ?? "NGN")}
-            type="revenue"
-            sparkline={revenueSpark.length >= 2 ? revenueSpark : undefined}
-            help="Paid sales in the selected window"
-          />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-stagger>
           <AdminMetricCard
             label="Paid orders"
             value={String(a?.totals.orderCount ?? 0)}
@@ -173,10 +205,15 @@ export default function SellerOverviewPage() {
             help="Paid/fulfilled orders in this window"
           />
           <AdminMetricCard
+            label="Avg order value"
+            value={avgOrder}
+            type="revenue"
+            help="Average value of paid orders in this window"
+          />
+          <AdminMetricCard
             label="Conversion"
             value={`${a?.totals.conversionRate ?? 0}%`}
             type="pending"
-            hint="Paid ÷ checkout attempts"
             help="Share of checkouts that completed payment"
           />
           <AdminMetricCard
@@ -188,47 +225,10 @@ export default function SellerOverviewPage() {
         </div>
       </section>
 
-      <QuickActions
-        actions={[
-          {
-            href: "/seller/products",
-            label: "Add Product",
-            icon: Package,
-            variant: "primary",
-          },
-          {
-            href: plan.data?.tenant?.slug
-              ? buildPublicShopUrl(plan.data.tenant.slug)
-              : "/seller/website",
-            label: "View Store",
-            icon: ExternalLink,
-            external: !!plan.data?.tenant?.slug,
-          },
-          { href: "/seller/orders", label: "Orders", icon: ShoppingBag },
-          { href: "/seller/branding", label: "Branding", icon: Palette },
-          { href: "/seller/settings", label: "Settings", icon: Settings },
-        ]}
-      />
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Insights
-        </h2>
-        <OverviewChart
-          title="Revenue over time"
-          description={`Paid sales · ${period}`}
-          data={chartData}
-          valueLabel="Revenue"
-          formatValue={(n) => formatMoney(n, a?.currency ?? "NGN")}
-          emptyMessage="Not enough data yet — revenue appears here after your first paid order."
-        />
-      </section>
-
       {!loading && a && a.totals.orderCount === 0 && (
         <EmptyState
           kind="orders"
           title="No sales in this period"
-          description="When buyers check out, revenue and charts will show here."
           actionLabel="Add a product"
           actionHref="/seller/products"
           icon={Package}

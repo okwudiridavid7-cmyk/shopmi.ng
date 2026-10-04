@@ -1,8 +1,11 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
+import crypto from "crypto";
 import type { User } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { env } from "../config/env";
+import { enqueueTransactionalMail } from "../queue/transactionalMail";
 import { optionalAuth } from "../auth/middleware";
 import { hashPassword } from "../auth/password";
 import { setAuthCookies } from "../auth/cookies";
@@ -18,13 +21,14 @@ const onboardingLimiter = rateLimit({
 });
 
 const accountSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
   email: z.string().email(),
   password: z.string().min(8).max(128),
   phone: z.string().min(5).max(32).optional(),
 });
 
 const onboardingSchema = z.object({
-  /** Required when not already authenticated — creates the seller user. */
+  /** Required when not already authenticated - creates the seller user. */
   account: accountSchema.optional(),
   shopName: z.string().min(2).max(100),
   slug: z
@@ -71,7 +75,7 @@ const onboardingSchema = z.object({
 export const onboardingRouter = Router();
 
 /**
- * POST /api/onboarding — guided seller flow in one request:
+ * POST /api/onboarding - guided seller flow in one request:
  * account (if needed) → tenant + owner → optional first product.
  * Sets auth cookies when a new account is created (or when already logged in).
  */
@@ -118,6 +122,10 @@ onboardingRouter.post(
         }
       }
 
+      const creatingAccount = !(req.user && !body.account);
+      const verifyRaw = crypto.randomBytes(32).toString("hex");
+      const verifyHash = crypto.createHash("sha256").update(verifyRaw).digest("hex");
+
       const result = await prisma.$transaction(async (tx) => {
         let user: User;
 
@@ -133,17 +141,19 @@ onboardingRouter.post(
           const account = body.account!;
           user = await tx.user.create({
             data: {
+              name: account.name,
               email: account.email.toLowerCase(),
               passwordHash: await hashPassword(account.password),
               role: "seller",
               phone: account.phone,
+              emailVerificationToken: verifyHash,
+              emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
             },
           });
         }
 
-        const trialPlan =
-          (await tx.plan.findUnique({ where: { slug: "yomi" } })) ??
-          (await tx.plan.findUnique({ where: { slug: "free" } }));
+        const { getDefaultTrialPlan } = await import("../lib/plans");
+        const trialPlan = await getDefaultTrialPlan();
         const { getPlatformTrialDays } = await import("../lib/platformSettings");
         const trialDays = await getPlatformTrialDays(trialPlan?.trialDays ?? 3);
         const trialEndsAt = new Date(
@@ -220,6 +230,22 @@ onboardingRouter.post(
       });
       const refreshToken = await issueRefreshToken(result.user.id);
       setAuthCookies(res, accessToken, refreshToken);
+
+      if (creatingAccount) {
+        const user = result.user;
+        void enqueueTransactionalMail({
+          kind: "welcome",
+          to: user.email,
+          data: { name: user.name, appName: env.appName, dashboardUrl: `${env.webUrl}/seller` },
+          idempotencyKey: `welcome:${user.id}`,
+        }).catch((e) => console.warn("[onboarding] welcome mail enqueue failed", e));
+        void enqueueTransactionalMail({
+          kind: "verify_email",
+          to: user.email,
+          data: { name: user.name, verifyUrl: `${env.webUrl}/verify-email?token=${verifyRaw}` },
+          idempotencyKey: `verify:${user.id}:${verifyHash.slice(0, 12)}`,
+        }).catch((e) => console.warn("[onboarding] verify mail enqueue failed", e));
+      }
 
       return res.status(201).json({
         user: toUserPublic(result.user),

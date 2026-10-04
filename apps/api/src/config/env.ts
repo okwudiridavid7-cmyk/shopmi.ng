@@ -31,14 +31,14 @@ export const env = {
   webUrl: process.env.WEB_URL ?? "http://localhost:3000",
   cookieDomain: process.env.COOKIE_DOMAIN ?? "localhost",
   isProd: (process.env.NODE_ENV ?? "development") === "production",
-  // Secrets — stay in .env, never platform_settings
+  // Secrets - stay in .env, never platform_settings
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   emailFrom: process.env.EMAIL_FROM ?? "Vendors <onboarding@resend.dev>",
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-  anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514",
+  anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   shopBaseDomain: process.env.SHOP_BASE_DOMAIN ?? "localhost:3000",
   /** Comma-separated absolute origins for preview / staging (prod CORS). */
@@ -46,12 +46,12 @@ export const env = {
   /** Cloudflare Turnstile (contact forms). Site key is public; secret stays server-side. */
   turnstileSiteKey: process.env.TURNSTILE_SITE_KEY ?? "",
   turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY ?? "",
-  /** Non-prod only — skip Turnstile verification for automated tests. */
+  /** Non-prod only - skip Turnstile verification for automated tests. */
   contactCaptchaBypass:
     (process.env.CONTACT_CAPTCHA_BYPASS ?? "").toLowerCase() === "true",
   /** Days to retain ContactInquiry rows before purge (REM-16). Default 180. */
   contactInquiryRetentionDays: Number(
-    process.env.CONTACT_INQUIRY_RETENTION_DAYS ?? 180
+    process.env.CONTACT_INQUIRY_RETENTION_DAYS || 180
   ),
   /**
    * When true, shop contact forms require the submitter to confirm via email
@@ -62,4 +62,22 @@ export const env = {
   whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
   whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
   uploadsDir: path.resolve(__dirname, "../../uploads"),
+  /** Seller custom domains: subdomains CNAME here, root domains use the A record. */
+  customDomainCnameTarget:
+    process.env.CUSTOM_DOMAIN_CNAME_TARGET || "shopmi-web.onrender.com",
+  customDomainARecord: process.env.CUSTOM_DOMAIN_A_RECORD || "216.24.57.1",
+  /** When both are set, verified seller domains are attached to the web service (Render issues TLS). */
+  renderApiKey: process.env.RENDER_API_KEY ?? "",
+  renderWebServiceId: process.env.RENDER_WEB_SERVICE_ID ?? "",
+  /** GO54 (WhoGoHost) domain reseller API. Domain purchases are off in production without these. */
+  go54ApiEmail: process.env.GO54_API_EMAIL ?? "",
+  go54ApiKey: process.env.GO54_API_KEY ?? "",
+  go54ApiUrl:
+    process.env.GO54_API_URL ||
+    "https://www.whogohost.com/host/modules/addons/DomainsReseller/api/index.php",
+  /** Nameservers set on new registrations; must be the registrar's DNS so records can be managed via the API. */
+  go54Nameservers: (process.env.GO54_NAMESERVERS || "nsa.whogohost.com,nsb.whogohost.com")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
 };

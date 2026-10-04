@@ -35,7 +35,7 @@ export type EmptyState04Action = {
   icon?: ReactNode;
 };
 
-/** Visual preset — drives marquee icon + default copy / CTAs. */
+/** Visual preset - drives marquee icon + default copy / CTAs. */
 export type EmptyState04Kind =
   | QueryStateKind
   | "products"
@@ -63,7 +63,7 @@ export type EmptyState04Props = {
 type KindPreset = {
   icon: LucideIcon;
   title: string;
-  description: string;
+  description?: string;
   primary?: EmptyState04Action;
   secondary?: EmptyState04Action;
   showMarquee: boolean;
@@ -75,7 +75,7 @@ const PRESETS: Record<EmptyState04Kind, KindPreset> = {
     icon: Store,
     title: "Create your shop first",
     description:
-      "You’re signed in as a seller, but you don’t have a shop yet. Finish onboarding to unlock products, orders, and branding.",
+      "Finish onboarding to unlock products, orders, and branding.",
     primary: {
       label: "Create your shop",
       href: "/onboarding",
@@ -92,7 +92,7 @@ const PRESETS: Record<EmptyState04Kind, KindPreset> = {
     icon: Lock,
     title: "You don’t have access",
     description:
-      "This area needs a different role or shop permission. Switch accounts or head back to the marketplace.",
+      "This area needs a different role or shop permission.",
     primary: {
       label: "Go to marketplace",
       href: "/explore",
@@ -104,7 +104,7 @@ const PRESETS: Record<EmptyState04Kind, KindPreset> = {
   not_found: {
     icon: SearchX,
     title: "Nothing here",
-    description: "We couldn’t find that page or resource. It may have been moved or removed.",
+    description: "We couldn’t find that page.",
     primary: {
       label: "Go back",
       href: "/explore",
@@ -131,22 +131,18 @@ const PRESETS: Record<EmptyState04Kind, KindPreset> = {
   empty: {
     icon: FolderCheck,
     title: "Nothing here yet",
-    description: "When you add items, they’ll show up in this list.",
     showMarquee: true,
     chipClass: "bg-muted text-muted-foreground",
   },
   empty_filtered: {
     icon: SearchX,
     title: "No matches",
-    description: "Nothing matches your current filters. Try clearing them or broadening your search.",
     showMarquee: false,
     chipClass: "bg-muted text-muted-foreground",
   },
   products: {
     icon: Package,
     title: "No products yet",
-    description:
-      "Add your first listing to start selling on the marketplace and your shop page.",
     primary: {
       label: "Add product",
       icon: <Plus className="h-4 w-4" aria-hidden />,
@@ -162,7 +158,6 @@ const PRESETS: Record<EmptyState04Kind, KindPreset> = {
   orders: {
     icon: ShoppingBag,
     title: "No orders yet",
-    description: "When buyers check out, their orders will appear here.",
     primary: {
       label: "View products",
       href: "/seller/products",
@@ -174,7 +169,6 @@ const PRESETS: Record<EmptyState04Kind, KindPreset> = {
   favorites: {
     icon: Heart,
     title: "No favorites yet",
-    description: "Save products you love while browsing the marketplace.",
     primary: {
       label: "Browse marketplace",
       href: "/explore",
@@ -186,21 +180,18 @@ const PRESETS: Record<EmptyState04Kind, KindPreset> = {
   shops: {
     icon: Store,
     title: "No shops yet",
-    description: "Marketplace shops will show up here once sellers onboard.",
     showMarquee: true,
     chipClass: "bg-accent-soft text-accent dark:text-accent-on-dark",
   },
   users: {
     icon: Users,
     title: "No users found",
-    description: "Try a different search or wait for new signups.",
     showMarquee: true,
     chipClass: "bg-info-muted text-info",
   },
   generic: {
     icon: FolderCheck,
     title: "Nothing here yet",
-    description: "Get started by creating your first item.",
     primary: {
       label: "Get started",
       icon: <Plus className="h-4 w-4" aria-hidden />,
@@ -330,7 +321,9 @@ export default function EmptyState04({
               previewRows={previewRows}
             />
             <EmptyTitle>{resolvedTitle}</EmptyTitle>
-            <EmptyDescription>{resolvedDescription}</EmptyDescription>
+            {resolvedDescription ? (
+              <EmptyDescription>{resolvedDescription}</EmptyDescription>
+            ) : null}
           </EmptyHeader>
           {(resolvedPrimary || resolvedSecondary) && (
             <EmptyContent>

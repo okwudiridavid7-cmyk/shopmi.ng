@@ -3,7 +3,8 @@
 import { FormEvent, useState } from "react";
 import { Mail } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { Button, Label } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { TextLink } from "@/components/ui/text-link";
 import { AuthSplitLayout } from "@/components/auth-split";
@@ -40,13 +41,14 @@ export default function ForgotPasswordPage() {
   return (
     <AuthSplitLayout
       title="Forgot password"
-      subtitle="Enter the email on your account. If it matches, we’ll send a reset link."
+      subtitle="We’ll email you a link to reset it."
     >
       <form onSubmit={onSubmit} className="space-y-5">
         <Label>
           <span className="text-sm font-medium">Email</span>
           <InputWithIcon
             icon={<Mail />}
+            placeholder="you@example.com"
             name="email"
             type="email"
             required

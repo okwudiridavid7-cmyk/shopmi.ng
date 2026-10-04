@@ -11,6 +11,7 @@ module.exports = {
         "muted-foreground": "var(--color-muted-foreground)",
         border: "var(--color-border)",
         accent: "var(--color-accent)",
+        "accent-strong": "var(--color-accent-strong)",
         "accent-foreground": "var(--color-accent-foreground)",
         "accent-soft": "var(--color-accent-soft)",
         "accent-deep": "var(--color-accent-deep)",
@@ -33,6 +34,14 @@ module.exports = {
         "shell-nav-hover": "var(--shell-nav-hover)",
         "shell-search": "var(--shell-search-bg)",
         "accent-on-dark": "var(--color-accent-on-dark)",
+        ink: "var(--color-ink)",
+        "ink-foreground": "var(--color-ink-foreground)",
+        "ink-muted": "var(--color-ink-muted)",
+        "ink-soft": "var(--color-ink-soft)",
+        "ink-border": "var(--color-ink-border)",
+        "dash-canvas": "var(--dash-canvas)",
+        "dash-tint": "var(--dash-tint)",
+        "chart-track": "var(--chart-track)",
       },
       borderRadius: {
         sm: "var(--radius-sm)",
@@ -52,10 +61,13 @@ module.exports = {
         "token-5": "var(--space-5)",
         "token-6": "var(--space-6)",
         "token-8": "var(--space-8)",
+        "token-10": "var(--space-10)",
+        "token-12": "var(--space-12)",
+        "token-16": "var(--space-16)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        display: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-heading, var(--font-sans))", "system-ui", "sans-serif"],
       },
       keyframes: {
         marquee: {

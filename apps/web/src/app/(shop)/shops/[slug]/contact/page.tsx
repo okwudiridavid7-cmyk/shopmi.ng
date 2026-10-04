@@ -48,10 +48,6 @@ export default function ShopContactPage({
         <h1 className="mt-token-3 font-display text-4xl leading-tight text-foreground sm:text-5xl">
           Get in touch with {name}
         </h1>
-        <p className="mt-token-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Questions about an order, a listing, or a custom request — send a
-          message and it goes to this shop’s inbox.
-        </p>
       </section>
 
       <div className="grid gap-token-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
@@ -124,19 +120,15 @@ export default function ShopContactPage({
           <h2 className="font-display text-2xl text-foreground">Send a message</h2>
           {theme.contactFormEnabled === false ? (
             <p className="mt-token-4 text-sm text-muted-foreground">
-              This shop is not accepting contact form messages right now. Use
-              the details on the left if available.
+              This shop is not accepting contact form messages.
             </p>
           ) : (
-            <>
-              <p className="mb-token-6 mt-token-2 text-sm text-muted-foreground">
-                We’ll email {name} with your details.
-              </p>
+            <div className="mt-token-6">
               <ContactForm
                 endpoint={`/api/contact/shops/${params.slug}`}
                 accent={brand}
               />
-            </>
+            </div>
           )}
         </div>
       </div>

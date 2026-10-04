@@ -16,7 +16,7 @@ declare global {
 
 function handleTenantError(err: unknown, res: Response, next: NextFunction) {
   if (err instanceof TenantIsolationError) {
-    return res.status(err.status).json({ error: err.message });
+    return res.status(err.status).json({ error: err.message, code: err.code });
   }
   return next(err);
 }

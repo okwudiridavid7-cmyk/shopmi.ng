@@ -2,6 +2,9 @@ import { Router } from "express";
 import sharp from "sharp";
 import { prisma } from "../db/prisma";
 import { decimalToNumber } from "../lib/serialize";
+import { UNAVAILABLE_SHOP_STATUSES } from "../tenant/tenantContext";
+import { getPlatformSetting } from "../lib/platformSettings";
+import { env } from "../config/env";
 
 function escapeXml(s: string): string {
   return s
@@ -24,7 +27,7 @@ ogRouter.get("/products/:id", async (req, res, next) => {
       where: {
         id: req.params.id,
         status: "active",
-        tenant: { status: { not: "suspended" } },
+        tenant: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
       },
       include: { tenant: { select: { name: true, slug: true } } },
     });
@@ -32,6 +35,9 @@ ogRouter.get("/products/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
+    const appName = escapeXml(
+      (await getPlatformSetting("app_name", env.appName)).toUpperCase() || "SHOPMI.NG"
+    );
     const title = escapeXml(truncate(product.title, 48));
     const shop = escapeXml(truncate(product.tenant.name, 36));
     const price = escapeXml(
@@ -63,7 +69,7 @@ ogRouter.get("/products/:id", async (req, res, next) => {
   <rect width="1200" height="630" fill="url(#bg)"/>
   <circle cx="1050" cy="80" r="180" fill="#1f6b4a" fill-opacity="0.25"/>
   <circle cx="100" cy="520" r="140" fill="#3dba7e" fill-opacity="0.12"/>
-  <text x="48" y="72" fill="#9aaca1" font-size="22" font-family="system-ui,sans-serif" letter-spacing="4">VENDORS</text>
+  <text x="48" y="72" fill="#9aaca1" font-size="22" font-family="system-ui,sans-serif" letter-spacing="4">${appName}</text>
   <text x="48" y="180" fill="#e8f0ea" font-size="56" font-family="Georgia,serif" font-weight="700">${title}</text>
   <text x="48" y="240" fill="#3dba7e" font-size="40" font-family="system-ui,sans-serif" font-weight="600">${price}</text>
   <text x="48" y="320" fill="#9aaca1" font-size="24" font-family="system-ui,sans-serif">${shop}</text>

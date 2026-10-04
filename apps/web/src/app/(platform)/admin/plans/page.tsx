@@ -122,7 +122,7 @@ export default function AdminPlansPage() {
     <div className="space-y-6">
       <PageHeader
         title="Plans"
-        description="Pricing tiers — product limits, trial days, and feature flags."
+        description="Pricing tiers, product limits, trial days, and feature flags."
         icon={Layers}
       />
 
@@ -140,7 +140,6 @@ export default function AdminPlansPage() {
         <EmptyState
           kind="empty"
           title="No plans"
-          description="Create a plan so new shops can be assigned a tier."
           actionLabel="Create plan"
           onAction={openCreate}
         />
@@ -218,6 +217,7 @@ export default function AdminPlansPage() {
               <span>Name</span>
               <Input
                 required
+                placeholder="e.g. Growth"
                 value={form.name}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))
@@ -228,6 +228,7 @@ export default function AdminPlansPage() {
               <span>Slug</span>
               <Input
                 required
+                placeholder="e.g. growth"
                 value={form.slug}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, slug: e.target.value }))
@@ -242,6 +243,7 @@ export default function AdminPlansPage() {
                   type="number"
                   min="0"
                   step="0.01"
+                  placeholder="0.00"
                   value={form.price}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, price: e.target.value }))
@@ -252,6 +254,7 @@ export default function AdminPlansPage() {
                 <span>Currency</span>
                 <Input
                   required
+                  placeholder="NGN"
                   value={form.currency}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, currency: e.target.value }))
@@ -265,6 +268,7 @@ export default function AdminPlansPage() {
                 <Input
                   type="number"
                   min="1"
+                  placeholder="Unlimited"
                   value={form.productLimit}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, productLimit: e.target.value }))
@@ -276,6 +280,7 @@ export default function AdminPlansPage() {
                 <Input
                   type="number"
                   min="0"
+                  placeholder="0"
                   value={form.trialDays}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, trialDays: e.target.value }))
@@ -286,6 +291,7 @@ export default function AdminPlansPage() {
             <Label>
               <span>Feature flags (JSON)</span>
               <Input
+                placeholder='{"ai": true, "customDomain": false}'
                 value={form.featureFlags}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, featureFlags: e.target.value }))

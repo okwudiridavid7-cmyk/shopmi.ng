@@ -108,6 +108,15 @@ services:
         sync: false
       - key: SUPER_ADMIN_PASSWORD
         sync: false
+      # Custom domains: attaches seller domains to shopmi-web and issues TLS
+      - key: RENDER_API_KEY
+        sync: false
+      - key: RENDER_WEB_SERVICE_ID
+        sync: false
+      - key: GO54_API_EMAIL
+        sync: false
+      - key: GO54_API_KEY
+        sync: false
 
   # ---- BullMQ worker (contact mail, AI, watermark, purge) ----
   - type: worker
@@ -152,6 +161,14 @@ services:
       - key: TURNSTILE_SECRET_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RENDER_API_KEY
+        sync: false
+      - key: RENDER_WEB_SERVICE_ID
+        sync: false
+      - key: GO54_API_EMAIL
+        sync: false
+      - key: GO54_API_KEY
         sync: false
 
   # Redis-compatible Key Value — BullMQ + rate limits + stats cache

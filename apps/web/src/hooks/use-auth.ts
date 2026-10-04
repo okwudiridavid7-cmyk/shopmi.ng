@@ -50,7 +50,7 @@ export function useAuth() {
       user: snap.user,
       loading: snap.loading,
       isAuthenticated: !!snap.user,
-      /** First name for greetings / nav — never the email address. */
+      /** First name for greetings / nav - never the email address. */
       firstName: snap.user
         ? firstNameFromUser(snap.user.name, snap.user.email)
         : null,

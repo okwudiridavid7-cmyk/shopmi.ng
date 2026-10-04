@@ -31,7 +31,7 @@ export function ShopCard({ shop }: { shop: ShopCardShop }) {
         <div className="flex items-center gap-token-3">
           {theme.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <img loading="lazy" decoding="async"
               src={theme.logoUrl}
               alt=""
               className="h-10 w-10 rounded-md border border-border bg-muted object-cover"

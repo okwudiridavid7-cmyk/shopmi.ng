@@ -28,7 +28,7 @@ export interface CartItem extends Product {
 
 export interface InteractiveCheckoutProps {
   products?: Product[];
-  /** Controlled cart — when set, parent owns quantity state. */
+  /** Controlled cart - when set, parent owns quantity state. */
   cart?: CartItem[];
   onAddToCart?: (product: Product) => void;
   onRemoveFromCart?: (productId: string) => void;
@@ -40,7 +40,7 @@ export interface InteractiveCheckoutProps {
   /** Hide the left product rail (cart-only layouts). */
   hideCatalog?: boolean;
   emptyCartMessage?: string;
-  /** Optional platform fee line (e.g. Shopmi Service Fee) — shown as included split. */
+  /** Optional platform fee line (e.g. Shopmi Service Fee) - shown as included split. */
   serviceFeeLabel?: string;
   serviceFeeAmount?: number;
   serviceFeeHint?: string;

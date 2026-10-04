@@ -1,4 +1,8 @@
+"use client";
+
+import { useId } from "react";
 import type { LucideIcon } from "lucide-react";
+import { AnimatedValue } from "@/components/dashboard/animated-value";
 import {
   Banknote,
   Clock,
@@ -21,50 +25,15 @@ export type AdminMetricType =
   | "favorites"
   | "plan";
 
-const META: Record<
-  AdminMetricType,
-  { icon: LucideIcon; chipClass: string; stroke: string }
-> = {
-  shops: {
-    icon: Store,
-    chipClass: "bg-accent-soft text-accent dark:text-accent-on-dark",
-    stroke: "var(--color-accent)",
-  },
-  users: {
-    icon: Users,
-    chipClass: "bg-info-muted text-info",
-    stroke: "var(--color-info)",
-  },
-  revenue: {
-    icon: Banknote,
-    chipClass: "bg-success-muted text-success",
-    stroke: "var(--color-success)",
-  },
-  pending: {
-    icon: Clock,
-    chipClass: "bg-warning-muted text-warning",
-    stroke: "var(--color-warning)",
-  },
-  products: {
-    icon: Package,
-    chipClass: "bg-accent-soft text-accent dark:text-accent-on-dark",
-    stroke: "var(--color-accent)",
-  },
-  orders: {
-    icon: ShoppingBag,
-    chipClass: "bg-info-muted text-info",
-    stroke: "var(--color-info)",
-  },
-  favorites: {
-    icon: Heart,
-    chipClass: "bg-danger-muted text-danger",
-    stroke: "var(--color-danger)",
-  },
-  plan: {
-    icon: CreditCard,
-    chipClass: "bg-warning-muted text-warning",
-    stroke: "var(--color-warning)",
-  },
+const ICONS: Record<AdminMetricType, LucideIcon> = {
+  shops: Store,
+  users: Users,
+  revenue: Banknote,
+  pending: Clock,
+  products: Package,
+  orders: ShoppingBag,
+  favorites: Heart,
+  plan: CreditCard,
 };
 
 export type SparkPoint = { value: number };
@@ -76,10 +45,10 @@ export type AdminMetricCardProps = {
   type: AdminMetricType;
   /** Optional sparkline from real time-series data. */
   sparkline?: SparkPoint[];
-  /** Real trend label e.g. "12.4%" — omit when unavailable. */
+  /** Real trend label e.g. "12.4%" - omit when unavailable. */
   trend?: string;
   trendDirection?: "up" | "down";
-  /** Optional help tooltip text — shows a ? control when set. */
+  /** Optional help tooltip text - shows a ? control when set. */
   help?: string;
   className?: string;
 };
@@ -114,7 +83,7 @@ function Sparkline({
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
-      className="mt-4 h-12 w-full"
+      className="mt-4 h-12 w-full overflow-visible"
       aria-hidden
       preserveAspectRatio="none"
     >
@@ -139,7 +108,7 @@ function Sparkline({
 }
 
 /**
- * Reusable admin KPI card — fintech layout:
+ * Reusable admin KPI card - fintech layout:
  * icon + label | help · large value + optional trend · optional area sparkline.
  */
 export function AdminMetricCard({
@@ -153,18 +122,18 @@ export function AdminMetricCard({
   help,
   className = "",
 }: AdminMetricCardProps) {
-  const meta = META[type];
-  const Icon = meta.icon;
+  const Icon = ICONS[type];
+  const gradientId = `metric-spark-${useId().replace(/:/g, "")}`;
   const hasSpark = (sparkline?.length ?? 0) >= 2;
 
   return (
     <article
-      className={`rounded-xl border border-border bg-card p-5 shadow-sm ${className}`}
+      className={`dash-card dash-card-hover p-5 ${className}`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${meta.chipClass}`}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-dash-tint text-accent-strong dark:text-accent-on-dark"
           >
             <Icon className="h-3.5 w-3.5" aria-hidden />
           </span>
@@ -185,7 +154,7 @@ export function AdminMetricCard({
 
       <div className="mt-4 flex flex-wrap items-baseline gap-2">
         <p className="text-[1.65rem] font-bold leading-none tracking-tight text-foreground sm:text-[1.85rem]">
-          {value}
+          <AnimatedValue value={value} />
         </p>
         {trend ? (
           <span
@@ -205,8 +174,8 @@ export function AdminMetricCard({
       {hasSpark ? (
         <Sparkline
           points={sparkline!}
-          stroke={meta.stroke}
-          gradientId={`metric-spark-${type}-${label.replace(/\s+/g, "-").toLowerCase()}`}
+          stroke="var(--color-accent)"
+          gradientId={gradientId}
         />
       ) : null}
     </article>

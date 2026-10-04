@@ -11,6 +11,7 @@ import {
   Sparkles,
   Store,
   Upload,
+  User,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { slugifyShopName } from "@/lib/slugify";
@@ -27,13 +28,14 @@ import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TextLink } from "@/components/ui/text-link";
+import { GoogleContinueButton } from "@/components/google-button";
 import { cn } from "@/lib/utils";
 
 const EXPERIENCE_OPTIONS = [
   {
     value: "first_time",
     title: "First time selling",
-    description: "Just getting started — we’ll keep things simple.",
+    description: "Just getting started.",
   },
   {
     value: "some",
@@ -110,6 +112,7 @@ export default function OnboardingPage() {
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
   const [categories, setCategories] = useState<CategoryPublic[]>([]);
   const [alreadyAuthed, setAlreadyAuthed] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [shopBaseDomain, setShopBaseDomain] = useState("localhost:3000");
   const [slugStatus, setSlugStatus] = useState<{
     available: boolean | null;
@@ -119,6 +122,7 @@ export default function OnboardingPage() {
   const slugCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [account, setAccount] = useState({
+    name: "",
     email: "",
     password: "",
     phone: "",
@@ -217,13 +221,26 @@ export default function OnboardingPage() {
       setShopBaseDomain(cfg.shopBaseDomain);
     });
 
-    apiFetch<{ user: { email: string } }>("/api/auth/me")
-      .then((res) => {
+    apiFetch<{ user: { email: string; role: string } }>("/api/auth/me")
+      .then(async (res) => {
+        if (res.user.role !== "buyer") {
+          const hasShop = await apiFetch("/api/seller/shop")
+            .then(() => true)
+            .catch(() => false);
+          if (hasShop) {
+            window.location.replace("/seller");
+            return;
+          }
+        }
         setAlreadyAuthed(true);
         setAccount((a) => ({ ...a, email: res.user.email }));
         setStep(0);
+        setAuthChecked(true);
       })
-      .catch(() => setAlreadyAuthed(false));
+      .catch(() => {
+        setAlreadyAuthed(false);
+        setAuthChecked(true);
+      });
   }, []);
 
   async function uploadLogo(file: File) {
@@ -281,6 +298,7 @@ export default function OnboardingPage() {
             ? {}
             : {
                 account: {
+                  name: account.name.trim() || undefined,
                   email: account.email,
                   password: account.password,
                   phone: account.phone || undefined,
@@ -331,6 +349,10 @@ export default function OnboardingPage() {
     const id = currentStepId;
 
     if (id === "account") {
+      if (!account.name.trim()) {
+        setError("Enter your full name");
+        return;
+      }
       if (!account.email || account.password.length < 8) {
         setError("Enter a valid email and password (8+ characters)");
         return;
@@ -391,10 +413,10 @@ export default function OnboardingPage() {
     product: "First product",
   };
   const subtitles: Record<string, string> = {
-    account: "One account for your shop dashboard and checkout.",
-    business: "A few preferences so we can tailor your workspace.",
-    shop: "Name, URL, and logo — favicon can wait until you’re in Branding.",
-    product: "List something now, or skip and add products from your dashboard.",
+    account: "Step one of opening your shop. You can shop on the marketplace with the same account.",
+    business: "Tell us how you sell.",
+    shop: "Name, address, and logo.",
+    product: "Add your first listing.",
   };
 
   return (
@@ -435,11 +457,32 @@ export default function OnboardingPage() {
           </p>
         ) : null}
 
-        {currentStepId === "account" && (
-          <SettingsCard
-            title="Account"
-            description="Email and a strong password to secure your shop."
-          >
+        {currentStepId === "account" && !authChecked && (
+          <div className="h-64 animate-pulse rounded-2xl bg-muted" aria-hidden />
+        )}
+
+        {currentStepId === "account" && authChecked && (
+          <SettingsCard title="Account">
+            <GoogleContinueButton role="seller" returnTo="/onboarding" />
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              or use email
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <Label>
+              <span>Full name</span>
+              <InputWithIcon
+                icon={<User />}
+                placeholder="Ada Okonkwo"
+                value={account.name}
+                onChange={(e) =>
+                  setAccount((a) => ({ ...a, name: e.target.value }))
+                }
+                className="h-12"
+                autoComplete="name"
+                required
+              />
+            </Label>
             <Label>
               <span>Email</span>
               <InputWithIcon
@@ -467,6 +510,7 @@ export default function OnboardingPage() {
               <InputWithIcon
                 icon={<Phone />}
                 type="tel"
+                placeholder="+234 xxx xxx xxxx"
                 value={account.phone}
                 onChange={(e) =>
                   setAccount((a) => ({ ...a, phone: e.target.value }))
@@ -474,22 +518,24 @@ export default function OnboardingPage() {
                 className="h-12"
               />
             </Label>
-            <p className="text-sm text-muted-foreground">
-              Already have an account? <TextLink href="/login">Log in</TextLink>{" "}
-              then return here.
-            </p>
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p>
+                Already have an account?{" "}
+                <TextLink href="/login?returnTo=%2Fonboarding">Log in</TextLink>
+              </p>
+              <p>
+                Just shopping?{" "}
+                <TextLink href="/signup/account?role=buyer">Create a buyer account</TextLink>
+              </p>
+            </div>
           </SettingsCard>
         )}
 
         {currentStepId === "business" && (
-          <SettingsCard
-            title="Business profile"
-            description="Help us understand your scale and how you operate."
-          >
+          <SettingsCard title="Business profile">
             {alreadyAuthed && (
               <p className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                Signed in as {account.email}. We’ll attach the shop to this
-                account.
+                Signed in as {account.email}
               </p>
             )}
             <Label>
@@ -565,10 +611,7 @@ export default function OnboardingPage() {
         )}
 
         {currentStepId === "shop" && (
-          <SettingsCard
-            title="Shop details"
-            description="Your storefront name, address, and logo."
-          >
+          <SettingsCard title="Shop details">
             <Label>
               <span>Shop name</span>
               <InputWithIcon
@@ -612,7 +655,7 @@ export default function OnboardingPage() {
               </div>
               {shop.slug.length >= 2 && slugStatus.available === true && (
                 <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                  Available — {shop.slug}.{shopBaseDomain}
+                  Available: {shop.slug}.{shopBaseDomain}
                 </p>
               )}
               {slugStatus.available === false && (
@@ -677,7 +720,7 @@ export default function OnboardingPage() {
                     {logoBusy ? "Uploading…" : "Drop or click to upload"}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    PNG or JPG · max 2MB. Favicon comes later in Branding.
+                    PNG or JPG · max 2MB
                   </span>
                   <input
                     type="file"
@@ -761,24 +804,15 @@ export default function OnboardingPage() {
                   setIncludeProduct(e.target.checked);
                 }}
               />
-              <span className="text-sm">
-                <span className="font-medium text-foreground">
-                  Also add my first product
-                </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Optional — untick to finish onboarding sooner and catalogue
-                  later.
-                </span>
+              <span className="text-sm font-medium text-foreground">
+                Also add my first product
               </span>
             </label>
           </SettingsCard>
         )}
 
         {currentStepId === "product" && (
-          <SettingsCard
-            title="First product"
-            description="Optional starter listing — you can edit it anytime."
-          >
+          <SettingsCard title="First product">
             <Label>
               <span>Title</span>
               <Input
@@ -808,6 +842,7 @@ export default function OnboardingPage() {
                   type="number"
                   min={0}
                   step="0.01"
+                  placeholder="0.00"
                   value={product.price}
                   onChange={(e) =>
                     setProduct((p) => ({ ...p, price: e.target.value }))
@@ -820,6 +855,7 @@ export default function OnboardingPage() {
                 <Input
                   type="number"
                   min={0}
+                  placeholder="e.g. 10"
                   value={product.stockQty}
                   onChange={(e) =>
                     setProduct((p) => ({ ...p, stockQty: e.target.value }))
@@ -841,7 +877,7 @@ export default function OnboardingPage() {
               className="w-full"
               onClick={() => void finish(false)}
             >
-              Skip product — open shop now
+              Skip for now and open shop
             </Button>
           </SettingsCard>
         )}

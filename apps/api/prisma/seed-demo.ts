@@ -11,6 +11,15 @@ const prisma = new PrismaClient();
 const DEMO_PASSWORD = "DemoPass123!";
 const DEMO_SEED_VERSION = "wave5-1";
 
+/** Main photo plus close-up crops of the same shot, so product pages have a gallery. */
+function productGallery(url: string): string[] {
+  if (!url.includes("images.unsplash.com")) return [url];
+  const base = url.split("?")[0];
+  const crop = (x: number, y: number, z: number) =>
+    `${base}?auto=format&fit=crop&crop=focalpoint&fp-x=${x}&fp-y=${y}&fp-z=${z}&w=800&h=800&q=80`;
+  return [url, crop(0.5, 0.45, 1.5), crop(0.5, 0.35, 2.2), crop(0.5, 0.7, 2.4)];
+}
+
 type Niche = "fashion" | "electronics" | "home" | "beauty" | "sports";
 
 const NICHE_TO_CATEGORY: Record<Niche, string> = {
@@ -58,7 +67,7 @@ const SHOPS: ShopDef[] = [
     ],
     banner: {
       imageUrl:
-        "https://images.unsplash.com/photo-1441984904996-e0b692843f41?auto=format&fit=crop&w=1600&q=80",
+        "https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1600&q=80",
       title: "Woven for the city",
       subtitle: "Contemporary African fashion from Lagos ateliers",
     },
@@ -114,7 +123,7 @@ const SHOPS: ShopDef[] = [
       {
         title: "Silk Headwrap Duo",
         description:
-          "Set of two silk satin headwraps — burgundy and gold. Soft hold without frizz.",
+          "Set of two silk satin headwraps in burgundy and gold. Soft hold without frizz.",
         price: 12000,
         stockQty: 30,
         brandName: "Lagos Loom",
@@ -165,7 +174,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 28,
         brandName: "Loom Atelier",
         image:
-          "https://images.unsplash.com/photo-1596755094514-f87e34085b85?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1602810316693-3667c854239a?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "ready-to-wear",
       },
       {
@@ -176,7 +185,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 35,
         brandName: "Loom Jewelry",
         image:
-          "https://images.unsplash.com/photo-1624222247344-550fb60583fd?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1711443982852-b3df5c563448?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "accessories",
       },
     ],
@@ -425,7 +434,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 21,
         brandName: "Ember Studio",
         image:
-          "https://images.unsplash.com/photo-1603199506016-b9a694b5162d?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1719148162837-63d2f256231f?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "tableware",
       },
       {
@@ -436,7 +445,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 27,
         brandName: "Clay & Ember",
         image:
-          "https://images.unsplash.com/photo-1584990347449-a2d17ebf3273?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1612152671386-5d3debc4ed9a?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "tableware",
       },
     ],
@@ -627,7 +636,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 10,
         brandName: "Peak Gear",
         image:
-          "https://images.unsplash.com/photo-1517963879433-6ad2b056d944?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1638536532686-d610adfc8e5c?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "training",
       },
       {
@@ -763,7 +772,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 22,
         brandName: "Lens Lab",
         image:
-          "https://images.unsplash.com/photo-1548036328-c1038a1e061e?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1521134563007-647ff6127244?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "bags",
       },
       {
@@ -798,7 +807,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 25,
         brandName: "Lab Light",
         image:
-          "https://images.unsplash.com/photo-1626785774573-4b7993143464?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1673196649671-eb09066ad6c1?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "lighting",
       },
       {
@@ -820,7 +829,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 14,
         brandName: "Lab Audio",
         image:
-          "https://images.unsplash.com/photo-1598653226810-4f278ea495b0?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1521424159246-e4a66f267e4b?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "cameras",
       },
       {
@@ -831,7 +840,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 11,
         brandName: "Lab Light",
         image:
-          "https://images.unsplash.com/photo-1471341173076-b0f0c3c5b1b1?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1647427854253-b92bb40c9330?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "lighting",
       },
     ],
@@ -932,7 +941,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 28,
         brandName: "Theory Studio",
         image:
-          "https://images.unsplash.com/photo-1564257631407-4deb1f99d508?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1588186941286-724357304676?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "womenswear",
       },
       {
@@ -1539,7 +1548,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 22,
         brandName: "Pantry Kitchen",
         image:
-          "https://images.unsplash.com/photo-1590794056226-9dc1338986b6?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1587302108992-20648821725d?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "kitchen",
       },
       {
@@ -1595,7 +1604,7 @@ const SHOPS: ShopDef[] = [
         stockQty: 38,
         brandName: "Green Pantry",
         image:
-          "https://images.unsplash.com/photo-1596040033229-a0b34b4434c8?auto=format&fit=crop&w=800&q=80",
+          "https://images.unsplash.com/photo-1599536884823-1bc4fb5f9dea?auto=format&fit=crop&w=800&q=80",
         shopCategorySlug: "pantry",
       },
       {
@@ -1634,7 +1643,7 @@ const BUYERS: { email: string; name: string }[] = [
 ];
 
 const REVIEW_COMMENTS = [
-  "Great quality — shipping was fast too.",
+  "Great quality, and shipping was fast too.",
   "Exactly as described. Will order again.",
   "Solid product for the price.",
   "Packaging was thoughtful and the item looks premium.",
@@ -1653,7 +1662,7 @@ function sellerEmail(slug: string): string {
 }
 
 async function clearTenantCatalog(tenantId: string) {
-  // OrderItem has no onDelete from Product — delete orders first.
+  // OrderItem has no onDelete from Product - delete orders first.
   await prisma.order.deleteMany({ where: { tenantId } });
   await prisma.favorite.deleteMany({
     where: { product: { tenantId } },
@@ -1769,7 +1778,7 @@ async function main() {
     const bg = shop.color.replace("#", "");
     const themeSettings: Prisma.InputJsonValue = {
       primaryColor: shop.color,
-      // Branded shape mark (not initials) — consistent look across demo shops
+      // Branded shape mark (not initials) - consistent look across demo shops
       logoUrl: `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(shop.slug)}&backgroundColor=${bg}`,
       logoRectUrl: null,
       promoProductsEnabled: shop.slug !== "pages-pour",
@@ -1891,7 +1900,7 @@ async function main() {
           categoryId: platformCategoryId,
           shopCategoryId,
           brandName: p.brandName,
-          images: [p.image] as Prisma.InputJsonValue,
+          images: productGallery(p.image) as Prisma.InputJsonValue,
           status: "active",
           location: shop.location,
           countryCode: "NG",

@@ -8,7 +8,6 @@ import { apiFetch } from "@/lib/api";
 import { usePlatformBranding } from "@/hooks/use-branding";
 import {
   CONTACT_CONFIRM_MESSAGE,
-  CONTACT_PROMISES,
   CONTACT_SUCCESS_MESSAGE,
 } from "@/lib/contact-copy";
 import { TurnstileField, resetTurnstile } from "@/components/turnstile-field";
@@ -20,6 +19,7 @@ const TOPICS = [
   "Partnerships",
   "Press & media",
   "Verification",
+  "Other",
 ] as const;
 
 const BUDGETS = [
@@ -43,7 +43,7 @@ function Chip({
       onClick={onClick}
       className={`rounded-full border px-token-4 py-token-2 text-sm transition ${
         selected
-          ? "border-accent bg-accent text-accent-foreground"
+          ? "border-accent-strong bg-accent-strong text-accent-foreground"
           : "border-white/25 bg-transparent text-white/90 hover:border-white/50"
       }`}
     >
@@ -125,25 +125,12 @@ export function ModernContactForm() {
         {/* Left: promises */}
         <div className="flex flex-col justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-strong dark:text-accent-on-dark">
               Contact
             </p>
             <h1 className="mt-token-4 font-display text-4xl leading-tight sm:text-5xl">
               Tell us about your project
             </h1>
-            <ul className="mt-token-8 space-y-token-4">
-              {CONTACT_PROMISES.map((line) => (
-                <li key={line} className="flex items-start gap-token-3 text-sm text-white/75">
-                  <span
-                    className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground"
-                    aria-hidden
-                  >
-                    ✓
-                  </span>
-                  {line}
-                </li>
-              ))}
-            </ul>
           </div>
             <div className="mt-10 space-y-token-4 lg:mt-16">
             <a
@@ -152,9 +139,6 @@ export function ModernContactForm() {
             >
               {supportEmail}
             </a>
-            <p className="text-sm text-white/55">
-              Always busy and want to book an exact time to call?
-            </p>
             <Link href="/support">
               <Button
                 type="button"
@@ -168,7 +152,7 @@ export function ModernContactForm() {
 
         {/* Right: form */}
         <form onSubmit={onSubmit} className="space-y-token-8">
-          {/* Honeypot — leave empty */}
+          {/* Honeypot - leave empty */}
           <div
             className="absolute -left-[9999px] h-0 w-0 overflow-hidden"
             aria-hidden
@@ -212,7 +196,7 @@ export function ModernContactForm() {
           <div className="grid gap-token-6 sm:grid-cols-2">
             <label className="block space-y-token-2">
               <span className="text-sm text-white/70">
-                Full name<span className="text-accent">*</span>
+                Full name<span className="text-accent-strong dark:text-accent-on-dark">*</span>
               </span>
               <input
                 name="name"
@@ -225,7 +209,7 @@ export function ModernContactForm() {
             </label>
             <label className="block space-y-token-2">
               <span className="text-sm text-white/70">
-                Email<span className="text-accent">*</span>
+                Email<span className="text-accent-strong dark:text-accent-on-dark">*</span>
               </span>
               <input
                 name="email"
@@ -245,13 +229,13 @@ export function ModernContactForm() {
               type="tel"
               autoComplete="tel"
               className="w-full border-0 border-b border-white/30 bg-transparent px-0 py-token-2 text-white outline-none transition placeholder:text-white/30 focus:border-accent"
-              placeholder="+234…"
+              placeholder="+234 xxx xxx xxxx"
             />
           </label>
 
           <label className="block space-y-token-2">
             <span className="text-sm text-white/70">
-              Project details<span className="text-accent">*</span>
+              Project details<span className="text-accent-strong dark:text-accent-on-dark">*</span>
             </span>
             <textarea
               name="message"
@@ -364,17 +348,17 @@ export function ContactForm({
       <div className="grid gap-token-4 sm:grid-cols-2">
         <Label>
           <span>Name</span>
-          <Input name="name" required autoComplete="name" />
+          <Input placeholder="Your full name" name="name" required autoComplete="name" />
         </Label>
         <Label>
           <span>Email</span>
-          <Input name="email" type="email" required autoComplete="email" />
+          <Input placeholder="you@example.com" name="email" type="email" required autoComplete="email" />
         </Label>
       </div>
       <div className="grid gap-token-4 sm:grid-cols-2">
         <Label>
           <span>Phone (optional)</span>
-          <Input name="phone" type="tel" autoComplete="tel" />
+          <Input placeholder="+234 xxx xxx xxxx" name="phone" type="tel" autoComplete="tel" />
         </Label>
         <Label>
           <span>Subject</span>
@@ -383,7 +367,7 @@ export function ContactForm({
       </div>
       <Label>
         <span>Message</span>
-        <Textarea name="message" required rows={6} minLength={10} />
+        <Textarea placeholder="Tell us what you need help with" name="message" required rows={6} minLength={10} />
       </Label>
       <TurnstileField siteKey={turnstileSiteKey} onToken={onCaptchaToken} />
       {err && <p className="text-sm text-danger">{err}</p>}

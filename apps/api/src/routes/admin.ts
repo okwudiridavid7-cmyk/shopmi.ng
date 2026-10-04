@@ -13,10 +13,11 @@ import {
   deleteContactInquiriesByEmail,
   toContactInquiryAdmin,
 } from "../services/contactRetention";
+import { optimizeUpload } from "../services/images";
 
 /**
  * All routes on this router require authenticated super_admin.
- * Do not weaken this — UI-only checks are not enough for suspend/role changes.
+ * Do not weaken this - UI-only checks are not enough for suspend/role changes.
  */
 export const adminRouter = Router();
 
@@ -42,11 +43,12 @@ const upload = multer({
 });
 
 adminRouter.post("/uploads", (req, res, next) => {
-  upload.single("file")(req, res, (err) => {
+  upload.single("file")(req, res, async (err) => {
     if (err) return res.status(400).json({ error: err.message || "Upload failed" });
     if (!req.file) return res.status(400).json({ error: "file is required" });
-    const url = `${env.apiUrl}/uploads/${req.file.filename}`;
-    return res.status(201).json({ url, path: `/uploads/${req.file.filename}` });
+    const filename = await optimizeUpload(req.file.filename);
+    const url = `${env.apiUrl}/uploads/${filename}`;
+    return res.status(201).json({ url, path: `/uploads/${filename}` });
   });
 });
 
@@ -303,6 +305,42 @@ adminRouter.get("/tenants/:id", async (req, res, next) => {
       },
     });
   } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * Start or renew a plan after an offline payment (until online billing is live).
+ * Renewing the current plan early extends from its end date.
+ */
+adminRouter.post("/tenants/:id/plan", async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        planId: z.string().min(1),
+        months: z.coerce.number().int().min(1).max(24).default(1),
+      })
+      .parse(req.body);
+    const [tenant, plan] = await Promise.all([
+      prisma.tenant.findUnique({ where: { id: req.params.id } }),
+      prisma.plan.findFirst({ where: { id: body.planId, active: true } }),
+    ]);
+    if (!tenant) return res.status(404).json({ error: "Shop not found" });
+    if (!plan) return res.status(404).json({ error: "Plan not found" });
+
+    const { activatePlan } = await import("../lib/plans");
+    const result = await activatePlan(tenant.id, plan.id, body.months);
+    return res.json({
+      planId: plan.id,
+      planName: plan.name,
+      planExpiresAt: result.planExpiresAt?.toISOString() ?? null,
+      paused: result.paused,
+      restored: result.restored,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation failed", details: err.flatten() });
+    }
     return next(err);
   }
 });

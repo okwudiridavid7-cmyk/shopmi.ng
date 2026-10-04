@@ -77,9 +77,8 @@ export default function ContactPage() {
 
   return (
     <ContactWithGlobe
-      title="Tell us about your project"
+      title="How can we help?"
       subtitle="Contact"
-      description="We read every message and reply as soon as we can on business days."
       supportEmail={supportEmail}
       promises={CONTACT_PROMISES}
       topics={CONTACT_TOPICS}

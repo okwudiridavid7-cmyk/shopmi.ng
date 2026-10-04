@@ -21,7 +21,7 @@ type Props = {
 };
 
 /**
- * Horizontal product/shop row — auto-scrolls when > threshold items.
+ * Horizontal product/shop row - auto-scrolls when > threshold items.
  * Edge fades, prev/next, pauses on hover/manual interaction.
  */
 export function AutoScrollCarousel({

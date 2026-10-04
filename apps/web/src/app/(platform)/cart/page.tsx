@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +31,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePlatformBranding } from "@/hooks/use-branding";
 import { loginUrl } from "@/lib/auth-redirect";
 import { beginCheckoutQueue, clearCheckoutQueue } from "@/lib/multi-checkout";
+import { CART_IMPORT_NOTES_KEY, shopReturnKey } from "@/lib/cart-handoff";
 import { useAuthTransition } from "@/stores/auth-transition";
 import { cn } from "@/lib/utils";
 
@@ -51,11 +52,28 @@ function CartInner() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lineBusy, setLineBusy] = useState<string | null>(null);
+  const [shopReturn, setShopReturn] = useState<string | null>(null);
+  const [importNotes, setImportNotes] = useState<
+    { productId: string; title?: string; reason: string }[]
+  >([]);
+
+  useEffect(() => {
+    setShopReturn(shopFilter ? sessionStorage.getItem(shopReturnKey(shopFilter)) : null);
+    const raw = sessionStorage.getItem(CART_IMPORT_NOTES_KEY);
+    if (raw) {
+      sessionStorage.removeItem(CART_IMPORT_NOTES_KEY);
+      try {
+        setImportNotes(JSON.parse(raw));
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [shopFilter]);
 
   function redirectToLogin(returnPath: string) {
     const dest = loginUrl(returnPath);
     show("session-expired", { nextHref: dest });
-    // Hard navigate — soft overlay alone was not reliably reaching /login.
+    // Hard navigate - soft overlay alone was not reliably reaching /login.
     window.location.assign(dest);
   }
 
@@ -66,25 +84,26 @@ function CartInner() {
       (c) => c.shopSlug === shopFilter && c.items.length > 0
     );
   }, [summaryQ.data, shopFilter]);
+  const buyable = useMemo(() => carts.filter((c) => c.available !== false), [carts]);
 
   const itemCount = useMemo(
-    () => carts.reduce((n, c) => n + c.items.reduce((s, i) => s + i.qty, 0), 0),
-    [carts]
+    () => buyable.reduce((n, c) => n + c.items.reduce((s, i) => s + i.qty, 0), 0),
+    [buyable]
   );
 
   const currencies = useMemo(
-    () => Array.from(new Set(carts.map((c) => c.currency))),
-    [carts]
+    () => Array.from(new Set(buyable.map((c) => c.currency))),
+    [buyable]
   );
   const mixedCurrency = currencies.length > 1;
 
   const grandSubtotal = useMemo(() => {
-    if (carts.length === 0) return null;
+    if (buyable.length === 0) return null;
     if (mixedCurrency) return null;
     const currency = currencies[0] ?? "NGN";
-    const total = carts.reduce((s, c) => s + c.subtotal, 0);
+    const total = buyable.reduce((s, c) => s + c.subtotal, 0);
     return { total, currency };
-  }, [carts, currencies, mixedCurrency]);
+  }, [buyable, currencies, mixedCurrency]);
 
   const commissionPct = branding.data?.commissionPercent ?? 5;
   const serviceFeeAmount = grandSubtotal
@@ -202,7 +221,7 @@ function CartInner() {
     );
   }
 
-  const shopCount = carts.length;
+  const shopCount = buyable.length;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -210,18 +229,38 @@ function CartInner() {
         title="Your cart"
         description={
           itemCount === 0
-            ? "Add items from any shop on the marketplace."
+            ? undefined
             : shopCount > 1
-              ? `${itemCount} items across ${shopCount} shops — checkout settles each seller automatically.`
-              : `${itemCount} item${itemCount === 1 ? "" : "s"} · pay securely with Paystack`
+              ? `${itemCount} items across ${shopCount} shops`
+              : `${itemCount} item${itemCount === 1 ? "" : "s"}`
         }
         icon={ShoppingBag}
         actions={
-          <TextLink href="/explore" arrow="left" tone="muted">
-            Continue shopping
-          </TextLink>
+          shopReturn ? (
+            <TextLink href={shopReturn} arrow="left" tone="muted">
+              Back to {new URL(shopReturn).host}
+            </TextLink>
+          ) : (
+            <TextLink href="/explore" arrow="left" tone="muted">
+              Continue shopping
+            </TextLink>
+          )
         }
       />
+
+      {importNotes.length > 0 ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+          <p className="font-medium">Some items changed since you added them:</p>
+          <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+            {importNotes.map((n) => (
+              <li key={n.productId}>
+                {n.title ? `${n.title}: ` : ""}
+                {n.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {shopFilter && carts.length === 0 && (summaryQ.data?.carts.length ?? 0) > 0 ? (
         <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -235,7 +274,6 @@ function CartInner() {
           <EmptyState
             kind="empty"
             title="Your cart is empty"
-            description="Browse the marketplace and add items from any shop."
             actionLabel="Browse marketplace"
             actionHref="/explore"
           />
@@ -263,8 +301,7 @@ function CartInner() {
           <div className="sticky bottom-4 z-10 rounded-2xl border border-border bg-card p-5 shadow-lg">
             {mixedCurrency ? (
               <p className="mb-3 text-sm text-amber-700 dark:text-amber-400">
-                Mixed currencies — use “Checkout this shop” on each section, or
-                keep one currency in the cart for a single multi-vendor flow.
+                Mixed currencies. Check out each shop separately.
               </p>
             ) : null}
 
@@ -290,10 +327,6 @@ function CartInner() {
                     </span>
                   </div>
                 ) : null}
-                <p className="text-[11px] text-muted-foreground">
-                  Fee is included in each shop payment and settled to Shopmi;
-                  verified sellers receive the rest via Paystack subaccounts.
-                </p>
                 <div className="flex items-center justify-between border-t border-border pt-2">
                   <span className="text-sm font-semibold text-foreground">
                     Total
@@ -315,11 +348,11 @@ function CartInner() {
               size="lg"
               className="h-12 w-full"
               disabled={
-                busy || authLoading || carts.length === 0 || mixedCurrency
+                busy || authLoading || buyable.length === 0 || mixedCurrency
               }
               onClick={() =>
                 void startCheckout(
-                  carts
+                  buyable
                     .map((c) => c.shopSlug)
                     .filter((s): s is string => Boolean(s))
                 )
@@ -335,12 +368,6 @@ function CartInner() {
                   ? `Checkout all shops (${shopCount})`
                   : "Checkout with Paystack"}
             </Button>
-            {shopCount > 1 && !mixedCurrency ? (
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                You’ll complete one Paystack payment per shop — we chain them
-                automatically so each vendor is settled separately.
-              </p>
-            ) : null}
           </div>
         </>
       )}
@@ -364,13 +391,19 @@ function ShopCartBlock({
   checkoutBusy: boolean;
 }) {
   const slug = cart.shopSlug ?? "";
+  const unavailable = cart.available === false;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+    <section
+      className={cn(
+        "overflow-hidden rounded-2xl border border-border bg-card shadow-sm",
+        unavailable && "opacity-75"
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <Store className="h-4 w-4 shrink-0 text-accent" aria-hidden />
-          {slug ? (
+          {slug && !unavailable ? (
             <Link
               href={`/shops/${slug}`}
               className="truncate font-semibold text-foreground hover:text-accent"
@@ -388,6 +421,13 @@ function ShopCartBlock({
         </p>
       </div>
 
+      {unavailable ? (
+        <p className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
+          This shop is temporarily unavailable, so these items can’t be bought right now. They’re
+          not included in your total.
+        </p>
+      ) : null}
+
       <ul className="divide-y divide-border">
         {cart.items.map((item) => {
           const img = productImageUrl(item.product.images);
@@ -396,7 +436,7 @@ function ShopCartBlock({
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
                 {img ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={img}
                     alt=""
                     className="h-full w-full object-cover"
@@ -419,7 +459,7 @@ function ShopCartBlock({
                   <div className="inline-flex items-center rounded-lg border border-border">
                     <button
                       type="button"
-                      disabled={lineBusy === item.id || !slug}
+                      disabled={lineBusy === item.id || !slug || unavailable}
                       className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-50"
                       aria-label="Decrease"
                       onClick={() =>
@@ -433,7 +473,7 @@ function ShopCartBlock({
                     </span>
                     <button
                       type="button"
-                      disabled={lineBusy === item.id || !slug}
+                      disabled={lineBusy === item.id || !slug || unavailable}
                       className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-50"
                       aria-label="Increase"
                       onClick={() =>
@@ -462,17 +502,19 @@ function ShopCartBlock({
         })}
       </ul>
 
-      <div className="border-t border-border px-4 py-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={checkoutBusy || !slug}
-          onClick={onCheckoutShop}
-        >
-          Checkout this shop only
-        </Button>
-      </div>
+      {unavailable ? null : (
+        <div className="border-t border-border px-4 py-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={checkoutBusy || !slug}
+            onClick={onCheckoutShop}
+          >
+            Checkout this shop only
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

@@ -27,7 +27,7 @@ export function TextLink({
       ? "text-muted-foreground hover:text-foreground"
       : tone === "danger"
         ? "text-danger hover:opacity-90"
-        : "text-accent hover:text-accent-deep dark:text-accent-on-dark";
+        : "text-accent-strong hover:opacity-80 dark:text-accent-on-dark";
 
   return (
     <Link

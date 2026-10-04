@@ -1,11 +1,33 @@
+import crypto from "crypto";
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { env } from "../config/env";
+import { enqueueTransactionalMail } from "../queue/transactionalMail";
 import { requireAuth } from "../auth/middleware";
 import { requireTenantFromMembership } from "../tenant/middleware";
 import { tenantWhere } from "../tenant/tenantContext";
 import { decimalToNumber, toTenantPublic, toUserPublic } from "../lib/serialize";
+import {
+  expirePlans,
+  planAllows,
+  planEnding,
+  switchPlan,
+  teamSeatLimit,
+} from "../lib/plans";
+import {
+  DomainConflictError,
+  DomainInputError,
+  hostingStatus,
+  normalizeDomain,
+  platformShopUrl,
+  requiredRecords,
+  setTenantDomain,
+  verifyTenantDomain,
+  type DnsCheck,
+} from "../lib/customDomains";
 
 export const sellerTeamRouter = Router();
 export const sellerDomainRouter = Router();
@@ -61,6 +83,22 @@ sellerTeamRouter.post("/invite", async (req, res, next) => {
     const body = inviteSchema.parse(req.body);
     const email = body.email.toLowerCase();
 
+    const seats = await teamSeatLimit(req.tenant!.tenantId);
+    if (seats !== null) {
+      const used = await prisma.tenantAdmin.count({
+        where: { tenantId: req.tenant!.tenantId, role: { not: "owner" } },
+      });
+      if (used >= seats) {
+        return res.status(403).json({
+          error:
+            seats === 0
+              ? "Your plan doesn't include team members. Upgrade to invite your team."
+              : `Your plan allows ${seats} team member${seats === 1 ? "" : "s"}. Upgrade to add more.`,
+          code: "PLAN_FEATURE",
+        });
+      }
+    }
+
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       user = await prisma.user.create({
@@ -99,6 +137,46 @@ sellerTeamRouter.post("/invite", async (req, res, next) => {
         where: { id: user.id },
         data: { role: "tenant_admin" },
       });
+    }
+
+    try {
+      const [tenant, inviter] = await Promise.all([
+        prisma.tenant.findUnique({
+          where: { id: req.tenant!.tenantId },
+          select: { name: true },
+        }),
+        prisma.user.findUnique({
+          where: { id: req.user!.id },
+          select: { name: true, email: true },
+        }),
+      ]);
+      let setPasswordUrl: string | undefined;
+      if (!user.passwordHash) {
+        const raw = crypto.randomBytes(32).toString("hex");
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            passwordResetToken: crypto.createHash("sha256").update(raw).digest("hex"),
+            passwordResetExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+        });
+        setPasswordUrl = `${env.webUrl}/reset-password?token=${raw}`;
+      }
+      await enqueueTransactionalMail({
+        kind: "team_invite",
+        to: user.email,
+        data: {
+          name: user.name,
+          shopName: tenant?.name,
+          inviterName: inviter?.name || inviter?.email,
+          roleLabel: body.role === "manager" ? "manager" : "staff member",
+          setPasswordUrl,
+          loginUrl: `${env.webUrl}/login?next=/seller`,
+        },
+        idempotencyKey: `team-invite:${member.id}`,
+      });
+    } catch (mailErr) {
+      console.warn("[team] invite mail failed:", mailErr);
     }
 
     return res.status(201).json({
@@ -178,22 +256,71 @@ sellerTeamRouter.delete("/:id", async (req, res, next) => {
   }
 });
 
+async function domainPayload(tenantId: string, check?: DnsCheck | null) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return null;
+  const planAllowed = await planAllows(tenantId, "customDomain");
+  const domain = tenant.customDomain;
+
+  let status: "none" | "plan" | "pending" | "securing" | "live" = "none";
+  if (domain) {
+    if (!planAllowed) status = "plan";
+    else if (!tenant.customDomainVerifiedAt) status = "pending";
+    else status = (await hostingStatus(domain)) === "verified" ? "live" : "securing";
+  }
+
+  return {
+    customDomain: domain,
+    status,
+    planAllowed,
+    records:
+      domain && tenant.customDomainToken
+        ? requiredRecords(domain, tenant.customDomainToken)
+        : [],
+    verifiedAt: tenant.customDomainVerifiedAt,
+    checkedAt: tenant.customDomainCheckedAt,
+    note: tenant.customDomainError,
+    platformUrl: platformShopUrl(tenant.slug),
+    aliasTarget: env.customDomainCnameTarget,
+    liveUrl: domain && status === "live" ? `https://${domain}` : null,
+    check: check
+      ? { ownership: check.ownership, routing: check.routing, found: check.found }
+      : null,
+  };
+}
+
 sellerDomainRouter.get("/", async (req, res, next) => {
   try {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: req.tenant!.tenantId },
-    });
-    if (!tenant) return res.status(404).json({ error: "Shop not found" });
-    return res.json({
-      customDomain: tenant.customDomain,
-      cnameTarget: env.shopBaseDomain,
-      instructions: [
-        `Create a CNAME record for your domain pointing to ${env.shopBaseDomain}.`,
-        "SSL provisioning is not automated in this environment — use a reverse proxy or CDN that terminates TLS.",
-        `Until DNS propagates, your shop remains at /shops/${tenant.slug}.`,
-      ],
-      tenant: toTenantPublic(tenant),
-    });
+    const payload = await domainPayload(req.tenant!.tenantId);
+    if (!payload) return res.status(404).json({ error: "Shop not found" });
+    return res.json(payload);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+const domainVerifyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many checks. Wait a minute and try again." },
+});
+
+sellerDomainRouter.post("/verify", domainVerifyLimiter, async (req, res, next) => {
+  try {
+    const me = await membershipRole(req.user!.id, req.tenant!.tenantId);
+    if (!me || !canManageTeam(me.role)) {
+      return res.status(403).json({ error: "Only owners and managers can manage the domain" });
+    }
+    if (!(await planAllows(req.tenant!.tenantId, "customDomain"))) {
+      return res.status(403).json({
+        error: "Custom domains are available on Lemi and Dami.",
+        code: "PLAN_FEATURE",
+      });
+    }
+    const result = await verifyTenantDomain(req.tenant!.tenantId);
+    return res.json(await domainPayload(req.tenant!.tenantId, result.check));
   } catch (err) {
     return next(err);
   }
@@ -206,46 +333,33 @@ sellerDomainRouter.put("/", async (req, res, next) => {
       return res.status(403).json({ error: "Only owners and managers can set domain" });
     }
     const body = z
-      .object({
-        customDomain: z
-          .string()
-          .min(3)
-          .max(253)
-          .regex(/^[a-z0-9.-]+$/i)
-          .nullable(),
-      })
+      .object({ customDomain: z.string().max(300).nullable() })
       .parse(req.body);
 
-    const domain = body.customDomain
-      ? body.customDomain.toLowerCase().replace(/^https?:\/\//, "").split("/")[0]
-      : null;
+    const tenantId = req.tenant!.tenantId;
+    const domain = body.customDomain?.trim() ? normalizeDomain(body.customDomain) : null;
 
-    if (domain) {
-      const taken = await prisma.tenant.findFirst({
-        where: {
-          customDomain: domain,
-          NOT: { id: req.tenant!.tenantId },
-        },
+    if (domain && !(await planAllows(tenantId, "customDomain"))) {
+      return res.status(403).json({
+        error: "Custom domains are available on Lemi and Dami.",
+        code: "PLAN_FEATURE",
       });
-      if (taken) {
-        return res.status(409).json({ error: "Domain already linked to another shop" });
-      }
     }
 
-    const tenant = await prisma.tenant.update({
-      where: { id: req.tenant!.tenantId },
-      data: { customDomain: domain },
-    });
-    return res.json({
-      customDomain: tenant.customDomain,
-      cnameTarget: env.shopBaseDomain,
-      tenant: toTenantPublic(tenant),
-    });
+    await setTenantDomain(tenantId, domain);
+    return res.json(await domainPayload(tenantId));
   } catch (err) {
+    if (err instanceof DomainInputError) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err instanceof DomainConflictError) {
+      return res.status(409).json({ error: err.message });
+    }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return res.status(409).json({ error: "That domain is already linked to another shop." });
+    }
     if (err instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: "Validation failed", details: err.flatten() });
+      return res.status(400).json({ error: "Enter a domain like shop.yourbrand.com." });
     }
     return next(err);
   }
@@ -337,6 +451,7 @@ sellerNotificationsRouter.put("/", async (req, res, next) => {
 
 sellerPlanRouter.get("/", async (req, res, next) => {
   try {
+    await expirePlans(req.tenant!.tenantId);
     const tenant = await prisma.tenant.findUnique({
       where: { id: req.tenant!.tenantId },
       include: { plan: true, _count: { select: { products: true } } },
@@ -348,12 +463,17 @@ sellerPlanRouter.get("/", async (req, res, next) => {
       orderBy: { price: "asc" },
     });
 
-    const trialEndsAt = tenant.trialEndsAt;
-    const trialActive =
-      trialEndsAt != null && trialEndsAt.getTime() > Date.now();
-    const trialDaysLeft = trialActive
-      ? Math.ceil((trialEndsAt!.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    const ending = planEnding(tenant);
+    const endsInFuture = ending != null && ending.endsAt.getTime() > Date.now();
+    const trialActive = endsInFuture && ending?.kind === "trial";
+    const daysLeft = endsInFuture
+      ? Math.ceil((ending!.endsAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
       : 0;
+    const trialDaysLeft = trialActive ? daysLeft : 0;
+    const [liveCount, pausedCount] = await Promise.all([
+      prisma.product.count({ where: { tenantId: tenant.id, status: "active" } }),
+      prisma.product.count({ where: { tenantId: tenant.id, status: "paused" } }),
+    ]);
 
     return res.json({
       tenant: toTenantPublic(tenant),
@@ -370,8 +490,15 @@ sellerPlanRouter.get("/", async (req, res, next) => {
           }
         : null,
       productCount: tenant._count.products,
+      liveCount,
+      pausedCount,
       trialActive,
       trialDaysLeft,
+      /** End of the paid period, when on a paid plan with an end date. */
+      planExpiresAt: tenant.planExpiresAt?.toISOString() ?? null,
+      /** Days until the trial or paid period ends; 0 when it doesn't end. */
+      daysLeft,
+      lapsed: tenant.status === "lapsed",
       plans: plans.map((p) => ({
         id: p.id,
         name: p.name,
@@ -400,13 +527,32 @@ sellerPlanRouter.post("/upgrade", async (req, res, next) => {
     });
     if (!plan) return res.status(404).json({ error: "Plan not found" });
 
-    const tenant = await prisma.tenant.update({
+    await expirePlans(req.tenant!.tenantId);
+    const current = await prisma.tenant.findUniqueOrThrow({
       where: { id: req.tenant!.tenantId },
-      data: { planId: plan.id },
+    });
+    const trialActive =
+      current.planExpiresAt == null &&
+      current.trialEndsAt != null &&
+      current.trialEndsAt.getTime() > Date.now();
+    const isFree = decimalToNumber(plan.price) <= 0;
+
+    if (!isFree && !trialActive) {
+      return res.status(402).json({
+        error: "Paid plans can be started once online billing is live.",
+        code: "BILLING_NOT_LIVE",
+      });
+    }
+
+    const { paused, restored } = await switchPlan(current.id, plan.id);
+    const tenant = await prisma.tenant.findUniqueOrThrow({
+      where: { id: current.id },
       include: { plan: true },
     });
 
     return res.json({
+      paused,
+      restored,
       tenant: toTenantPublic(tenant),
       plan: tenant.plan
         ? {
@@ -418,7 +564,6 @@ sellerPlanRouter.post("/upgrade", async (req, res, next) => {
             productLimit: tenant.plan.productLimit,
           }
         : null,
-      note: "Billing is not connected yet — plan assignment is recorded for gating.",
     });
   } catch (err) {
     if (err instanceof z.ZodError) {

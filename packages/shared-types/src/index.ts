@@ -1,10 +1,12 @@
 export type UserRole = "buyer" | "seller" | "tenant_admin" | "super_admin";
 
-export type TenantStatus = "pending_verification" | "active" | "suspended";
+/** `lapsed`: plan ended with no free plan to fall back to; storefront hidden. */
+export type TenantStatus = "pending_verification" | "active" | "suspended" | "lapsed";
 
 export type TenantAdminRole = "owner" | "manager" | "staff";
 
-export type ProductStatus = "draft" | "active" | "archived";
+/** `paused`: hidden by the system because the shop is over its plan's product limit. */
+export type ProductStatus = "draft" | "active" | "archived" | "paused";
 
 export type OrderStatus =
   | "pending_payment"
@@ -68,6 +70,8 @@ export interface TenantPublic {
   termsText: string | null;
   privacyText: string | null;
   trialEndsAt: string | null;
+  /** End of the current paid period; null on free plans and comped shops. */
+  planExpiresAt?: string | null;
   planId: string | null;
   createdAt: string;
 }
@@ -171,7 +175,7 @@ export interface SellerTrustPublic {
   verifiedBadge: boolean;
   logoUrl: string | null;
   yearsOnPlatform: number;
-  /** Completed (paid|fulfilled) order count — drives Quality/Delivery threshold. */
+  /** Completed (paid|fulfilled) order count - drives Quality/Delivery threshold. */
   ordersCompletedCount: number;
   /** Same as completed orders for “number of sales”; UI hides when 0. */
   salesCount: number;
@@ -179,7 +183,7 @@ export interface SellerTrustPublic {
   avgRating: number | null;
   /**
    * Quality / Delivery % only populate once `ordersCompletedCount >= 10`
-   * (see API comment / sellerTrust helper). Otherwise null — UI must hide.
+   * (see API comment / sellerTrust helper). Otherwise null - UI must hide.
    */
   qualityPercent: number | null;
   deliveryPercent: number | null;
@@ -242,6 +246,8 @@ export interface CartPublic {
   items: CartItemPublic[];
   subtotal: number;
   currency: string;
+  /** False when the shop is hidden from shoppers; items can be removed, not bought. */
+  available?: boolean;
 }
 
 export interface CartSummary {
@@ -283,7 +289,7 @@ export interface ShopThemeSettings {
     color?: string;
     fontPairId?: string;
   } | null;
-  /** Primary brand color — CTAs, shop header bar (never full page bg). */
+  /** Primary brand color - CTAs, shop header bar (never full page bg). */
   primaryColor?: string | null;
   /** Optional secondary accent for badges/links/dividers. */
   accentColor?: string | null;
@@ -305,7 +311,17 @@ export interface ShopThemeSettings {
   tickerColor?: string | null;
   whatsappUrl?: string | null;
   chatbotHtml?: string | null;
+  /** Storefront theme id; missing means "classic". */
+  storeTheme?: StoreThemeId;
 }
+
+export type StoreThemeId =
+  | "classic"
+  | "mono"
+  | "runway"
+  | "atelier"
+  | "bazaar"
+  | "pop";
 
 export type AnnouncementTicker = {
   enabled: boolean;

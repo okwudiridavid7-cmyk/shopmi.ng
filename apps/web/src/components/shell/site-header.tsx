@@ -22,20 +22,34 @@ import { useTheme } from "next-themes";
 import { useAuth } from "@/hooks/use-auth";
 import { useSellerBranding } from "@/hooks/use-seller";
 import { CartNav } from "@/components/shell/cart-nav";
+import { MegaNav } from "@/components/shell/mega-nav";
 import { UserAccountMenu } from "@/components/shell/user-account-menu";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeCycleToggle } from "@/components/theme-cycle-toggle";
 import { Input } from "@/components/ui/input";
 import { useMarketplaceFilters, useUiStore } from "@/stores/ui";
 import { usePlatformBranding } from "@/hooks/use-branding";
-import { cn } from "@/lib/utils";
+import { cn, isUnderPath } from "@/lib/utils";
 
 const COMPANY_LINKS = [
-  { href: "/about", label: "About Us", icon: Store },
+  { href: "/#about", label: "About Us", icon: Store },
   { href: "/pricing", label: "Pricing", icon: Tag },
   { href: "/contact", label: "Contact Us", icon: Mail },
   { href: "/faq", label: "FAQs", icon: CircleHelp },
 ] as const;
+
+const MARKETING_PATHS = new Set([
+  "/",
+  "/buyers",
+  "/sellers",
+  "/pricing",
+  "/contact",
+  "/faq",
+  "/support",
+  "/privacy",
+  "/terms",
+  "/cookies",
+]);
 
 export function SiteHeader({
   onOpenFilters,
@@ -73,17 +87,18 @@ export function SiteHeader({
     if (pathname !== "/explore") router.push("/explore");
   }
 
+  const isMarketing = MARKETING_PATHS.has(pathname);
   const isExplore = pathname === "/explore";
-  const isAdmin = pathname.startsWith("/admin");
-  const isSellerDash = pathname.startsWith("/seller");
+  const isAdmin = isUnderPath(pathname, "/admin");
+  const isSellerDash = isUnderPath(pathname, "/seller");
   const sellerBranding = useSellerBranding(isSellerDash);
   const shopLogo =
     sellerBranding.data?.logoRectUrl || sellerBranding.data?.logoUrl || null;
   const shopName = sellerBranding.data?.shopName ?? "Your shop";
 
   return (
-    <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-16 w-full max-w-[100rem] items-center gap-token-3 px-token-4 sm:px-token-6">
+    <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-card">
+      <div className="relative mx-auto flex h-16 w-full max-w-[100rem] items-center gap-token-3 px-token-4 sm:px-token-6">
         <button
           type="button"
           className="rounded-md p-token-2 text-foreground lg:hidden"
@@ -131,7 +146,11 @@ export function SiteHeader({
           </span>
         )}
 
-        {!isAdmin && (
+        {isMarketing ? (
+          <MegaNav className="absolute inset-y-0 left-1/2 hidden -translate-x-1/2 lg:flex" />
+        ) : null}
+
+        {!isAdmin && !isMarketing && (
           <form
             onSubmit={submitSearch}
             className="relative mx-auto hidden min-w-0 max-w-xl flex-1 items-stretch lg:flex"
@@ -148,7 +167,7 @@ export function SiteHeader({
             </div>
             <button
               type="submit"
-              className="inline-flex h-10 shrink-0 items-center rounded-r-md bg-accent px-token-4 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-deep"
+              className="inline-flex h-10 shrink-0 items-center rounded-r-md bg-accent-strong px-token-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-90"
             >
               Search
             </button>
@@ -156,11 +175,11 @@ export function SiteHeader({
         )}
 
         <nav className="ml-auto flex items-center gap-token-1 sm:gap-token-2">
-          {!isAdmin && (
+          {!isAdmin && !isMarketing && (
             <div className="relative hidden lg:block">
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md px-token-3 py-token-2 text-sm text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1 rounded-md px-token-3 py-token-2 text-[15px] font-medium text-foreground transition hover:text-accent-strong dark:hover:text-accent-on-dark"
                 onClick={() => setCompanyOpen((v) => !v)}
                 aria-expanded={companyOpen}
               >
@@ -172,7 +191,7 @@ export function SiteHeader({
                     <Link
                       key={l.href}
                       href={l.href}
-                      className="block px-3 py-2 text-sm transition hover:bg-muted"
+                      className="block px-3 py-2 text-sm font-medium text-foreground transition hover:bg-muted"
                       onClick={() => setCompanyOpen(false)}
                     >
                       {l.label}
@@ -183,16 +202,14 @@ export function SiteHeader({
             </div>
           )}
 
-          <ThemeCycleToggle
-            className={isAdmin ? "inline-flex" : "hidden lg:inline-flex"}
-          />
+          {isAdmin ? <ThemeCycleToggle className="inline-flex" /> : null}
 
           {!isAdmin && (
             <>
               <Link
                 href={user ? "/buyer/favorites" : "/login?next=/buyer/favorites"}
                 aria-label="Favorites"
-                className="rounded-md p-token-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded-md p-token-2 text-foreground hover:bg-muted"
               >
                 <Heart className="h-5 w-5" />
               </Link>
@@ -207,19 +224,24 @@ export function SiteHeader({
               <Link
                 href="/login"
                 aria-label="Sign in"
-                className="rounded-md p-token-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+                className="rounded-md p-token-2 text-foreground hover:bg-muted lg:hidden"
               >
                 <User className="h-5 w-5" />
               </Link>
               <Link
                 href="/login"
-                className="hidden rounded-md px-token-3 py-token-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground lg:inline"
+                className="hidden rounded-md px-token-3 py-token-2 text-[15px] font-medium text-foreground transition hover:text-accent-strong dark:hover:text-accent-on-dark lg:inline"
               >
                 Sign in
               </Link>
               <Link
                 href="/signup"
-                className="hidden rounded-md bg-accent px-token-4 py-token-2 text-sm font-medium text-white lg:inline"
+                className={cn(
+                  "hidden rounded-md px-token-4 py-token-2 text-[15px] font-semibold transition lg:inline",
+                  isMarketing
+                    ? "rounded-lg bg-foreground text-background hover:opacity-85"
+                    : "bg-accent-strong text-white hover:brightness-90"
+                )}
               >
                 Sign up
               </Link>
@@ -230,7 +252,7 @@ export function SiteHeader({
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          {/* Backdrop — page peeks on the right with blur */}
+          {/* Backdrop - page peeks on the right with blur */}
           <button
             type="button"
             className="absolute inset-0 bg-black/40 backdrop-blur-[4px]"
@@ -346,7 +368,7 @@ export function SiteHeader({
                           className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-foreground transition hover:bg-muted"
                         >
                           <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          {user ? "Become a seller" : "Start selling"}
+                          {user ? "Become a seller" : "Create your shop"}
                         </Link>
                       </li>
                       {billingEnabled && (
@@ -410,7 +432,7 @@ export function SiteHeader({
                   </Link>
                   <Link
                     href="/signup"
-                    className="flex h-11 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-white transition hover:bg-accent-deep"
+                    className="flex h-11 items-center justify-center rounded-xl bg-accent-strong text-sm font-semibold text-white transition hover:brightness-90"
                   >
                     Sign up
                   </Link>
@@ -418,7 +440,7 @@ export function SiteHeader({
               ) : (
                 <Link
                   href="/explore"
-                  className="flex h-11 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-white transition hover:bg-accent-deep"
+                  className="flex h-11 items-center justify-center gap-2 rounded-xl bg-accent-strong text-sm font-semibold text-white transition hover:brightness-90"
                 >
                   <Store className="h-4 w-4" aria-hidden />
                   Go to marketplace

@@ -8,7 +8,20 @@ export type TransactionalEmailKind =
   | "order_buyer"
   | "order_seller"
   | "verification_approved"
-  | "verification_rejected";
+  | "verification_rejected"
+  | "plan_reminder"
+  | "plan_ended"
+  | "team_invite"
+  | "domain_active"
+  | "domain_renewal_due";
+
+function plural(n: number, word: string) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function p(html: string) {
+  return `<p style="margin:0 0 12px;">${html}</p>`;
+}
 
 function ctaButton(href: string, label: string): string {
   const safeHref = escapeHtml(href);
@@ -42,7 +55,7 @@ export async function buildTransactionalEmail(
       subject = `Welcome to ${app}`;
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
-        <p style="margin:0 0 12px;">You're in — your ${escapeHtml(app)} account is ready.</p>
+        <p style="margin:0 0 12px;">You're in! Your ${escapeHtml(app)} account is ready.</p>
         <p style="margin:0 0 12px;">Browse shops, save favorites, or open your own storefront when you're ready to sell.</p>
         ${data.dashboardUrl ? ctaButton(String(data.dashboardUrl), "Go to your dashboard") : ""}
         <p style="margin:16px 0 0;">Thank you for choosing ${escapeHtml(app)}.</p>
@@ -73,7 +86,7 @@ export async function buildTransactionalEmail(
       const shop = escapeHtml(String(data.shopName ?? "a shop"));
       const total = escapeHtml(String(data.totalLabel ?? ""));
       const ref = escapeHtml(String(data.reference ?? data.orderId ?? ""));
-      subject = `Payment confirmed — ${String(data.shopName ?? "your order")}`;
+      subject = `Payment confirmed: ${String(data.shopName ?? "your order")}`;
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
         <p style="margin:0 0 12px;"><strong>${total}</strong> has been paid for your order from <strong>${shop}</strong>.</p>
@@ -87,10 +100,10 @@ export async function buildTransactionalEmail(
     case "order_seller": {
       const total = escapeHtml(String(data.totalLabel ?? ""));
       const buyer = escapeHtml(String(data.buyerEmail ?? "a buyer"));
-      subject = `New order — ${String(data.totalLabel ?? "payment received")}`;
+      subject = `New order: ${String(data.totalLabel ?? "payment received")}`;
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
-        <p style="margin:0 0 12px;">Great news — <strong>${total}</strong> just came in from ${buyer}.</p>
+        <p style="margin:0 0 12px;">Great news! <strong>${total}</strong> just came in from ${buyer}.</p>
         ${data.itemsHtml ? `<div style="margin:16px 0;">${data.itemsHtml}</div>` : ""}
         ${data.ordersUrl ? ctaButton(String(data.ordersUrl), "Open orders") : ""}
         <p style="margin:16px 0 0;">Pack carefully and keep buyers updated.</p>
@@ -99,24 +112,169 @@ export async function buildTransactionalEmail(
     }
     case "verification_approved": {
       const shop = escapeHtml(String(data.shopName ?? "your shop"));
-      subject = `Verified — ${String(data.shopName ?? "your shop")}`;
+      subject = `Verified: ${String(data.shopName ?? "your shop")}`;
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
         <p style="margin:0 0 12px;"><strong>${shop}</strong> is now verified on the marketplace. Buyers will see your verified badge.</p>
         ${data.dashboardUrl ? ctaButton(String(data.dashboardUrl), "Open seller dashboard") : ""}
-        <p style="margin:16px 0 0;">Congrats — you’re cleared to settle payouts once bank details are on file.</p>
+        <p style="margin:16px 0 0;">Congrats! You’re cleared to settle payouts once bank details are on file.</p>
       `;
       break;
     }
     case "verification_rejected": {
       const shop = escapeHtml(String(data.shopName ?? "your shop"));
       const reason = escapeHtml(String(data.reason ?? "Please update your documents and resubmit."));
-      subject = `Verification update — ${String(data.shopName ?? "your shop")}`;
+      subject = `Verification update: ${String(data.shopName ?? "your shop")}`;
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
         <p style="margin:0 0 12px;">We reviewed verification for <strong>${shop}</strong> and can’t approve it yet.</p>
         <p style="margin:0 0 12px;"><strong>What to fix:</strong> ${reason}</p>
         ${data.verificationUrl ? ctaButton(String(data.verificationUrl), "Update and resubmit") : ""}
+      `;
+      break;
+    }
+    case "team_invite": {
+      const shop = escapeHtml(String(data.shopName ?? "a shop"));
+      const inviter = escapeHtml(String(data.inviterName ?? "The shop owner"));
+      const role = escapeHtml(String(data.roleLabel ?? "team member"));
+      const setPassword = Boolean(data.setPasswordUrl);
+      subject = `You've been added to ${String(data.shopName ?? "a shop")} on Shopmi.ng`;
+      inner = `
+        ${p(greeting(name))}
+        ${p(`${inviter} added you to <strong>${shop}</strong> as a ${role}.`)}
+        ${p(
+          setPassword
+            ? "Set a password to sign in and open the seller dashboard. You can also continue with Google using this email."
+            : "Sign in with your existing account to open the seller dashboard."
+        )}
+        ${ctaButton(
+          String(data.setPasswordUrl ?? data.loginUrl ?? "#"),
+          setPassword ? "Set your password" : "Sign in"
+        )}
+        ${
+          setPassword
+            ? `<p style="margin:12px 0 0;font-size:13px;color:#6b7280;">This link expires in 7 days. If it runs out, use "Forgot password" on the sign-in page with this email.</p>`
+            : ""
+        }
+      `;
+      break;
+    }
+    case "plan_reminder": {
+      const shop = escapeHtml(String(data.shopName ?? "your shop"));
+      const plan = escapeHtml(String(data.planName ?? "Your plan"));
+      const isTrial = data.kind === "trial";
+      const days = Number(data.daysLeft ?? 0);
+      const free = data.freePlanName ? escapeHtml(String(data.freePlanName)) : null;
+      const freeLimit = data.freeLimit != null ? Number(data.freeLimit) : null;
+      const willPause = Number(data.willPause ?? 0);
+      const openOrders = Number(data.openOrders ?? 0);
+      const endsOn = escapeHtml(String(data.endsOn ?? ""));
+      subject = isTrial
+        ? `Your ${String(data.planName ?? "")} trial ends in ${plural(days, "day")}`
+        : `Your ${String(data.planName ?? "")} plan ends in ${plural(days, "day")}`;
+      inner = `
+        ${p(greeting(name))}
+        ${p(
+          isTrial
+            ? `Your free trial of <strong>${plan}</strong> for <strong>${shop}</strong> ends on <strong>${endsOn}</strong>.`
+            : `The <strong>${plan}</strong> plan for <strong>${shop}</strong> ends on <strong>${endsOn}</strong>. Renew to keep everything as it is.`
+        )}
+        ${
+          free
+            ? p(
+                `After that, your shop moves to ${free} and stays online${
+                  freeLimit != null ? ` with up to ${freeLimit} live products` : ""
+                }.${
+                  willPause > 0
+                    ? ` ${plural(willPause, "product")} will be paused, which hides them from shoppers. Nothing is deleted, and they come back when you upgrade.`
+                    : ""
+                }`
+              )
+            : p(
+                "After that, your storefront will be unavailable to shoppers until you renew. Your dashboard keeps working."
+              )
+        }
+        ${p(
+          openOrders > 0
+            ? `Orders already placed aren’t affected. You have ${plural(openOrders, "paid order")} to fulfil.`
+            : "Orders already placed aren’t affected."
+        )}
+        ${data.planUrl ? ctaButton(String(data.planUrl), isTrial ? "Choose a plan" : "Renew plan") : ""}
+      `;
+      break;
+    }
+    case "plan_ended": {
+      const shop = escapeHtml(String(data.shopName ?? "your shop"));
+      const plan = escapeHtml(String(data.planName ?? "Your plan"));
+      const isTrial = data.kind === "trial";
+      const free = data.freePlanName ? escapeHtml(String(data.freePlanName)) : null;
+      const paused = Number(data.paused ?? 0);
+      const openOrders = Number(data.openOrders ?? 0);
+      subject = isTrial
+        ? `Your ${String(data.planName ?? "")} trial has ended`
+        : `Your ${String(data.planName ?? "")} plan has ended`;
+      inner = `
+        ${p(greeting(name))}
+        ${p(
+          `${isTrial ? `Your free trial of <strong>${plan}</strong>` : `The <strong>${plan}</strong> plan`} for <strong>${shop}</strong> ended today.`
+        )}
+        ${
+          free
+            ? p(
+                `Your shop is now on ${free} and your storefront is still online.${
+                  paused > 0
+                    ? ` ${plural(paused, "product")} ${paused === 1 ? "was" : "were"} paused to fit the plan’s limit. Nothing was deleted: upgrade to bring them back, or choose which products stay live from your dashboard.`
+                    : ""
+                }`
+              )
+            : p(
+                "Your storefront is now unavailable to shoppers. Your dashboard still works, and it comes back as soon as you renew."
+              )
+        }
+        ${
+          openOrders > 0
+            ? p(
+                `You have ${plural(openOrders, "paid order")} to fulfil. Buyers can still see their orders and invoices.`
+              )
+            : ""
+        }
+        ${
+          openOrders > 0 && data.ordersUrl
+            ? ctaButton(String(data.ordersUrl), "Open orders")
+            : data.planUrl
+              ? ctaButton(String(data.planUrl), "See plans")
+              : ""
+        }
+      `;
+      break;
+    }
+    case "domain_active": {
+      const domain = escapeHtml(String(data.domain ?? "your domain"));
+      const shop = escapeHtml(String(data.shopName ?? "your shop"));
+      subject = `${String(data.domain ?? "Your domain")} is registered`;
+      inner = `
+        ${p(greeting(name))}
+        ${p(`<strong>${domain}</strong> is now registered to <strong>${shop}</strong>.`)}
+        ${p(
+          "We've pointed it at your storefront. It can take up to a few hours for the domain to work everywhere, and we'll secure it with SSL automatically."
+        )}
+        ${data.expiresOn ? p(`It's registered until <strong>${escapeHtml(String(data.expiresOn))}</strong>.`) : ""}
+        ${data.domainUrl ? ctaButton(String(data.domainUrl), "Manage domain") : ""}
+      `;
+      break;
+    }
+    case "domain_renewal_due": {
+      const domain = escapeHtml(String(data.domain ?? "your domain"));
+      const days = Number(data.daysLeft ?? 0);
+      const expiresOn = escapeHtml(String(data.expiresOn ?? ""));
+      subject = `${String(data.domain ?? "Your domain")} expires in ${plural(days, "day")}`;
+      inner = `
+        ${p(greeting(name))}
+        ${p(`<strong>${domain}</strong> expires on <strong>${expiresOn}</strong>.`)}
+        ${p(
+          "Renew it to keep your storefront on this address. If it expires, shoppers visiting it won't reach your shop and someone else could register it."
+        )}
+        ${data.domainUrl ? ctaButton(String(data.domainUrl), "Renew domain") : ""}
       `;
       break;
     }

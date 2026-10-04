@@ -16,14 +16,23 @@ export function useBuyerOrders() {
   });
 }
 
+export type OrderShopContact = {
+  /** False when the storefront is hidden (plan ended or suspended). */
+  available: boolean;
+  email: string | null;
+  phone: string | null;
+  whatsappUrl: string | null;
+};
+
 export function useBuyerOrder(id: string) {
   return useQuery({
     queryKey: queryKeys.buyer.order(id),
     queryFn: async () => {
-      const res = await apiFetch<{ order: OrderPublic }>(
-        `/api/buyer/orders/${id}`
-      );
-      return res.order;
+      const res = await apiFetch<{
+        order: OrderPublic;
+        shopContact: OrderShopContact | null;
+      }>(`/api/buyer/orders/${id}`);
+      return { ...res.order, shopContact: res.shopContact };
     },
     enabled: !!id,
   });

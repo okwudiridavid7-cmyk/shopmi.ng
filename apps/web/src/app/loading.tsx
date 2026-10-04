@@ -5,7 +5,7 @@ import {
   DOT_LOADER_GAME_FRAMES,
 } from "@/components/ui/dot-loader";
 
-/** Shared route-level loading UI — centered horizontally & vertically. */
+/** Shared route-level loading UI - centered horizontally & vertically. */
 export default function Loading() {
   return (
     <div className="flex min-h-[calc(100dvh-4rem)] w-full flex-col items-center justify-center px-6">

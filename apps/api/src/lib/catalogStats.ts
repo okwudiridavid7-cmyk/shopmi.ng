@@ -1,6 +1,7 @@
 import type IORedis from "ioredis";
 import { prisma } from "../db/prisma";
 import { getRedisConnection } from "../queue/connection";
+import { UNAVAILABLE_SHOP_STATUSES } from "../tenant/tenantContext";
 
 export type CatalogStats = {
   shopCount: number;
@@ -15,12 +16,12 @@ export const CATALOG_STATS_TTL_SEC = 120;
 async function loadCatalogStatsFromDb(): Promise<CatalogStats> {
   const [shopCount, productCount, orderCount] = await Promise.all([
     prisma.tenant.count({
-      where: { status: { not: "suspended" } },
+      where: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
     }),
     prisma.product.count({
       where: {
         status: "active",
-        tenant: { status: { not: "suspended" } },
+        tenant: { status: { notIn: UNAVAILABLE_SHOP_STATUSES } },
       },
     }),
     prisma.order.count({

@@ -19,19 +19,19 @@ For questions about this Policy or requests regarding Personal Data, contact ${s
 2. GENERAL PRINCIPLES. CONFIDENTIALITY
 We process Personal Data adhering to these principles:
 
-* Lawfulness, fairness, and transparency — we process Personal Data lawfully and explain our practices in plain language.
-* Purpose limitation — we collect and process Personal Data for specified, explicit, and legitimate purposes and do not further process it in incompatible ways.
-* Data minimization — Personal Data is adequate, relevant, and limited to what is necessary.
-* Accuracy — we take reasonable steps to keep Personal Data accurate and up to date.
-* Storage limitation — we keep Personal Data in identifiable form only as long as needed for the purposes described here (and legal retention duties).
-* Integrity and confidentiality — we use appropriate technical and organizational measures to protect Personal Data.
+* Lawfulness, fairness, and transparency: we process Personal Data lawfully and explain our practices in plain language.
+* Purpose limitation: we collect and process Personal Data for specified, explicit, and legitimate purposes and do not further process it in incompatible ways.
+* Data minimization: Personal Data is adequate, relevant, and limited to what is necessary.
+* Accuracy: we take reasonable steps to keep Personal Data accurate and up to date.
+* Storage limitation: we keep Personal Data in identifiable form only as long as needed for the purposes described here (and legal retention duties).
+* Integrity and confidentiality: we use appropriate technical and organizational measures to protect Personal Data.
 
 Information stored on the Platform is treated as confidential and accessed only by authorized personnel and processors who need it to operate the service.
 
 3. INFORMATION WE COLLECT
 3.1 Information you provide to us
 
-Account signup and profile. When you create an account we require an email address and password (stored as a hash — we never store plain-text passwords). You may also provide name, phone, WhatsApp number, country, state, and other profile fields. Your role may be buyer, seller, and/or administrator.
+Account signup and profile. When you create an account we require an email address and password (stored as a hash; we never store plain-text passwords). You may also provide name, phone, WhatsApp number, country, state, and other profile fields. Your role may be buyer, seller, and/or administrator.
 
 Shop and listing data. Sellers provide shop name, slug, branding (colors, logos, banners), product titles, descriptions, prices, images, inventory, policies, FAQs, and published contact details.
 
@@ -53,11 +53,11 @@ Legal bases for this processing typically include: performance of a contract; ou
 
 Log and device data. IP address, browser type, device/OS characteristics, approximate timestamps, and security-related events when you access the Platform (including as a guest).
 
-Cookies and sessions. Essential cookies and similar storage for signed-in sessions (httpOnly access/refresh tokens) and guest cart identifiers. These are required for core functionality, not advertising cookies. Blocking them may prevent login or cart persistence.
+Cookies and sessions. Essential cookies and similar storage for signed-in sessions (httpOnly access/refresh tokens) and guest cart identifiers are required for core functionality. Optional functional, analytics, and marketing cookies are only set with your consent. See our Cookie Policy at ${webUrl}/cookies for details and to change your choices.
 
 Usage data. Pages viewed, search and filter queries, category browsing, and similar interactions needed to run and improve the catalog experience.
 
-Geo-related data. Approximate location derived from country/state you select or, where applicable, coarse signals used for localized experience and fraud prevention — not precise GPS tracking by default.
+Geo-related data. Approximate location derived from country/state you select or, where applicable, coarse signals used for localized experience and fraud prevention, not precise GPS tracking by default.
 
 Abuse-prevention signals. Patterns related to payments, account activity, suspensions, and device/session metadata to detect fraud, spam, and Terms violations.
 
@@ -132,6 +132,51 @@ We will update this page when the Policy changes and revise the “Last revised�
 
 15. CONTACT
 Privacy questions and data requests: ${supportEmail}
+Website: ${webUrl}
+`;
+}
+
+export function platformCookiePolicy(appName: string, webUrl: string, supportEmail: string): string {
+  return `${appName} Cookie Policy
+
+Last revised: 28 September 2026
+
+1. WHAT COOKIES ARE
+Cookies are small text files stored on your device when you visit a website. We also use similar technologies such as local storage. Together we call these “cookies” in this Policy. This Policy applies to ${webUrl} and to seller storefronts hosted on ${appName}.
+
+2. HOW WE USE COOKIES
+We group cookies into four categories. Essential cookies are always on because the Platform cannot work without them. All other categories are off until you allow them.
+
+2.1 Essential
+* Session cookies that keep you signed in (httpOnly access and refresh tokens).
+* Guest cart identifiers so your cart survives page reloads.
+* Security and fraud-prevention signals, including bot protection on forms.
+* Your cookie choice itself (shopmi_consent), kept for 12 months.
+
+2.2 Functional
+* Live chat and support widgets added by ${appName} or by a seller on their storefront. These are provided by third parties who may set their own cookies.
+* Interface preferences such as light or dark mode.
+
+2.3 Analytics
+* Aggregated measurement of pages visited and features used, so we can improve the Platform. We do not use analytics to identify you personally.
+
+2.4 Marketing
+* Measuring the performance of ${appName} and partner-shop promotions, and showing more relevant offers.
+
+3. THIRD-PARTY COOKIES
+Payments are processed by Paystack on its own pages, which set cookies under Paystack’s policies. Third-party chat widgets load only after you allow functional cookies. We do not sell cookie data.
+
+4. YOUR CHOICES
+When you first visit, you can accept all cookies, reject all optional cookies, or choose categories under “Manage preferences”. You can change your choice at any time with the “Cookie settings” link in the site footer or the button on this page. You can also delete or block cookies in your browser settings; blocking essential cookies may prevent sign-in or checkout.
+
+5. RETENTION
+Session cookies expire when you sign out or when the session ends. Your consent choice is kept for 12 months, after which we ask again. Third-party cookies follow their providers’ retention periods.
+
+6. CHANGES
+We will update this page and the “Last revised” date when this Policy changes. If we add a new cookie category, we will ask for your consent again.
+
+7. CONTACT
+Questions about cookies: ${supportEmail}
 Website: ${webUrl}
 `;
 }

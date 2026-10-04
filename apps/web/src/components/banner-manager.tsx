@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/components/ui/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ShopBannerPublic } from "@vendors/shared-types";
 import { BannerCarousel } from "@/components/banner-carousel";
@@ -75,7 +76,8 @@ export function BannerManager({
   const [selectedId, setSelectedId] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [, setMsg] = useState<string | null>(null);
+  const { toast } = useToast();
   const [err, setErr] = useState<string | null>(null);
   const [useDefaultPreview, setUseDefaultPreview] = useState(false);
 
@@ -196,7 +198,7 @@ export function BannerManager({
           method: "PATCH",
           body: JSON.stringify(body),
         });
-        setMsg("Banner updated");
+        toast({ title: "Banner updated", tone: "success" });
       } else {
         const res = await apiFetch<{ banner: ShopBannerPublic }>(
           "/api/seller/banners",
@@ -204,7 +206,7 @@ export function BannerManager({
         );
         setSelectedId(res.banner.id);
         setDraft(fromBanner(res.banner));
-        setMsg("Banner created");
+        toast({ title: "Banner created", tone: "success" });
       }
       await qc.invalidateQueries({ queryKey: ["seller", "banners"] });
     } catch (e) {
@@ -223,7 +225,7 @@ export function BannerManager({
       setDraft(null);
       setSelectedId(null);
       await qc.invalidateQueries({ queryKey: ["seller", "banners"] });
-      setMsg("Banner deleted");
+      toast({ title: "Banner deleted", tone: "success" });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Delete failed");
     } finally {
@@ -266,7 +268,7 @@ export function BannerManager({
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "banners"] });
-      setMsg("Default banner added");
+      toast({ title: "Default banner added", tone: "success" });
       setUseDefaultPreview(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to add default");
@@ -277,13 +279,7 @@ export function BannerManager({
 
   return (
     <div className="space-y-token-6">
-      <div>
-        <h2 className="font-display text-lg">Banners</h2>
-        <p className="mt-token-1 text-sm text-muted-foreground">
-          Create rotating hero banners for your storefront. Live preview updates
-          as you edit.
-        </p>
-      </div>
+      <h2 className="font-display text-lg">Banners</h2>
 
       <div>
         <p className="mb-token-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -327,7 +323,7 @@ export function BannerManager({
           <CardBody className="space-y-token-2 p-token-3">
             {banners.length === 0 && (
               <p className="px-token-2 text-xs text-muted-foreground">
-                No banners yet — add one or use the default.
+                No banners yet
               </p>
             )}
             {[...banners]
@@ -401,6 +397,7 @@ export function BannerManager({
               <Label>
                 <span>Title</span>
                 <Input
+                  placeholder="e.g. New season, new colours"
                   value={draft.title}
                   onChange={(e) =>
                     setDraft({ ...draft, title: e.target.value })
@@ -411,6 +408,7 @@ export function BannerManager({
                 <span>Subtitle</span>
                 <Textarea
                   rows={2}
+                  placeholder="One line about the offer"
                   value={draft.subtitle}
                   onChange={(e) =>
                     setDraft({ ...draft, subtitle: e.target.value })
@@ -421,6 +419,7 @@ export function BannerManager({
                 <Label>
                   <span>CTA text</span>
                   <Input
+                    placeholder="e.g. Shop now"
                     value={draft.ctaText}
                     onChange={(e) =>
                       setDraft({ ...draft, ctaText: e.target.value })
@@ -444,6 +443,7 @@ export function BannerManager({
                   type="number"
                   min={1}
                   max={100}
+                  placeholder="6"
                   value={draft.scrollSpeed}
                   onChange={(e) =>
                     setDraft({
@@ -463,11 +463,6 @@ export function BannerManager({
                 />
                 Active on storefront
               </label>
-              {msg && (
-                <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                  {msg}
-                </p>
-              )}
               {err && <p className="text-sm text-danger">{err}</p>}
               <div className="flex flex-wrap gap-token-2">
                 <Button
@@ -494,7 +489,7 @@ export function BannerManager({
         ) : (
           <Card>
             <CardBody className="py-token-10 text-center text-sm text-muted-foreground">
-              Select a banner or create a new one.
+              No banner selected
             </CardBody>
           </Card>
         )}

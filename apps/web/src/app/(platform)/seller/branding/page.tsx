@@ -10,7 +10,6 @@ import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
-import { TextLink } from "@/components/ui/text-link";
 import { apiFetch } from "@/lib/api";
 import { uploadSellerFile, useSellerBranding } from "@/hooks/use-seller";
 import { checkBrandContrast, parseHexColor } from "@/lib/theme";
@@ -86,7 +85,7 @@ export default function SellerBrandingPage() {
       }
       if (logoRectUrl && !logoUrl) {
         setMsg(
-          "Wide logo saved. Add a square icon too for favicon and compact nav — we won’t stretch the wide logo into a square."
+          "Wide logo saved. Add a square icon for your favicon."
         );
       }
       await apiFetch("/api/seller/branding", {
@@ -103,7 +102,7 @@ export default function SellerBrandingPage() {
       setMsg((m) =>
         m?.includes("Wide logo")
           ? m
-          : "Branding saved — your shop header and accents will update on the storefront."
+          : "Branding saved"
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn’t save branding");
@@ -133,17 +132,6 @@ export default function SellerBrandingPage() {
     <div className="space-y-6">
       <PageHeader
         title="Branding"
-        description={
-          <>
-            Upload a square icon and optional wide lockup. Colors apply to your
-            shop header, CTAs, and accents — never as a full-page background.
-            Prefer the{" "}
-            <TextLink href="/seller/website?tab=branding">
-              Website → Branding
-            </TextLink>{" "}
-            logo builder if you don’t have files yet.
-          </>
-        }
         icon={Palette}
       />
 
@@ -160,8 +148,7 @@ export default function SellerBrandingPage() {
                 <Label>
                   <span>Square icon</span>
                   <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                    Favicon and compact logo (1:1). Used with your shop name when
-                    no wide logo is set.
+                    1:1 aspect ratio
                   </span>
                   <Input
                     type="file"
@@ -195,10 +182,6 @@ export default function SellerBrandingPage() {
               <div className="space-y-3">
                 <Label>
                   <span>Wide / rectangular logo</span>
-                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                    Header lockup where space allows. We never crop this into a
-                    square — upload a separate icon for that.
-                  </span>
                   <Input
                     type="file"
                     accept="image/*"
@@ -228,8 +211,7 @@ export default function SellerBrandingPage() {
                 )}
                 {logoRectUrl && !logoUrl && (
                   <p className="text-xs text-amber-800 dark:text-amber-200">
-                    Add a square icon for favicon use — stretching the wide logo
-                    would look wrong.
+                    Add a square icon for your favicon.
                   </p>
                 )}
               </div>
@@ -281,9 +263,7 @@ export default function SellerBrandingPage() {
                   role="alert"
                   className="rounded-xl border border-warning/40 bg-warning-muted px-3 py-2 text-sm text-warning"
                 >
-                  {contrast.warning} Preview uses{" "}
-                  <strong>{contrast.suggestedTextColor}</strong> on buttons so
-                  they stay readable.
+                  {contrast.warning}
                 </div>
               )}
 
@@ -305,10 +285,6 @@ export default function SellerBrandingPage() {
 
         <div className="space-y-3">
           <p className="text-sm font-semibold text-foreground">Live preview</p>
-          <p className="text-xs text-muted-foreground">
-            Header bar and buttons use your brand color. Page background and body
-            text keep the platform defaults.
-          </p>
           <BrandPreview shopName={shopName} theme={previewTheme} />
         </div>
       </div>
