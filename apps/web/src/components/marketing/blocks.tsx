@@ -75,7 +75,7 @@ export function SectionIntro({
           label={eyebrow}
           className={
             inverted
-              ? "border-white/15 bg-white/5 text-[#ff9a52] shadow-none dark:text-[#ff9a52]"
+              ? "border-white/15 bg-white/5 text-accent-on-dark shadow-none dark:text-accent-on-dark"
               : undefined
           }
         />
@@ -233,7 +233,7 @@ export function CtaBand({
 }) {
   return (
     <section className="px-5 pb-16 pt-4 sm:px-8 sm:pb-24">
-      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-[#ff822e] px-6 py-14 text-center sm:px-12 sm:py-16">
+      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-accent px-6 py-14 text-center sm:px-12 sm:py-16">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-[0.16]"
@@ -243,10 +243,10 @@ export function CtaBand({
           }}
         />
         <div className="relative">
-          <h2 className="mx-auto max-w-2xl font-display text-3xl font-bold leading-tight tracking-tight text-[#141414] sm:text-4xl">
+          <h2 className="mx-auto max-w-2xl font-display text-3xl font-bold leading-tight tracking-tight text-accent-ink sm:text-4xl">
             {title}
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#2b1a0e] sm:text-lg">
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[color-mix(in_oklab,var(--color-accent-ink)_85%,transparent)] sm:text-lg">
             {body}
           </p>
           <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">

@@ -43,6 +43,8 @@
   /* Fills behind white text and orange words - bright accent fails contrast there. */
   --color-accent-strong: #c2530a;
   --color-accent-foreground: #ffffff;
+  /* Dark copy on large bright accent fills (CTA band, arrow badges). */
+  --color-accent-ink: #141414;
   --color-accent-soft: rgb(255 130 46 / 0.1);
   --color-accent-deep: #e56a14;
   --color-accent-on-dark: #ff822e;
@@ -182,6 +184,32 @@
 
 [data-shell="shop"] {
   --shell-bar: color-mix(in srgb, var(--shop-accent, var(--color-accent)) 10%, transparent);
+}
+
+/*
+  Storefronts belong to sellers, so the admin platform palette (injected as
+  #platform-palette) must not reach them. Pin the default tokens here; the
+  store theme rules below still apply each seller's brand colour.
+*/
+[data-shell="shop"] {
+  --color-accent: #ff822e;
+  --color-accent-strong: #c2530a;
+  --color-accent-foreground: #ffffff;
+  --color-accent-soft: rgb(255 130 46 / 0.1);
+  --color-accent-deep: #e56a14;
+  --color-accent-on-dark: #ff822e;
+  --color-ring: #ff822e;
+}
+html:not(.dark) [data-shell="shop"] {
+  --color-foreground: #111113;
+  --color-card-foreground: #111113;
+  --color-muted: #f4f4f5;
+}
+.dark [data-shell="shop"] {
+  --color-accent-soft: rgb(255 130 46 / 0.15);
+  --color-accent-deep: #ff944d;
+  --color-accent-on-dark: #ff944d;
+  --color-ring: #ff944d;
 }
 
 /*
@@ -352,7 +380,7 @@ html:not(.dark) [data-store-theme="pop"] {
   /* Marketplace wash only outside admin shell (dark only - light stays pure white) */
   .dark body:not(:has([data-shell="admin"], [data-shell="seller"], [data-shell="buyer"])) {
     background-image:
-      radial-gradient(ellipse 70% 45% at 8% -8%, rgb(255 146 77 / 0.08), transparent),
+      radial-gradient(ellipse 70% 45% at 8% -8%, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent),
       radial-gradient(ellipse 50% 35% at 100% 0%, rgb(0 0 0 / 0.35), transparent);
   }
 }

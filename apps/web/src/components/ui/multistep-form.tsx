@@ -61,7 +61,7 @@ export function MultiStepShell({
     return (
       <div className={cn("mx-auto w-full max-w-md", className)}>
         <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/30 p-10 sm:p-12">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,130,46,0.12),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,color-mix(in_srgb,var(--color-accent)_12%,transparent),transparent_55%)]" />
           <div className="relative flex flex-col items-center gap-4 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-border bg-muted">
               <Check className="h-8 w-8 text-foreground" strokeWidth={2.5} />
@@ -111,7 +111,7 @@ export function MultiStepShell({
                     "disabled:cursor-not-allowed",
                     done && "border-accent-strong bg-accent-strong text-white",
                     active &&
-                      "border-accent-strong bg-accent-strong text-white shadow-[0_0_0_4px_rgba(255,130,46,0.2)]",
+                      "border-accent-strong bg-accent-strong text-white shadow-[0_0_0_4px_color-mix(in_srgb,var(--color-accent)_20%,transparent)]",
                     !done &&
                       !active &&
                       "border-muted bg-card text-muted-foreground"

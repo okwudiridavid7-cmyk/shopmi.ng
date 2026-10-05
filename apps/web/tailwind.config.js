@@ -13,6 +13,7 @@ module.exports = {
         accent: "var(--color-accent)",
         "accent-strong": "var(--color-accent-strong)",
         "accent-foreground": "var(--color-accent-foreground)",
+        "accent-ink": "var(--color-accent-ink)",
         "accent-soft": "var(--color-accent-soft)",
         "accent-deep": "var(--color-accent-deep)",
         card: "var(--color-card)",

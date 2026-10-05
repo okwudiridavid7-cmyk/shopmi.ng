@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { requireAuth, requireRoles } from "../auth/middleware";
 import { CACHE_KEYS, invalidateCache } from "../lib/cache";
-import { invalidatePlatformSettings } from "../lib/platformSettings";
+import { invalidatePlatformSettings, settingValueError } from "../lib/platformSettings";
 
 async function afterSettingsWrite(): Promise<void> {
   invalidatePlatformSettings();
@@ -23,14 +23,19 @@ async function afterSettingsWrite(): Promise<void> {
  */
 export const platformSettingsRouter = Router();
 
-const upsertSchema = z.object({
-  key: z
-    .string()
-    .min(1)
-    .max(100)
-    .regex(/^[a-z0-9_]+$/, "Key must be snake_case alphanumeric"),
-  value: z.string().max(100_000),
-});
+const upsertSchema = z
+  .object({
+    key: z
+      .string()
+      .min(1)
+      .max(100)
+      .regex(/^[a-z0-9_]+$/, "Key must be snake_case alphanumeric"),
+    value: z.string().max(100_000),
+  })
+  .superRefine((s, ctx) => {
+    const message = settingValueError(s.key, s.value);
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message });
+  });
 
 const bulkSchema = z.object({
   settings: z.array(upsertSchema).min(1).max(50),
@@ -76,6 +81,7 @@ platformSettingsRouter.put("/:key", async (req, res, next) => {
       create: { key: parsed.key, value: parsed.value },
       update: { value: parsed.value },
     });
+    await afterSettingsWrite();
 
     return res.json({ setting });
   } catch (err) {

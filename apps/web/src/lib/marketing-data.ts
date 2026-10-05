@@ -1,11 +1,29 @@
 import type { CategoryPublic, PlanPublic, ProductPublic, TenantPublic } from "@vendors/shared-types";
 import { API_URL } from "@/lib/seo";
+import { parsePalette, type Palette } from "@/lib/palette";
 
 async function get<T>(path: string, revalidate: number): Promise<T | null> {
   try {
     const res = await fetch(`${API_URL}${path}`, { next: { revalidate } });
     if (!res.ok) return null;
     return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export const PLATFORM_CONFIG_TAG = "platform-config";
+
+/** Admin-chosen site palette. Short timeout: every page renders through this, so a slow API must not block it. */
+export async function getPalette(): Promise<Palette | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/tenants/config`, {
+      next: { revalidate: 60, tags: [PLATFORM_CONFIG_TAG] },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { palette?: unknown };
+    return parsePalette(data.palette ?? null);
   } catch {
     return null;
   }

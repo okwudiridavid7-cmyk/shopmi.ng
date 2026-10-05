@@ -126,7 +126,7 @@ export function Cta69({
                 trailing={
                   <span
                     aria-hidden="true"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff822e] text-[#141414] transition-transform duration-300 group-hover:translate-x-0.5"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-ink transition-transform duration-300 group-hover:translate-x-0.5"
                   >
                     <ArrowRight className="h-4 w-4" />
                   </span>

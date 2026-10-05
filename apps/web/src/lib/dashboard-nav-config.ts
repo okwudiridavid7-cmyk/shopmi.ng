@@ -261,6 +261,13 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         keywords: ["platform", "features"],
       },
       {
+        id: "appearance",
+        href: "/admin/appearance",
+        label: "Appearance",
+        icon: Palette,
+        keywords: ["colours", "colors", "palette", "theme", "brand"],
+      },
+      {
         id: "plans",
         href: "/admin/plans",
         label: "Plans",

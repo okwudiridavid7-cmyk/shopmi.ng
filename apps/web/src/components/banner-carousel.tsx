@@ -4,8 +4,11 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -80,6 +83,47 @@ export function BannerCarousel({
     [active.length]
   );
 
+  /* Touch swipe: the track follows the finger, then snaps to the next/previous slide or back. */
+  const [dragX, setDragX] = useState<number | null>(null);
+  const touchStart = useRef<{ x: number; t: number } | null>(null);
+  const swiped = useRef(false);
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!multi || e.pointerType === "mouse") return;
+    touchStart.current = { x: e.clientX, t: performance.now() };
+    swiped.current = false;
+    setPaused(true);
+  };
+
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const start = touchStart.current;
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    if (Math.abs(dx) > 8) swiped.current = true;
+    setDragX(dx);
+  };
+
+  const endSwipe = (e: ReactPointerEvent<HTMLDivElement>, commit: boolean) => {
+    const start = touchStart.current;
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const speed = Math.abs(dx) / Math.max(1, performance.now() - start.t);
+    const far = Math.abs(dx) > e.currentTarget.clientWidth * 0.18;
+    const flick = Math.abs(dx) > 30 && speed > 0.4;
+    if (commit && (far || flick)) go(dx < 0 ? 1 : -1);
+    touchStart.current = null;
+    setDragX(null);
+    setPaused(false);
+  };
+
+  /** Stops a swipe from also following the slide's CTA link. */
+  const onClickCapture = (e: ReactMouseEvent) => {
+    if (!swiped.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    swiped.current = false;
+  };
+
   const slideKey = slides.map((s) => s.id).join("|");
   useEffect(() => {
     setIndex(0);
@@ -108,7 +152,7 @@ export function BannerCarousel({
     ["--slide-w" as string]: "90%",
     ["--side-inset" as string]: "5%",
     ["--gap" as string]: "0.75rem",
-    transform: `translateX(calc(var(--side-inset) - ${index} * (var(--slide-w) + var(--gap))))`,
+    transform: `translateX(calc(var(--side-inset) - ${index} * (var(--slide-w) + var(--gap)) + ${dragX ?? 0}px))`,
   } as CSSProperties;
 
   return (
@@ -119,11 +163,20 @@ export function BannerCarousel({
       aria-roledescription="carousel"
       aria-label="Banners"
     >
-      <div className="relative overflow-hidden">
+      <div
+        className={cn("relative overflow-hidden", multi && "touch-pan-y select-none")}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => endSwipe(e, true)}
+        onPointerCancel={(e) => endSwipe(e, false)}
+        onClickCapture={onClickCapture}
+      >
         <div
           className={cn(
             "flex gap-[var(--gap)]",
-            "transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+            dragX === null
+              ? "transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+              : "transition-none",
             "md:[--slide-w:78%] md:[--side-inset:11%] md:[--gap:1rem]",
             "sm:[--slide-w:84%] sm:[--side-inset:8%] sm:[--gap:0.875rem]"
           )}
@@ -208,7 +261,7 @@ function BannerSlideCard({
     <span
       className="inline-flex items-center rounded-full px-6 py-2.5 text-sm font-semibold shadow-md transition hover:opacity-95"
       style={{
-        backgroundColor: accent ?? "var(--color-accent)",
+        backgroundColor: accent ?? "var(--color-accent-strong)",
         color: ctaTextColor,
       }}
     >
@@ -231,6 +284,7 @@ function BannerSlideCard({
       <img
         src={slide.imageUrl}
         alt=""
+        draggable={false}
         className="absolute inset-0 h-full w-full object-cover"
       />
       <div

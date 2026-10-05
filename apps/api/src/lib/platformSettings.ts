@@ -66,3 +66,37 @@ export async function getCommissionPercent(fallback = 5): Promise<number> {
   const n = Number.parseFloat(raw);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
+
+export const PALETTE_SETTING_KEY = "platform_palette";
+
+export type PlatformPalette = { primary: string; secondary: string; text: string; accent: string };
+
+const HEX = /^#[0-9a-f]{6}$/i;
+const PALETTE_FIELDS = ["primary", "secondary", "text", "accent"] as const;
+
+/** Parses the stored palette JSON. Returns null when missing or malformed so the site falls back to the default. */
+export function parsePalette(raw: string | null | undefined): PlatformPalette | null {
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    if (!o || typeof o !== "object") return null;
+    if (!PALETTE_FIELDS.every((f) => typeof o[f] === "string" && HEX.test(o[f] as string))) return null;
+    return Object.fromEntries(
+      PALETTE_FIELDS.map((f) => [f, (o[f] as string).toLowerCase()])
+    ) as PlatformPalette;
+  } catch {
+    return null;
+  }
+}
+
+export async function getPlatformPalette(): Promise<PlatformPalette | null> {
+  return parsePalette(await getPlatformSetting(PALETTE_SETTING_KEY, ""));
+}
+
+/** Per-key value checks for settings that the web app renders directly. Returns an error message or null. */
+export function settingValueError(key: string, value: string): string | null {
+  if (key === PALETTE_SETTING_KEY && value !== "" && !parsePalette(value)) {
+    return "Palette must be JSON with primary, secondary, text and accent as #rrggbb colours";
+  }
+  return null;
+}

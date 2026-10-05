@@ -46,6 +46,9 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile --prod=false && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
+    # Syncs schema.prisma to the database before each release. Without --accept-data-loss,
+    # a change that would drop data fails the deploy instead of running.
+    preDeployCommand: pnpm --filter @vendors/api exec prisma db push --skip-generate
     startCommand: pnpm --filter @vendors/api start
     healthCheckPath: /health
     envVars:

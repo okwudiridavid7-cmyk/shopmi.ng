@@ -28,7 +28,7 @@ export function AuthSplitLayout({
           alt=""
           className="absolute inset-0 h-full w-full scale-105 object-cover opacity-60"
         />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(255,130,46,0.35),transparent_50%),linear-gradient(to_bottom,rgba(10,10,12,0.35),rgba(10,10,12,0.88))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,color-mix(in_srgb,var(--color-accent)_35%,transparent),transparent_50%),linear-gradient(to_bottom,rgba(10,10,12,0.35),rgba(10,10,12,0.88))]" />
         <div className="relative z-10 flex h-full flex-col justify-between p-10 xl:p-14">
           <BrandMark href="/" inverted />
           <div className="max-w-md space-y-4 text-white">

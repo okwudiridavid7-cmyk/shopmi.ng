@@ -128,7 +128,7 @@ export function SiteHeader({
               />
             ) : (
               <span className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
                   <Store className="h-4 w-4" aria-hidden />
                 </span>
                 <span className="hidden max-w-[10rem] truncate text-sm font-semibold text-foreground sm:inline">

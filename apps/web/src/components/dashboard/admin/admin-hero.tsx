@@ -263,13 +263,13 @@ export function AdminHeroMetric({
   return (
     <div
       className={`dash-card dash-card-hover min-w-0 p-5 ${
-        featured ? "!bg-accent text-ink" : ""
+        featured ? "!bg-accent text-accent-ink" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <p
           className={`text-xs font-medium ${
-            featured ? "text-[rgb(28_23_20/0.7)]" : "text-muted-foreground"
+            featured ? "text-[color-mix(in_oklab,var(--color-accent-ink)_70%,transparent)]" : "text-muted-foreground"
           }`}
         >
           {label}
@@ -286,7 +286,7 @@ export function AdminHeroMetric({
       </div>
       <p
         className={`mt-3 text-xl font-bold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-[1.75rem] ${
-          featured ? "text-ink" : "text-foreground"
+          featured ? "text-accent-ink" : "text-foreground"
         }`}
       >
         <AnimatedValue value={value} />
@@ -294,12 +294,12 @@ export function AdminHeroMetric({
       {pct != null ? (
         <div
           className={`mt-3 h-1.5 overflow-hidden rounded-full ${
-            featured ? "bg-[rgb(28_23_20/0.15)]" : "bg-chart-track"
+            featured ? "bg-[color-mix(in_oklab,var(--color-accent-ink)_15%,transparent)]" : "bg-chart-track"
           }`}
         >
           <div
             className={`h-full rounded-full animate-bar-grow ${
-              featured ? "bg-ink" : pct >= 0.9 ? "bg-danger" : "bg-accent"
+              featured ? "bg-accent-ink" : pct >= 0.9 ? "bg-danger" : "bg-accent"
             }`}
             style={{ width: `${pct * 100}%` }}
           />
@@ -308,7 +308,7 @@ export function AdminHeroMetric({
       {hint ? (
         <p
           className={`mt-1.5 text-xs ${
-            featured ? "text-[rgb(28_23_20/0.7)]" : "text-muted-foreground"
+            featured ? "text-[color-mix(in_oklab,var(--color-accent-ink)_70%,transparent)]" : "text-muted-foreground"
           }`}
         >
           {hint}

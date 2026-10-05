@@ -68,6 +68,10 @@ pnpm --filter @vendors/api exec prisma db push
 pnpm --filter @vendors/api exec tsx prisma/seed.ts
 ```
 
+### Schema changes on later deploys
+
+`shopmi-api` runs `prisma db push --skip-generate` as its **Pre-Deploy Command**, so schema changes reach the database before new code starts. If the service was created before this was added, set it in Settings → Build & Deploy → Pre-Deploy Command. Skipping it leaves the database behind the code, and queries using new columns or enum values return `Internal server error`.
+
 ### If deploys still fail with Corepack `keyid` or npm 404 `@vendors/…`
 
 Existing Blueprint services often keep the **old** build command. For each of `shopmi-web`, `shopmi-api`, `shopmi-worker`:

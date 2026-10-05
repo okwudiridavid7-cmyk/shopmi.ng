@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AppProviders } from "@/components/app-providers";
 import { ToastProvider } from "@/components/ui/toast";
 import { Walkthrough } from "@/components/walkthrough";
+import { getPalette } from "@/lib/marketing-data";
+import { paletteCss } from "@/lib/palette";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
 import "./globals.css";
 
@@ -63,14 +65,17 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const paletteStyles = paletteCss(await getPalette());
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${fontVars} font-sans antialiased`}>
+        {/* In <body> so it follows the globals.css links and wins at equal specificity. */}
+        {paletteStyles ? <style id="platform-palette" dangerouslySetInnerHTML={{ __html: paletteStyles }} /> : null}
         <ThemeProvider>
           <AppProviders>
             <ToastProvider>

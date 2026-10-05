@@ -28,6 +28,10 @@ import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { useAdminSettings, useSaveAdminSettings } from "@/hooks/use-admin";
 import { apiFetch } from "@/lib/api";
+import { PALETTE_SETTING_KEY } from "@/lib/palette";
+
+/** Keys with their own admin page, kept out of the generic "Other keys" list. */
+const MANAGED_ELSEWHERE = new Set([PALETTE_SETTING_KEY]);
 
 const SETTING_META: {
   key: string;
@@ -191,7 +195,7 @@ export default function AdminSettingsPage() {
       next[meta.key] = found?.value ?? meta.defaultValue;
     }
     for (const s of settings) {
-      if (!(s.key in next)) next[s.key] = s.value;
+      if (!(s.key in next) && !MANAGED_ELSEWHERE.has(s.key)) next[s.key] = s.value;
     }
     setValues(next);
   }, [settings]);

@@ -40,7 +40,7 @@ export function OnboardingCongrats({
       <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
         <div className="bg-gradient-to-br from-accent/20 via-card to-card px-6 pb-2 pt-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent text-white shadow-lg shadow-accent/30">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg shadow-accent/30">
             <Sparkles className="h-8 w-8" strokeWidth={2} />
           </div>
           <h2

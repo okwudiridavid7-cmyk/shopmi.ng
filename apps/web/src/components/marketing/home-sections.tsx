@@ -109,7 +109,7 @@ export function FeaturesBento({ startOffer }: { startOffer: { value: string; lab
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_30%,rgba(255,130,46,0.14),transparent_45%),radial-gradient(circle_at_100%_80%,rgba(0,195,247,0.08),transparent_45%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_30%,color-mix(in_srgb,var(--color-accent)_14%,transparent),transparent_45%),radial-gradient(circle_at_100%_80%,rgba(0,195,247,0.08),transparent_45%)]"
       />
       <div className="relative mx-auto w-full max-w-6xl">
         <SectionIntro
@@ -173,7 +173,7 @@ export function FeaturesBento({ startOffer }: { startOffer: { value: string; lab
             <GlassTile title="AI listing descriptions" body="Type a product name, get a clear description to edit.">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 text-xs leading-relaxed">
                 <span className="flex items-center gap-1.5 font-semibold text-zinc-100">
-                  <Sparkles className="h-3.5 w-3.5 text-[#ff9a52]" aria-hidden />
+                  <Sparkles className="h-3.5 w-3.5 text-accent-on-dark" aria-hidden />
                   Ankara midi skirt
                 </span>
                 <span className="mt-1.5 block text-zinc-400">

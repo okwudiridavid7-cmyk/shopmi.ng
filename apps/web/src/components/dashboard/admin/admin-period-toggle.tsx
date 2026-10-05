@@ -35,8 +35,8 @@ export function AdminPeriodToggle({ value, onChange, tone = "default" }: Props) 
             className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors duration-200 ${
               active
                 ? onInk
-                  ? "bg-accent text-ink"
-                  : "bg-ink text-ink-foreground dark:bg-accent dark:text-ink"
+                  ? "bg-accent text-accent-ink"
+                  : "bg-ink text-ink-foreground dark:bg-accent dark:text-accent-ink"
                 : onInk
                   ? "text-white/65 hover:text-white"
                   : "text-muted-foreground hover:text-foreground"

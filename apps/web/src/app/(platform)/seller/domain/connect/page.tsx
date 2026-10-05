@@ -42,8 +42,8 @@ function Stepper({ steps, current }: { steps: { id: StepId; label: string }[]; c
             <span
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition",
-                done && "bg-ink text-white dark:bg-accent dark:text-ink",
-                active && "bg-accent text-ink",
+                done && "bg-ink text-white dark:bg-accent dark:text-accent-ink",
+                active && "bg-accent text-accent-ink",
                 !done && !active && "bg-muted text-muted-foreground"
               )}
               aria-current={active ? "step" : undefined}

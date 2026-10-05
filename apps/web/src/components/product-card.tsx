@@ -154,12 +154,12 @@ function ProductCardView({
             </div>
           )}
           {priorityBadge?.kind === "discount" && (
-            <span className="absolute left-token-3 top-token-3 rounded-md bg-accent-strong px-token-2 py-0.5 text-xs font-semibold text-accent-foreground shadow-sm">
+            <span className="absolute left-token-3 top-token-3 rounded-md bg-red-600 px-token-2 py-0.5 text-xs font-semibold text-white shadow-sm">
               {priorityBadge.label}
             </span>
           )}
           {priorityBadge?.kind === "new" && (
-            <span className="absolute left-token-3 top-token-3 rounded-md border border-border bg-card/95 px-token-2 py-0.5 text-xs font-semibold text-foreground shadow-sm backdrop-blur">
+            <span className="absolute left-token-3 top-token-3 rounded-md bg-card px-token-2 py-0.5 text-xs font-semibold text-foreground shadow-md ring-1 ring-black/10">
               {priorityBadge.label}
             </span>
           )}
@@ -209,7 +209,7 @@ function ProductCardView({
           }}
           aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
           aria-pressed={!!favorited}
-          className="absolute right-token-3 top-token-3 rounded-full border border-border bg-card/95 p-token-2 text-muted-foreground shadow-sm backdrop-blur transition hover:bg-card hover:text-danger disabled:opacity-50 motion-safe:active:scale-95"
+          className="absolute right-token-3 top-token-3 rounded-full bg-card p-token-2 text-foreground shadow-md ring-1 ring-black/10 transition hover:text-danger disabled:opacity-50 motion-safe:active:scale-95"
         >
           <Heart
             className={`h-4 w-4 ${favorited ? "fill-danger text-danger" : ""}`}
@@ -227,7 +227,7 @@ function ProductCardView({
             onAddToCart();
           }}
           aria-label="Add to cart"
-          className="absolute bottom-[5.5rem] right-token-3 rounded-full border border-border bg-card/95 p-token-2 text-foreground shadow-sm opacity-100 transition hover:bg-accent hover:text-accent-foreground disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100"
+          className="absolute right-token-3 top-[3.25rem] rounded-full bg-card p-token-2 text-foreground shadow-md ring-1 ring-black/10 transition hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
         >
           <ShoppingCart className="h-4 w-4" aria-hidden />
         </button>

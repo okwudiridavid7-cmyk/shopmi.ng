@@ -30,6 +30,7 @@ import {
   getPlatformSetting,
   isBillingEnabled,
   getCommissionPercent,
+  getPlatformPalette,
 } from "../lib/platformSettings";
 
 function parseTicker(raw: string | null): {
@@ -82,6 +83,7 @@ async function loadPublicConfig() {
       whatsappUrl,
       chatbotHtml,
       webUrlSetting,
+      palette,
     ] = await Promise.all([
       isVerificationRequired(),
       getPlatformTrialDays(3),
@@ -95,9 +97,11 @@ async function loadPublicConfig() {
       getPlatformSetting("whatsapp_url", ""),
       getPlatformSetting("chatbot_html", ""),
       getPlatformSetting("web_url", env.webUrl),
+      getPlatformPalette(),
     ]);
     return {
       shopBaseDomain: env.shopBaseDomain,
+      palette,
       verificationRequired,
       trialDays,
       billingEnabled,
