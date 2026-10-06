@@ -10,13 +10,15 @@ type Props = {
   children: ReactNode;
   /** Optional role check - redirects away if wrong role. */
   roles?: string[];
+  /** Shown while the session loads and during the redirect to sign in. */
+  fallback?: ReactNode;
 };
 
 /**
  * Shared guard for protected dashboards.
  * Unauthenticated → /login?returnTo=<current path>. Never renders API error text.
  */
-export function AuthGuard({ children, roles }: Props) {
+export function AuthGuard({ children, roles, fallback }: Props) {
   const { user, loading, isAuthenticated } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -31,6 +33,10 @@ export function AuthGuard({ children, roles }: Props) {
       router.replace("/");
     }
   }, [loading, isAuthenticated, pathname, router, roles, user]);
+
+  if ((loading || !isAuthenticated) && fallback) {
+    return <>{fallback}</>;
+  }
 
   if (loading) {
     return (

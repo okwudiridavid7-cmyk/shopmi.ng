@@ -4,6 +4,7 @@ import { Suspense, useState, type ReactNode } from "react";
 import { Menu } from "lucide-react";
 import type { DashboardMode } from "@/lib/dashboard-nav-config";
 import { AuthGuard } from "@/components/auth-guard";
+import { Pattern as DashboardSkeleton } from "@/components/ui/v-skeleton-8";
 import { CommandPalette } from "./command-palette";
 import { DashboardSidebar } from "./dashboard-sidebar";
 
@@ -23,7 +24,10 @@ function DashboardShellInner({ mode, children }: Props) {
   const [commandOpen, setCommandOpen] = useState(false);
 
   return (
-    <AuthGuard roles={MODE_ROLES[mode]}>
+    <AuthGuard
+      roles={MODE_ROLES[mode]}
+      fallback={<DashboardSkeleton fill label="Loading dashboard" />}
+    >
       <div
         data-shell={mode}
         className="flex h-full w-full flex-1 overflow-hidden"
@@ -76,11 +80,7 @@ function DashboardShellInner({ mode, children }: Props) {
 export function DashboardShell(props: Props) {
   return (
     <Suspense
-      fallback={
-        <div className="flex h-full w-full flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        </div>
-      }
+      fallback={<DashboardSkeleton fill label="Loading dashboard" />}
     >
       <DashboardShellInner {...props} />
     </Suspense>

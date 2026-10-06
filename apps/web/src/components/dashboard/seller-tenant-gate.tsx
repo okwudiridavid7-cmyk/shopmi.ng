@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useSellerPlan } from "@/hooks/use-seller";
 import { QueryErrorState } from "@/components/empty-state";
-import { SkeletonLines } from "@/components/skeleton";
+import { DashboardContentSkeleton } from "@/components/ui/v-skeleton-8";
 
 /**
  * Blocks seller dashboard content until the user has a shop membership.
@@ -13,7 +13,7 @@ export function SellerTenantGate({ children }: { children: ReactNode }) {
   const plan = useSellerPlan();
 
   if (plan.isLoading && !plan.data) {
-    return <SkeletonLines count={5} />;
+    return <DashboardContentSkeleton label="Loading your shop" />;
   }
 
   if (plan.isError) {
