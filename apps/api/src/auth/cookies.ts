@@ -8,7 +8,9 @@ function baseCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: env.isProd ? "none" : "lax",
+    // Lax: the marketplace, shop subdomains and the API are all same-site, so cookies
+    // still flow there, but no other site can make the browser send them.
+    sameSite: "lax",
     domain: env.cookieDomain === "localhost" ? undefined : env.cookieDomain,
     path: "/",
   };
@@ -33,4 +35,5 @@ export function clearAuthCookies(res: Response): void {
   const opts = baseCookieOptions();
   res.clearCookie(ACCESS_COOKIE, opts);
   res.clearCookie(REFRESH_COOKIE, opts);
+  res.clearCookie("active_shop", opts);
 }

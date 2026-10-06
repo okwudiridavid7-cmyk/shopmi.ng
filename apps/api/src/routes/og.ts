@@ -5,6 +5,7 @@ import { decimalToNumber } from "../lib/serialize";
 import { UNAVAILABLE_SHOP_STATUSES } from "../tenant/tenantContext";
 import { getPlatformSetting } from "../lib/platformSettings";
 import { env } from "../config/env";
+import { redisRateLimit } from "../lib/rateLimit";
 
 function escapeXml(s: string): string {
   return s
@@ -20,8 +21,10 @@ function truncate(s: string, n: number): string {
 
 export const ogRouter = Router();
 
+const ogLimiter = redisRateLimit({ name: "og", windowMs: 60_000, max: 60, by: "ip" });
+
 /** Public OG card image for product share previews. */
-ogRouter.get("/products/:id", async (req, res, next) => {
+ogRouter.get("/products/:id", ogLimiter, async (req, res, next) => {
   try {
     const product = await prisma.product.findFirst({
       where: {

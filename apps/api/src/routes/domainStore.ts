@@ -1,9 +1,9 @@
 import { Router, type NextFunction, type Response } from "express";
-import rateLimit from "express-rate-limit";
+import { redisRateLimit } from "../lib/rateLimit";
 import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { requireAuth, requireRoles } from "../auth/middleware";
-import { requireTenantFromMembership } from "../tenant/middleware";
+import { requireTenantRoles, requireTenantFromMembership } from "../tenant/middleware";
 import { planAllows } from "../lib/plans";
 import { DomainConflictError, DomainInputError } from "../lib/customDomains";
 import { getRegistrar } from "../services/registrar";
@@ -111,12 +111,12 @@ sellerDomainStoreRouter.get("/store", async (req, res, next) => {
   }
 });
 
-const searchLimiter = rateLimit({
+const searchLimiter = redisRateLimit({
+  name: "domain-search",
   windowMs: 60 * 1000,
   max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many searches. Wait a minute and try again." },
+  by: "tenant",
+  message: "Too many searches. Wait a minute and try again.",
 });
 
 sellerDomainStoreRouter.get("/search", searchLimiter, async (req, res, next) => {
@@ -128,7 +128,7 @@ sellerDomainStoreRouter.get("/search", searchLimiter, async (req, res, next) => 
   }
 });
 
-sellerDomainStoreRouter.post("/buy", async (req, res, next) => {
+sellerDomainStoreRouter.post("/buy", requireTenantRoles("owner"), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId;
     if (!(await canManage(req.user!.id, tenantId))) {
@@ -163,7 +163,7 @@ sellerDomainStoreRouter.get("/purchases/:reference/verify", async (req, res, nex
   }
 });
 
-sellerDomainStoreRouter.post("/owned/:id/renew", async (req, res, next) => {
+sellerDomainStoreRouter.post("/owned/:id/renew", requireTenantRoles("owner"), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId;
     if (!(await canManage(req.user!.id, tenantId))) {
@@ -183,7 +183,7 @@ sellerDomainStoreRouter.post("/owned/:id/renew", async (req, res, next) => {
   }
 });
 
-sellerDomainStoreRouter.post("/owned/:id/connect", async (req, res, next) => {
+sellerDomainStoreRouter.post("/owned/:id/connect", requireTenantRoles("owner"), async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId;
     if (!(await canManage(req.user!.id, tenantId))) {

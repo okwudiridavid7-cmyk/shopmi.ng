@@ -13,7 +13,10 @@ export type TransactionalEmailKind =
   | "plan_ended"
   | "team_invite"
   | "domain_active"
-  | "domain_renewal_due";
+  | "domain_renewal_due"
+  | "order_refunded"
+  | "domain_detached"
+  | "admin_alert";
 
 function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -137,25 +140,13 @@ export async function buildTransactionalEmail(
       const shop = escapeHtml(String(data.shopName ?? "a shop"));
       const inviter = escapeHtml(String(data.inviterName ?? "The shop owner"));
       const role = escapeHtml(String(data.roleLabel ?? "team member"));
-      const setPassword = Boolean(data.setPasswordUrl);
-      subject = `You've been added to ${String(data.shopName ?? "a shop")} on Shopmi.ng`;
+      subject = `You're invited to join ${String(data.shopName ?? "a shop")} on Shopmi.ng`;
       inner = `
         ${p(greeting(name))}
-        ${p(`${inviter} added you to <strong>${shop}</strong> as a ${role}.`)}
-        ${p(
-          setPassword
-            ? "Set a password to sign in and open the seller dashboard. You can also continue with Google using this email."
-            : "Sign in with your existing account to open the seller dashboard."
-        )}
-        ${ctaButton(
-          String(data.setPasswordUrl ?? data.loginUrl ?? "#"),
-          setPassword ? "Set your password" : "Sign in"
-        )}
-        ${
-          setPassword
-            ? `<p style="margin:12px 0 0;font-size:13px;color:#6b7280;">This link expires in 7 days. If it runs out, use "Forgot password" on the sign-in page with this email.</p>`
-            : ""
-        }
+        ${p(`${inviter} invited you to join <strong>${shop}</strong> as a ${role}.`)}
+        ${p("Open the link to accept. You'll sign in or create an account with this email address first.")}
+        ${ctaButton(String(data.acceptUrl ?? "#"), "Accept invite")}
+        <p style="margin:12px 0 0;font-size:13px;color:#6b7280;">This invite expires in 7 days. If you weren't expecting it, you can ignore this email.</p>
       `;
       break;
     }
@@ -276,6 +267,42 @@ export async function buildTransactionalEmail(
         )}
         ${data.domainUrl ? ctaButton(String(data.domainUrl), "Renew domain") : ""}
       `;
+      break;
+    }
+    case "order_refunded": {
+      const shop = escapeHtml(String(data.shopName ?? "the shop"));
+      const total = escapeHtml(String(data.totalLabel ?? ""));
+      const ref = escapeHtml(String(data.reference ?? data.orderId ?? ""));
+      subject = `Refund on its way: ${String(data.shopName ?? "your order")}`;
+      inner = `
+        ${p(greeting(name))}
+        ${p(`<strong>${shop}</strong> cancelled your order and we've refunded <strong>${total}</strong> to the card or account you paid with.`)}
+        ${p("Refunds usually reach you within 5 to 10 working days, depending on your bank.")}
+        ${p(`Reference: <code style="font-size:13px;">${ref}</code>`)}
+        ${data.orderUrl ? ctaButton(String(data.orderUrl), "View order") : ""}
+      `;
+      break;
+    }
+    case "domain_detached": {
+      const domain = escapeHtml(String(data.domain ?? "your domain"));
+      subject = `${String(data.domain ?? "Your domain")} was disconnected`;
+      inner = `
+        ${p(greeting(name))}
+        ${p(`<strong>${domain}</strong> no longer points to your shop, so we've disconnected it. Your shop is still live at its Shopmi.ng address.`)}
+        ${p("If you moved the domain on purpose, there's nothing to do. Otherwise check its DNS records (and make sure Cloudflare's proxy is off for them) and connect it again.")}
+        ${data.domainUrl ? ctaButton(String(data.domainUrl), "Reconnect domain") : ""}
+      `;
+      break;
+    }
+    case "admin_alert": {
+      subject = `[Admin] ${String(data.title ?? "Platform alert")}`;
+      const lines = String(data.body ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => p(escapeHtml(line)))
+        .join("");
+      inner = `${p(`<strong>${escapeHtml(String(data.title ?? "Platform alert"))}</strong>`)}${lines}
+        ${data.actionUrl ? ctaButton(String(data.actionUrl), "Open admin") : ""}`;
       break;
     }
     default: {

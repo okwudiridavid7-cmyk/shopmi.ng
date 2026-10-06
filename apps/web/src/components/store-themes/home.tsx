@@ -12,6 +12,7 @@ import type {
 } from "@vendors/shared-types";
 import { formatMoney, productImageUrl } from "@/lib/api";
 import type { BannerSlide } from "@/lib/default-banners";
+import { safeHref } from "@/lib/safe-url";
 
 export type ThemedHomeProps = {
   themeId: Exclude<StoreThemeId, "classic">;
@@ -34,8 +35,7 @@ function scrollToProducts() {
 }
 
 function slideHref(slide?: BannerSlide): string {
-  const url = slide?.ctaUrl?.trim();
-  return url || "#products";
+  return safeHref(slide?.ctaUrl) ?? "#products";
 }
 
 function img(p?: ProductPublic): string | null {

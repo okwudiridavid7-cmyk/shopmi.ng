@@ -54,6 +54,14 @@ export default function BuyerOrderDetailPage() {
 
   const canInvoice =
     order.status === "paid" || order.status === "fulfilled";
+  const refundNote =
+    order.refundStatus === "processed"
+      ? "This order was cancelled and your refund has been sent."
+      : order.refundStatus
+        ? "This order was cancelled. Your refund is being processed and usually arrives within 5 to 10 working days."
+        : order.failureReason === "expired"
+          ? "Payment was not completed in time, so this checkout closed. Your card was not charged."
+          : null;
 
   return (
     <div className="space-y-6">
@@ -75,6 +83,12 @@ export default function BuyerOrderDetailPage() {
           }
         />
       </div>
+
+      {refundNote ? (
+        <p className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-foreground">
+          {refundNote}
+        </p>
+      ) : null}
 
       <Card className="overflow-hidden rounded-2xl">
         <CardHeader className="bg-muted/30">

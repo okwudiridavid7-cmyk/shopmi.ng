@@ -20,7 +20,6 @@ function toReviewPublic(
   return {
     id: row.id,
     productId: row.productId,
-    buyerId: row.buyerId,
     rating: row.rating,
     comment: row.comment,
     createdAt: row.createdAt.toISOString(),

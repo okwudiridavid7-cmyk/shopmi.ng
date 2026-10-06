@@ -12,9 +12,12 @@ export type GenerateDescriptionInput = {
   shopCategoryId?: string;
   brandName?: string;
   location?: string;
-  price?: number;
-  currency?: string;
   productId?: string;
+};
+
+export type EnhanceResult = {
+  originalUrl: string;
+  watermarkedUrl: string | null;
 };
 
 export async function pollAiJob(
@@ -67,9 +70,17 @@ export async function generateProductDescription(
   return result.description;
 }
 
-export async function pollWatermarkJob(
-  jobId: string
-): Promise<string | null> {
-  const result = await pollAiJob(jobId);
-  return result.watermarkedUrl ?? null;
+export async function enhanceProductImage(imageUrl: string): Promise<EnhanceResult> {
+  const { job } = await apiFetch<{ job: { id: string } }>("/api/seller/ai/enhance", {
+    method: "POST",
+    body: JSON.stringify({ imageUrl }),
+  });
+  const result = await pollAiJob(job.id, 60);
+  if (!result.originalUrl) {
+    throw new Error("No enhanced image returned");
+  }
+  return {
+    originalUrl: result.originalUrl,
+    watermarkedUrl: result.watermarkedUrl ?? null,
+  };
 }

@@ -4,7 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { Mail, User } from "lucide-react";
 import type { AuthTokensResponse } from "@vendors/shared-types";
+import { useAuthCaptcha } from "@/components/auth-captcha";
 import { apiFetch } from "@/lib/api";
+import { safeReturnTo } from "@/lib/auth-redirect";
 import { useAuth } from "@/hooks/use-auth";
 import { markWalkthroughPending } from "@/components/walkthrough";
 import { Button } from "@/components/ui/button";
@@ -25,10 +27,12 @@ function SignupAccountForm() {
   const [loading, setLoading] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
   const wantsSeller = searchParams.get("role") === "seller";
+  const returnTo = safeReturnTo(searchParams.get("returnTo")) ?? "/explore";
   const [countryCode, setCountryCode] = useState("NG");
   const [stateCode, setStateCode] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [password, setPassword] = useState("");
+  const captcha = useAuthCaptcha();
 
   useEffect(() => {
     if (wantsSeller) router.replace("/onboarding");
@@ -54,12 +58,14 @@ function SignupAccountForm() {
           countryCode: "NG",
           stateCode: stateCode || undefined,
           location: locationLabel || undefined,
+          captchaToken: captcha.token,
         }),
       });
       markWalkthroughPending();
       await refresh();
-      window.location.assign("/explore");
+      window.location.assign(returnTo);
     } catch (err) {
+      captcha.reset();
       setError(err instanceof Error ? err.message : "Signup failed");
     } finally {
       setLoading(false);
@@ -75,7 +81,7 @@ function SignupAccountForm() {
     >
       {!emailMode ? (
         <div className="space-y-4">
-          <GoogleContinueButton role="buyer" returnTo="/explore" />
+          <GoogleContinueButton role="buyer" returnTo={returnTo} />
           <Button
             type="button"
             variant="outline"
@@ -140,10 +146,11 @@ function SignupAccountForm() {
                 }}
               />
             </div>
+            {captcha.field}
             {error && <p className="text-sm text-danger">{error}</p>}
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || captcha.waiting}
               className="h-12 w-full"
               size="lg"
             >

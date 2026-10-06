@@ -5,6 +5,7 @@ import { prisma } from "../db/prisma";
 import { toTenantPublic, toUserPublic } from "../lib/serialize";
 import { resolveTenantFromMembership } from "../tenant/tenantContext";
 import { tenantWhere } from "../tenant/tenantContext";
+import { readActiveShopCookie } from "../tenant/activeShop";
 
 export const healthRouter = Router();
 
@@ -22,13 +23,13 @@ healthRouter.get("/hello", requireAuth, async (req, res, next) => {
     let tenantPayload = null;
 
     try {
-      const ctx = await resolveTenantFromMembership(user.id);
+      const ctx = await resolveTenantFromMembership(user.id, readActiveShopCookie(req));
       const membership = await prisma.tenantAdmin.findFirst({
         where: tenantWhere(ctx, { userId: user.id }),
         include: { tenant: true },
       });
       if (membership) {
-        tenantPayload = toTenantPublic(membership.tenant);
+        tenantPayload = toTenantPublic(membership.tenant, { private: true });
       }
     } catch {
       // No membership yet - still a valid authenticated hello.

@@ -2,8 +2,8 @@ import type { PrismaClient } from "@prisma/client";
 
 /**
  * Shared seller basics - every tier, Freemi included. Only list features that
- * exist in the product; `ai`, `customDomain`, `freeDomain` and `staffAccounts`
- * are enforced by the API (src/lib/plans.ts).
+ * exist in the product; `ai`, `customDomain`, `freeDomain`, `staffAccounts` and the
+ * monthly AI quotas are enforced by the API (src/lib/plans.ts).
  */
 const BASIC_SELLER_FEATURES = {
   storefront: true,
@@ -31,6 +31,8 @@ export const PLANS = [
     featureFlags: {
       ...BASIC_SELLER_FEATURES,
       ai: false,
+      aiDescriptionsPerMonth: 0,
+      imageEnhancePerMonth: 0,
       customDomain: false,
       freeDomain: false,
       staffAccounts: 0,
@@ -57,6 +59,8 @@ export const PLANS = [
     featureFlags: {
       ...BASIC_SELLER_FEATURES,
       ai: true,
+      aiDescriptionsPerMonth: 50,
+      imageEnhancePerMonth: 20,
       customDomain: false,
       freeDomain: false,
       staffAccounts: 1,
@@ -64,7 +68,8 @@ export const PLANS = [
       benefits: [
         "Everything in Freemi",
         "50 live products",
-        "AI listing descriptions",
+        "50 AI descriptions a month",
+        "20 photo background removals a month",
         "1 team member",
       ],
       recommended: false,
@@ -81,6 +86,8 @@ export const PLANS = [
     featureFlags: {
       ...BASIC_SELLER_FEATURES,
       ai: true,
+      aiDescriptionsPerMonth: 200,
+      imageEnhancePerMonth: 60,
       customDomain: true,
       freeDomain: false,
       staffAccounts: 3,
@@ -88,6 +95,7 @@ export const PLANS = [
       benefits: [
         "Everything in Yomi",
         "200 live products",
+        "200 AI descriptions and 60 background removals a month",
         "Custom domain",
         "3 team members",
       ],
@@ -105,6 +113,8 @@ export const PLANS = [
     featureFlags: {
       ...BASIC_SELLER_FEATURES,
       ai: true,
+      aiDescriptionsPerMonth: 1000,
+      imageEnhancePerMonth: 200,
       customDomain: true,
       freeDomain: true,
       staffAccounts: 10,
@@ -112,6 +122,7 @@ export const PLANS = [
       benefits: [
         "Everything in Lemi",
         "Unlimited products",
+        "1,000 AI descriptions and 200 background removals a month",
         "Free .com.ng domain",
         "10 team members",
       ],

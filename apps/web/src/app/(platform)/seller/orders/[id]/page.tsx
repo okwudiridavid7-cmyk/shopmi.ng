@@ -55,10 +55,36 @@ export default function SellerOrderDetailPage() {
     [];
   if (order.status === "paid") {
     nextActions.push({ status: "fulfilled", label: "Mark fulfilled / shipped" });
-    nextActions.push({ status: "cancelled", label: "Cancel order" });
+    nextActions.push({ status: "cancelled", label: "Cancel and refund buyer" });
   }
   if (order.status === "pending_payment") {
     nextActions.push({ status: "cancelled", label: "Cancel order" });
+  }
+
+  const notice =
+    order.flag === "oversold"
+      ? "An item in this order sold out before payment cleared. Restock it, or cancel to refund the buyer."
+      : order.flag === "amount_mismatch"
+        ? "The amount paid did not match this order, so it was not confirmed. Our team is reviewing it."
+        : order.refundStatus === "pending"
+          ? "Refund started. Paystack usually completes it within a few days."
+          : order.refundStatus === "processed"
+            ? "The buyer has been refunded."
+            : order.refundStatus === "failed"
+              ? "The refund failed. Our team has been alerted and will follow up."
+              : null;
+
+  function runAction(status: "fulfilled" | "cancelled") {
+    if (
+      status === "cancelled" &&
+      order!.status === "paid" &&
+      !window.confirm(
+        `Cancel this order and refund ${formatMoney(order!.total, order!.currency)} to the buyer? This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    updateStatus.mutate({ id: order!.id, status });
   }
 
   return (
@@ -81,6 +107,12 @@ export default function SellerOrderDetailPage() {
           }
         />
       </div>
+
+      {notice ? (
+        <p className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-foreground">
+          {notice}
+        </p>
+      ) : null}
 
       <Card className="overflow-hidden rounded-2xl">
         <CardHeader className="bg-muted/30">
@@ -140,9 +172,7 @@ export default function SellerOrderDetailPage() {
                 variant={a.status === "cancelled" ? "danger" : "primary"}
                 size="sm"
                 disabled={updateStatus.isPending}
-                onClick={() =>
-                  updateStatus.mutate({ id: order.id, status: a.status })
-                }
+                onClick={() => runAction(a.status)}
               >
                 {a.label}
               </Button>

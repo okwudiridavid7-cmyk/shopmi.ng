@@ -1,6 +1,7 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
+import { redisRateLimit } from "../lib/rateLimit";
 import { z } from "zod";
+import { safeLink } from "../lib/safeUrl";
 import type { Campaign } from "@prisma/client";
 import type {
   CampaignContent,
@@ -32,7 +33,7 @@ const contentSchema = z.object({
   headline: z.string().min(1).max(120),
   body: z.string().min(1).max(1000),
   ctaLabel: z.string().max(60).optional(),
-  ctaUrl: z.union([z.string().url(), z.literal("")]).optional(),
+  ctaUrl: z.union([safeLink(2000), z.literal("")]).optional(),
 });
 
 const createSchema = z.object({
@@ -153,11 +154,11 @@ sellerCampaignsRouter.delete(
   }
 });
 
-const publicCampaignLimiter = rateLimit({
+const publicCampaignLimiter = redisRateLimit({
+  name: "campaigns-public",
   windowMs: 60 * 1000,
   max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
+  by: "ip",
 });
 
 /** Mount under /api/shops - GET /:slug/campaigns/active */

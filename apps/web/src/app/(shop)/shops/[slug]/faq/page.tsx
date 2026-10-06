@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import type { FaqItem, TenantPublic } from "@vendors/shared-types";
 import { apiFetch } from "@/lib/api";
 
-export default function ShopFaqPage({ params }: { params: { slug: string } }) {
+export default function ShopFaqPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
   const [tenant, setTenant] = useState<TenantPublic | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<{ tenant: TenantPublic }>(`/api/shops/${params.slug}`)
+    apiFetch<{ tenant: TenantPublic }>(`/api/shops/${slug}`)
       .then((r) => setTenant(r.tenant))
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Failed to load")
       );
-  }, [params.slug]);
+  }, [slug]);
 
   if (error) {
     return <p className="text-sm text-danger">{error}</p>;

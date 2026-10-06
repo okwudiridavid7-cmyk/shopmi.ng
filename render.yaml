@@ -38,6 +38,9 @@ services:
         value: https://shopmi.ng
       - key: NEXT_PUBLIC_SHOP_BASE_DOMAIN
         value: shopmi.ng
+      # Cookieless media origin (R2 public bucket); allowed in the CSP img-src
+      - key: NEXT_PUBLIC_MEDIA_URL
+        value: https://media.shopmi.ng
 
   # ---- Express API ----
   - type: web
@@ -46,9 +49,9 @@ services:
     plan: starter
     region: frankfurt
     buildCommand: npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile --prod=false && pnpm --filter @vendors/shared-types build && pnpm --filter @vendors/api exec prisma generate && pnpm --filter @vendors/api build
-    # Syncs schema.prisma to the database before each release. Without --accept-data-loss,
-    # a change that would drop data fails the deploy instead of running.
-    preDeployCommand: pnpm --filter @vendors/api exec prisma db push --skip-generate
+    # Before each release: sync schema.prisma (without --accept-data-loss, a change that would
+    # drop data fails the deploy instead of running), then pricing plans, then idempotent data fixes.
+    preDeployCommand: pnpm --filter @vendors/api run db:release
     startCommand: pnpm --filter @vendors/api start
     healthCheckPath: /health
     envVars:
@@ -120,8 +123,40 @@ services:
         sync: false
       - key: GO54_API_KEY
         sync: false
+      # Cloudflare R2: public bucket behind media.shopmi.ng, private bucket for invoices/KYC
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_PUBLIC_BUCKET
+        sync: false
+      - key: R2_PRIVATE_BUCKET
+        sync: false
+      - key: MEDIA_URL
+        value: https://media.shopmi.ng
+      - key: PHOTOROOM_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_TEMPLATE_NEW_ORDER
+        value: new_order
+      - key: WHATSAPP_TEMPLATE_LANG
+        value: en
+      - key: ADMIN_ALERT_EMAIL
+        sync: false
+      # Meta webhook: https://api.shopmi.ng/api/whatsapp/webhook
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
 
-  # ---- BullMQ worker (contact mail, AI, watermark, purge) ----
+  # ---- BullMQ worker (mail, AI, image enhance, domains, plan lifecycle, order events, WhatsApp) ----
   - type: worker
     name: shopmi-worker
     runtime: node
@@ -163,7 +198,8 @@ services:
         sync: false
       - key: TURNSTILE_SECRET_KEY
         sync: false
-      - key: ANTHROPIC_API_KEY
+      # Refunds for failed domain registrations and plan billing run here
+      - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: RENDER_API_KEY
         sync: false
@@ -172,6 +208,33 @@ services:
       - key: GO54_API_EMAIL
         sync: false
       - key: GO54_API_KEY
+        sync: false
+      # Cloudflare R2: public bucket behind media.shopmi.ng, private bucket for invoices/KYC
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_PUBLIC_BUCKET
+        sync: false
+      - key: R2_PRIVATE_BUCKET
+        sync: false
+      - key: MEDIA_URL
+        value: https://media.shopmi.ng
+      - key: PHOTOROOM_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_TEMPLATE_NEW_ORDER
+        value: new_order
+      - key: WHATSAPP_TEMPLATE_LANG
+        value: en
+      - key: ADMIN_ALERT_EMAIL
         sync: false
 
   # Redis-compatible Key Value — BullMQ + rate limits + stats cache

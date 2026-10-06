@@ -250,7 +250,13 @@ export async function detachFromHosting(domain: string): Promise<void> {
 
 export class DomainConflictError extends Error {}
 
-/** Point the shop at a domain (or clear it). New domains start unverified with a fresh token. */
+export const CLAIM_TTL_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * Point the shop at a domain (or clear it). New domains start unverified with a fresh token.
+ * An unverified claim by another shop doesn't block anyone once it is 72 hours old, and never
+ * blocks the shop that bought the domain on the platform.
+ */
 export async function setTenantDomain(
   tenantId: string,
   domain: string | null
@@ -263,11 +269,30 @@ export async function setTenantDomain(
     return { changed: false, token: current?.customDomainToken ?? null };
   }
   if (domain) {
-    const taken = await prisma.tenant.findFirst({
-      where: { customDomain: domain, NOT: { id: tenantId } },
-      select: { id: true },
+    const registered = await prisma.registeredDomain.findFirst({
+      where: { domain, status: { in: ["registering", "active"] } },
+      select: { tenantId: true },
     });
-    if (taken) throw new DomainConflictError("That domain is already linked to another shop.");
+    if (registered && registered.tenantId !== tenantId) {
+      throw new DomainConflictError("That domain is already linked to another shop.");
+    }
+    const holder = await prisma.tenant.findFirst({
+      where: { customDomain: domain, NOT: { id: tenantId } },
+      select: { id: true, customDomainVerifiedAt: true, customDomainClaimedAt: true },
+    });
+    if (holder) {
+      const staleClaim =
+        !holder.customDomainVerifiedAt &&
+        (!holder.customDomainClaimedAt || holder.customDomainClaimedAt.getTime() < Date.now() - CLAIM_TTL_MS);
+      const boughtHere = registered?.tenantId === tenantId;
+      if (holder.customDomainVerifiedAt && !boughtHere) {
+        throw new DomainConflictError("That domain is already linked to another shop.");
+      }
+      if (!staleClaim && !boughtHere) {
+        throw new DomainConflictError("That domain is already linked to another shop.");
+      }
+      await releaseTenantDomain(holder.id, domain);
+    }
   }
   const token = domain ? newDomainToken() : null;
   await prisma.tenant.update({
@@ -278,6 +303,8 @@ export async function setTenantDomain(
       customDomainVerifiedAt: null,
       customDomainCheckedAt: null,
       customDomainError: null,
+      customDomainClaimedAt: domain ? new Date() : null,
+      customDomainFailures: 0,
     },
   });
   if (current?.customDomain) {
@@ -285,6 +312,27 @@ export async function setTenantDomain(
     await detachFromHosting(current.customDomain);
   }
   return { changed: true, token };
+}
+
+/** Removes a domain from a shop, only if the shop still has that domain. */
+async function releaseTenantDomain(tenantId: string, domain: string, reason?: string): Promise<boolean> {
+  const res = await prisma.tenant.updateMany({
+    where: { id: tenantId, customDomain: domain },
+    data: {
+      customDomain: null,
+      customDomainToken: null,
+      customDomainVerifiedAt: null,
+      customDomainCheckedAt: null,
+      customDomainClaimedAt: null,
+      customDomainFailures: 0,
+      customDomainError: reason ?? null,
+    },
+  });
+  if (res.count) {
+    invalidateDomainCache(domain);
+    await detachFromHosting(domain);
+  }
+  return res.count > 0;
 }
 
 /* ---------------- Verification flow ---------------- */
@@ -366,7 +414,26 @@ export async function verifyTenantDomain(tenantId: string): Promise<VerifyResult
 }
 
 /** Hourly: retry pending domains and nudge hosting for verified ones still waiting on TLS. */
-export async function checkPendingDomains(): Promise<{ checked: number; verified: number }> {
+export async function checkPendingDomains(): Promise<{ checked: number; verified: number; released: number }> {
+  const staleClaims = await prisma.tenant.findMany({
+    where: {
+      customDomain: { not: null },
+      customDomainVerifiedAt: null,
+      customDomainClaimedAt: { lt: new Date(Date.now() - CLAIM_TTL_MS) },
+    },
+    select: { id: true, customDomain: true },
+    take: 200,
+  });
+  let released = 0;
+  for (const t of staleClaims) {
+    const ok = await releaseTenantDomain(
+      t.id,
+      t.customDomain!,
+      `We removed ${t.customDomain} because its DNS records weren't set up within 72 hours. Add it again when you're ready.`
+    );
+    if (ok) released += 1;
+  }
+
   const staleBefore = new Date(Date.now() - 50 * 60 * 1000);
   const tenants = await prisma.tenant.findMany({
     where: {
@@ -393,7 +460,77 @@ export async function checkPendingDomains(): Promise<{ checked: number; verified
       console.warn("[domains] check failed", t.id, err);
     }
   }
-  return { checked: tenants.length, verified };
+  return { checked: tenants.length, verified, released };
+}
+
+const RECHECK_FAILURES_BEFORE_DETACH = 3;
+
+/**
+ * Daily: verified domains must still point at us. After three failed days in a row
+ * (so a short DNS outage doesn't cost a seller their domain) the domain is detached
+ * and the owner is told why.
+ */
+export async function recheckVerifiedDomains(): Promise<{ checked: number; detached: number }> {
+  const tenants = await prisma.tenant.findMany({
+    where: {
+      customDomain: { not: null },
+      customDomainVerifiedAt: { not: null },
+      customDomainError: null,
+      customDomainCheckedAt: { lt: new Date(Date.now() - 23 * 60 * 60 * 1000) },
+    },
+    select: {
+      id: true,
+      name: true,
+      customDomain: true,
+      customDomainToken: true,
+      customDomainFailures: true,
+      owner: { select: { email: true, name: true } },
+    },
+    take: 300,
+  });
+  let detached = 0;
+  for (const t of tenants) {
+    const domain = t.customDomain!;
+    let check: DnsCheck;
+    try {
+      check = await checkDomainDns(domain, t.customDomainToken ?? "");
+    } catch {
+      continue;
+    }
+    const now = new Date();
+    if (check.routing) {
+      await prisma.tenant.updateMany({
+        where: { id: t.id, customDomain: domain },
+        data: { customDomainCheckedAt: now, customDomainFailures: 0 },
+      });
+      continue;
+    }
+    const failures = t.customDomainFailures + 1;
+    if (failures < RECHECK_FAILURES_BEFORE_DETACH) {
+      await prisma.tenant.updateMany({
+        where: { id: t.id, customDomain: domain },
+        data: { customDomainCheckedAt: now, customDomainFailures: failures },
+      });
+      continue;
+    }
+    const reason = `${domain} stopped pointing to your shop, so we disconnected it. Check its DNS records and connect it again.`;
+    if (await releaseTenantDomain(t.id, domain, reason)) {
+      detached += 1;
+      const { enqueueTransactionalMail } = await import("../queue/transactionalMail");
+      await enqueueTransactionalMail({
+        kind: "domain_detached",
+        to: t.owner.email,
+        data: {
+          name: t.owner.name,
+          shopName: t.name,
+          domain,
+          domainUrl: `${env.webUrl.replace(/\/$/, "")}/seller/domain`,
+        },
+        idempotencyKey: `domain-detached-${t.id}-${domain}-${now.toISOString().slice(0, 10)}`,
+      }).catch(() => undefined);
+    }
+  }
+  return { checked: tenants.length, detached };
 }
 
 /* ---------------- CORS lookup ---------------- */

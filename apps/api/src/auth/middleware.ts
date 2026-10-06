@@ -54,7 +54,15 @@ async function loadUserFromRequest(req: Request): Promise<User | null> {
   if (!token) return null;
 
   const payload = verifyAccessToken(token);
-  return prisma.user.findUnique({ where: { id: payload.sub } });
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+  if (!user) return null;
+  if (
+    user.sessionsRevokedAt &&
+    (payload.iat ?? 0) < Math.floor(user.sessionsRevokedAt.getTime() / 1000)
+  ) {
+    return null;
+  }
+  return user;
 }
 
 

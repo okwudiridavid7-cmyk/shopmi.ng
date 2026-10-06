@@ -13,6 +13,16 @@ import {
 import { getDomainsQueue } from "../queue/connection";
 import { enqueueTransactionalMail } from "../queue/transactionalMail";
 import { getRegistrar, type ManagedDnsRecord, type RegistrantContact } from "./registrar";
+import { alertAdmins } from "./adminAlerts";
+import {
+  PaystackError,
+  initializeTransaction,
+  newReference,
+  paystackConfigured,
+  refundTransaction,
+  toMinorUnits,
+  verifyTransaction,
+} from "./paystack";
 
 export class DomainPurchaseError extends Error {
   constructor(
@@ -71,9 +81,22 @@ async function enabledPricing(): Promise<TldPrice[]> {
 
 /* ---------------- Eligibility ---------------- */
 
-export async function freeDomainEligible(tenantId: string): Promise<boolean> {
+/**
+ * The free .com.ng comes with a paid period, not a trial: the plan must include it,
+ * the shop must not be on trial, and it must have paid (online, or a period set by an admin).
+ */
+export async function freeDomainEligible(tenantId: string, db: Prisma.TransactionClient = prisma): Promise<boolean> {
   if (!(await planAllows(tenantId, "freeDomain"))) return false;
-  const existing = await prisma.registeredDomain.count({
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { trialEndsAt: true, planExpiresAt: true },
+  });
+  if (!tenant || tenant.trialEndsAt) return false;
+  if (!tenant.planExpiresAt || tenant.planExpiresAt.getTime() <= Date.now()) {
+    const paid = await db.planPayment.count({ where: { tenantId, status: "paid" } });
+    if (!paid) return false;
+  }
+  const existing = await db.registeredDomain.count({
     where: { tenantId, free: true, status: { in: ["registering", "active"] } },
   });
   return existing === 0;
@@ -217,33 +240,25 @@ async function paystackInitialize(input: {
   callbackUrl: string;
   metadata: Record<string, unknown>;
 }): Promise<PaystackInit> {
-  if (!env.paystackSecretKey) {
+  if (!paystackConfigured()) {
     throw new DomainPurchaseError("Payments aren't configured yet.", 503);
   }
-  const res = await fetch("https://api.paystack.co/transaction/initialize", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.paystackSecretKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  try {
+    const data = await initializeTransaction({
       email: input.email,
-      amount: Math.round(input.amount * 100),
+      amount: toMinorUnits(input.amount),
       currency: "NGN",
       reference: input.reference,
       callback_url: input.callbackUrl,
       metadata: input.metadata,
-    }),
-  });
-  const json = (await res.json().catch(() => ({}))) as {
-    status?: boolean;
-    message?: string;
-    data?: { authorization_url: string; reference: string };
-  };
-  if (!res.ok || !json.status || !json.data) {
-    throw new DomainPurchaseError(json.message || "Couldn't start the payment.", 502);
+    });
+    return { authorizationUrl: data.authorization_url, reference: data.reference };
+  } catch (err) {
+    throw new DomainPurchaseError(
+      err instanceof PaystackError ? err.message : "Couldn't start the payment.",
+      502
+    );
   }
-  return { authorizationUrl: json.data.authorization_url, reference: json.data.reference };
 }
 
 function domainCallbackUrl(): string {
@@ -296,44 +311,67 @@ export async function startDomainPurchase(input: {
     throw new DomainPurchaseError(`${domain} isn't available.`, 409, "TAKEN");
   }
 
-  const existing = await prisma.registeredDomain.findUnique({ where: { domain } });
+  const contact = input.contact as unknown as Prisma.InputJsonValue;
+
+  // Rows are never deleted once a payment exists. An abandoned checkout is taken over in
+  // place: its open payments expire, and a late payment on one is refunded.
+  const existing = await prisma.registeredDomain.findUnique({
+    where: { domain },
+    include: { payments: { where: { status: "paid" }, select: { id: true } } },
+  });
+  let rowId: string | null = null;
   if (existing) {
-    const staleCheckout =
-      existing.status === "pending_payment" &&
-      (existing.tenantId === input.tenantId ||
-        existing.updatedAt.getTime() < Date.now() - 30 * 60 * 1000);
-    if (existing.status === "registering" || existing.status === "active") {
+    if (existing.status === "registering" || existing.status === "active" || existing.status === "expired") {
       throw new DomainPurchaseError(`${domain} isn't available.`, 409, "TAKEN");
     }
-    if (existing.status === "pending_payment" && !staleCheckout) {
+    if (existing.payments.length > 0 && existing.tenantId !== input.tenantId) {
+      throw new DomainPurchaseError(`${domain} isn't available.`, 409, "TAKEN");
+    }
+    const checkoutOpen =
+      existing.status === "pending_payment" &&
+      existing.tenantId !== input.tenantId &&
+      existing.updatedAt.getTime() > Date.now() - 30 * 60 * 1000;
+    if (checkoutOpen) {
       throw new DomainPurchaseError(
         `Someone is checking out ${domain} right now. Try again in a few minutes.`,
         409,
         "TAKEN"
       );
     }
-    await prisma.registeredDomain.delete({ where: { id: existing.id } });
+    await prisma.domainPayment.updateMany({
+      where: { registeredDomainId: existing.id, status: "pending" },
+      data: { status: "expired" },
+    });
+    rowId = existing.id;
   }
 
-  const free = tld === FREE_TLD && years === 1 && (await freeDomainEligible(input.tenantId));
-  const contact = input.contact as unknown as Prisma.InputJsonValue;
-
-  if (free) {
-    const row = await prisma.registeredDomain.create({
-      data: { tenantId: input.tenantId, domain, tld, free: true, status: "registering", contact },
+  const wantsFree = tld === FREE_TLD && years === 1;
+  if (wantsFree) {
+    // Advisory lock per shop so two simultaneous requests can't both claim the free domain.
+    const claimed = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`free-domain:${input.tenantId}`}))`;
+      if (!(await freeDomainEligible(input.tenantId, tx))) return null;
+      const data = { tenantId: input.tenantId, tld, free: true, status: "registering" as const, contact, lastError: null };
+      return rowId
+        ? tx.registeredDomain.update({ where: { id: rowId }, data })
+        : tx.registeredDomain.create({ data: { ...data, domain } });
     });
-    await enqueueDomainJob({ kind: "register", registeredDomainId: row.id }, `register-${row.id}`);
-    return { status: "registering", domain };
+    if (claimed) {
+      await enqueueDomainJob({ kind: "register", registeredDomainId: claimed.id }, `register-${claimed.id}`);
+      return { status: "registering", domain };
+    }
   }
 
   const amount = price.register * years;
-  const row = await prisma.registeredDomain.create({
-    data: { tenantId: input.tenantId, domain, tld, status: "pending_payment", contact },
-  });
-  const reference = `${PAYMENT_PREFIX}${row.id}_${Date.now().toString(36)}`;
+  const rowData = { tenantId: input.tenantId, tld, free: false, status: "pending_payment" as const, contact, lastError: null };
+  const row = rowId
+    ? await prisma.registeredDomain.update({ where: { id: rowId }, data: rowData })
+    : await prisma.registeredDomain.create({ data: { ...rowData, domain } });
+  const reference = newReference(PAYMENT_PREFIX);
   await prisma.domainPayment.create({
     data: {
       registeredDomainId: row.id,
+      tenantId: input.tenantId,
       kind: "register",
       years,
       amount: new Prisma.Decimal(amount),
@@ -350,7 +388,14 @@ export async function startDomainPurchase(input: {
     });
     return { status: "payment", domain, authorizationUrl: init.authorizationUrl, reference };
   } catch (err) {
-    await prisma.registeredDomain.delete({ where: { id: row.id } }).catch(() => undefined);
+    await prisma.domainPayment.updateMany({
+      where: { paystackReference: reference, status: "pending" },
+      data: { status: "failed" },
+    });
+    await prisma.registeredDomain.updateMany({
+      where: { id: row.id, status: "pending_payment" },
+      data: { status: "cancelled" },
+    });
     throw err;
   }
 }
@@ -379,10 +424,11 @@ export async function startDomainRenewal(input: {
   }
   const years = Math.min(Math.max(Math.round(input.years), 1), 5);
   const amount = price.renew * years;
-  const reference = `${PAYMENT_PREFIX}${row.id}_${Date.now().toString(36)}`;
+  const reference = newReference(PAYMENT_PREFIX);
   await prisma.domainPayment.create({
     data: {
       registeredDomainId: row.id,
+      tenantId: input.tenantId,
       kind: "renew",
       years,
       amount: new Prisma.Decimal(amount),
@@ -399,33 +445,84 @@ export async function startDomainRenewal(input: {
   return { authorizationUrl: init.authorizationUrl, reference };
 }
 
+/** Refunds a paid domain payment and tells the admins. Never throws. */
+async function refundDomainPayment(paymentId: string, reason: string): Promise<void> {
+  const payment = await prisma.domainPayment.findUnique({
+    where: { id: paymentId },
+    include: { registeredDomain: { select: { domain: true } } },
+  });
+  if (!payment || payment.status !== "paid") return;
+  let refunded = false;
+  try {
+    await refundTransaction(payment.paystackReference, { reason });
+    await prisma.domainPayment.updateMany({
+      where: { id: payment.id, status: "paid" },
+      data: { status: "refunded" },
+    });
+    refunded = true;
+  } catch (err) {
+    console.error("[domains] refund failed", payment.paystackReference, err instanceof Error ? err.message : err);
+  }
+  await alertAdmins({
+    title: refunded ? "Domain payment refunded" : "Domain refund needs attention",
+    lines: [
+      `${payment.registeredDomain.domain}: ${reason}.`,
+      refunded
+        ? `Paystack refund started for ${payment.paystackReference} (NGN ${Number(payment.amount)}).`
+        : `The automatic refund for ${payment.paystackReference} failed. Refund it from the Paystack dashboard.`,
+    ],
+    path: "/admin/domains",
+    idempotencyKey: `alert-domain-refund:${payment.id}`,
+  });
+}
+
 /** Mark a domain payment paid (webhook or verify) and queue the registrar work. Idempotent. */
-export async function fulfillDomainPayment(reference: string, paidKobo?: number): Promise<boolean> {
+export async function fulfillDomainPayment(
+  reference: string,
+  paidKobo?: number,
+  currency?: string
+): Promise<boolean> {
   const payment = await prisma.domainPayment.findUnique({
     where: { paystackReference: reference },
     include: { registeredDomain: true },
   });
   if (!payment) return false;
-  if (paidKobo != null && paidKobo < Math.round(Number(payment.amount) * 100)) {
-    console.warn("[domains] underpaid", reference, paidKobo);
-    await prisma.domainPayment.updateMany({
-      where: { id: payment.id, status: "pending" },
-      data: { status: "failed" },
+  const wrongCurrency = currency != null && currency.toUpperCase() !== "NGN";
+  if (wrongCurrency || (paidKobo != null && paidKobo !== toMinorUnits(Number(payment.amount)))) {
+    console.warn("[domains] amount mismatch", reference, paidKobo, currency);
+    await alertAdmins({
+      title: "Domain payment amount mismatch",
+      lines: [
+        `${reference} expected NGN ${Number(payment.amount)}, Paystack reported ${currency ?? "NGN"} ${(paidKobo ?? 0) / 100}. Nothing was registered.`,
+      ],
+      idempotencyKey: `alert-domain-mismatch:${payment.id}`,
     });
     return false;
   }
   const claimed = await prisma.domainPayment.updateMany({
-    where: { id: payment.id, status: "pending" },
+    where: { id: payment.id, status: { in: ["pending", "expired", "failed"] } },
     data: { status: "paid", paidAt: new Date() },
   });
   if (claimed.count === 0) return payment.status === "paid";
 
   const row = payment.registeredDomain;
+  const payer = payment.tenantId ?? row.tenantId;
   if (payment.kind === "register") {
-    await prisma.registeredDomain.update({
-      where: { id: row.id },
+    // Late payment: the checkout expired and the domain moved on (another shop, or already registered).
+    const stillOurs =
+      row.tenantId === payer && (row.status === "pending_payment" || row.status === "cancelled");
+    if (!stillOurs) {
+      await refundDomainPayment(payment.id, "paid after the checkout expired and the domain was taken");
+      return false;
+    }
+    const moved = await prisma.registeredDomain.updateMany({
+      where: { id: row.id, tenantId: payer, status: { in: ["pending_payment", "cancelled"] } },
       data: { status: "registering", lastError: null },
     });
+    if (!moved.count) {
+      await refundDomainPayment(payment.id, "paid after the checkout expired and the domain was taken");
+      return false;
+    }
     await enqueueDomainJob({ kind: "register", registeredDomainId: row.id }, `register-${row.id}`);
   } else {
     await enqueueDomainJob(
@@ -442,20 +539,15 @@ export async function verifyDomainPayment(tenantId: string, reference: string) {
     where: { paystackReference: reference },
     include: { registeredDomain: true },
   });
-  if (!payment || payment.registeredDomain.tenantId !== tenantId) {
+  if (!payment || (payment.tenantId ?? payment.registeredDomain.tenantId) !== tenantId) {
     throw new DomainPurchaseError("Payment not found.", 404);
   }
-  if (payment.status === "pending" && env.paystackSecretKey) {
-    const res = await fetch(
-      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-      { headers: { Authorization: `Bearer ${env.paystackSecretKey}` } }
-    );
-    const json = (await res.json().catch(() => ({}))) as {
-      status?: boolean;
-      data?: { status?: string; amount?: number };
-    };
-    if (json.status && json.data?.status === "success") {
-      await fulfillDomainPayment(reference, json.data.amount);
+  if ((payment.status === "pending" || payment.status === "expired") && paystackConfigured()) {
+    try {
+      const charge = await verifyTransaction(reference);
+      if (charge?.status === "success") await fulfillDomainPayment(reference, charge.amount, charge.currency);
+    } catch (err) {
+      if (!(err instanceof PaystackError)) throw err;
     }
   }
   const fresh = await prisma.domainPayment.findUnique({
@@ -466,7 +558,8 @@ export async function verifyDomainPayment(tenantId: string, reference: string) {
     paymentStatus: fresh!.status,
     kind: fresh!.kind,
     domain: fresh!.registeredDomain.domain,
-    domainStatus: fresh!.registeredDomain.status,
+    domainStatus:
+      fresh!.registeredDomain.tenantId === tenantId ? fresh!.registeredDomain.status : ("cancelled" as const),
   };
 }
 
@@ -579,6 +672,7 @@ export async function processDomainRenewal(registeredDomainId: string, years: nu
   });
 }
 
+/** Final failure after all retries: the seller gets their money back automatically. */
 export async function markDomainJobFailed(registeredDomainId: string, kind: string, message: string) {
   await prisma.registeredDomain.updateMany({
     where: { id: registeredDomainId },
@@ -587,6 +681,24 @@ export async function markDomainJobFailed(registeredDomainId: string, kind: stri
         ? { status: "failed", lastError: message.slice(0, 500) }
         : { lastError: `Renewal failed: ${message}`.slice(0, 500) },
   });
+  const payment = await prisma.domainPayment.findFirst({
+    where: { registeredDomainId, kind: kind === "register" ? "register" : "renew", status: "paid" },
+    orderBy: { paidAt: "desc" },
+  });
+  if (payment) {
+    await refundDomainPayment(
+      payment.id,
+      kind === "register" ? `registration failed (${message.slice(0, 200)})` : `renewal failed (${message.slice(0, 200)})`
+    );
+  } else if (kind === "register") {
+    const row = await prisma.registeredDomain.findUnique({ where: { id: registeredDomainId }, select: { domain: true } });
+    await alertAdmins({
+      title: "Free domain registration failed",
+      lines: [`${row?.domain ?? registeredDomainId}: ${message.slice(0, 300)}`],
+      path: "/admin/domains",
+      idempotencyKey: `alert-domain-failed:${registeredDomainId}`,
+    });
+  }
 }
 
 export async function noteDomainJobError(registeredDomainId: string, message: string) {
@@ -602,6 +714,14 @@ export async function retryDomainRegistration(registeredDomainId: string) {
   if (!row) throw new DomainPurchaseError("Domain not found.", 404);
   if (row.status !== "failed" && row.status !== "registering") {
     throw new DomainPurchaseError("Only failed registrations can be retried.", 409);
+  }
+  if (!row.free) {
+    const paid = await prisma.domainPayment.count({
+      where: { registeredDomainId: row.id, kind: "register", status: "paid" },
+    });
+    if (!paid) {
+      throw new DomainPurchaseError("This registration was refunded, so there's no payment to retry with.", 409);
+    }
   }
   await prisma.registeredDomain.update({
     where: { id: row.id },

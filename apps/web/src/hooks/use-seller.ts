@@ -21,8 +21,10 @@ import { queryKeys } from "@/lib/query-keys";
 
 export type SellerFeatures = {
   aiFeaturesEnabled: boolean;
+  aiPlanAllows?: boolean;
+  imageEnhanceEnabled?: boolean;
   watermarkDefaultOn: boolean;
-  imageToolsEnabled: boolean;
+  imageToolsEnabled?: boolean;
 };
 
 export type SellerPlanInfo = {
@@ -60,8 +62,12 @@ export type SellerShop = TenantPublic & {
   contactFormEnabled?: boolean;
   watermarkDefaultOn: boolean | null;
   watermarkPlatformDefault: boolean;
+  /** The signed-in member's role in this shop. */
+  viewerRole?: "owner" | "manager" | "staff" | null;
   settlementBankCode?: string | null;
+  /** Masked unless the viewer is the owner. */
   settlementAccountNumber?: string | null;
+  settlementAccountName?: string | null;
   paystackSubaccountCode?: string | null;
 };
 
@@ -82,8 +88,11 @@ export type SellerBranding = {
 export type SellerUploadResult = {
   url: string;
   originalUrl: string;
-  watermarkJobId: string | null;
+  /** Product uploads only: the same image with the shop's watermark applied. */
+  watermarkedUrl: string | null;
 };
+
+export type SellerUploadKind = "product" | "logo" | "banner";
 
 export function useSellerProducts() {
   return useQuery({
@@ -186,15 +195,20 @@ export function useSellerBranding(enabled = true) {
   });
 }
 
+export type TeamInvitePublic = {
+  id: string;
+  email: string;
+  role: "manager" | "staff";
+  expiresAt: string;
+};
+
 export function useSellerTeam() {
   return useQuery({
     queryKey: ["seller", "team"] as const,
-    queryFn: async () => {
-      const res = await apiFetch<{ members: TeamMemberPublic[] }>(
+    queryFn: async () =>
+      apiFetch<{ members: TeamMemberPublic[]; invites: TeamInvitePublic[] }>(
         "/api/seller/team"
-      );
-      return res.members;
-    },
+      ),
   });
 }
 
@@ -394,10 +408,13 @@ export function useUpdateOrderStatus() {
   });
 }
 
-export async function uploadSellerFile(file: File): Promise<SellerUploadResult> {
+export async function uploadSellerFile(
+  file: File,
+  kind: SellerUploadKind = "product"
+): Promise<SellerUploadResult> {
   const body = new FormData();
   body.append("file", file);
-  return apiFetch<SellerUploadResult>("/api/seller/uploads", {
+  return apiFetch<SellerUploadResult>(`/api/seller/uploads?kind=${kind}`, {
     method: "POST",
     body,
   });

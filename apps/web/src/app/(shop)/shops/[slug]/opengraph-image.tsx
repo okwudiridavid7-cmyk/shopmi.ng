@@ -19,8 +19,8 @@ function firstImage(images: unknown): string | null {
   return null;
 }
 
-export default async function Image({ params }: { params: { slug: string } }) {
-  const slug = encodeURIComponent(params.slug);
+export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
+  const slug = encodeURIComponent((await params).slug);
   const [shopRes, productsRes] = await Promise.all([
     fetch(`${API_URL}/api/shops/${slug}`).catch(() => null),
     fetch(`${API_URL}/api/shops/${slug}/products?limit=1&page=1`).catch(() => null),

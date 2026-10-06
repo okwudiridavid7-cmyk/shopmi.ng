@@ -17,6 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
+import {
+  ChatEmbedFields,
+  draftFromEmbed,
+  embedFromDraft,
+  type ChatEmbedDraft,
+} from "@/components/chat-embed-fields";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -94,7 +100,7 @@ export default function SellerWebsitePage() {
   const [tickerBg, setTickerBg] = useState("#111111");
   const [tickerColor, setTickerColor] = useState("#ffffff");
   const [whatsappUrl, setWhatsappUrl] = useState("");
-  const [chatbotHtml, setChatbotHtml] = useState("");
+  const [chatDraft, setChatDraft] = useState<ChatEmbedDraft>({ provider: "", id: "" });
   const [contactFormEnabled, setContactFormEnabled] = useState(true);
 
   const [, setMsg] = useState<string | null>(null);
@@ -128,7 +134,7 @@ export default function SellerWebsitePage() {
     setTickerBg(theme.tickerBg ?? "#111111");
     setTickerColor(theme.tickerColor ?? "#ffffff");
     setWhatsappUrl(theme.whatsappUrl ?? "");
-    setChatbotHtml(theme.chatbotHtml ?? "");
+    setChatDraft(draftFromEmbed(theme.chatEmbed));
   }, [shopQ.data]);
 
   useEffect(() => {
@@ -563,6 +569,11 @@ export default function SellerWebsitePage() {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
+            const chatEmbed = embedFromDraft(chatDraft);
+            if (chatEmbed === undefined) {
+              setErr("Check the live chat widget ID.");
+              return;
+            }
             setBusy(true);
             setMsg(null);
             setErr(null);
@@ -577,7 +588,7 @@ export default function SellerWebsitePage() {
                   tickerBg,
                   tickerColor,
                   whatsappUrl: whatsappUrl || null,
-                  chatbotHtml: chatbotHtml || null,
+                  chatEmbed,
                 }),
               });
               await qc.invalidateQueries({ queryKey: ["seller", "shop"] });
@@ -653,16 +664,7 @@ export default function SellerWebsitePage() {
               onChange={(e) => setWhatsappUrl(e.target.value)}
             />
           </Label>
-          <Label>
-            <span>Custom chatbot embed</span>
-            <Textarea
-              rows={6}
-              className="font-mono text-xs"
-              placeholder="Paste the embed code from your chat provider"
-              value={chatbotHtml}
-              onChange={(e) => setChatbotHtml(e.target.value)}
-            />
-          </Label>
+          <ChatEmbedFields value={chatDraft} onChange={setChatDraft} />
           <Button type="submit" variant="primary" disabled={busy}>
             Save widgets
           </Button>

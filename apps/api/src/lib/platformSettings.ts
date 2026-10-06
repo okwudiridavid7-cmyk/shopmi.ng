@@ -1,4 +1,8 @@
 import { prisma } from "../db/prisma";
+import { CHAT_EMBED_SETTING_KEY, parseChatEmbed } from "./chatEmbed";
+import { isHttpsUrl, isSafeLink, isWhatsappTarget } from "./safeUrl";
+
+export const MAX_COMMISSION_PERCENT = 30;
 
 /**
  * All settings are read with one query and memoised briefly per process, so a
@@ -64,7 +68,7 @@ export async function getPlatformTrialDays(fallback = 3): Promise<number> {
 export async function getCommissionPercent(fallback = 5): Promise<number> {
   const raw = await getPlatformSetting("commission_percent", String(fallback));
   const n = Number.parseFloat(raw);
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, MAX_COMMISSION_PERCENT) : fallback;
 }
 
 export const PALETTE_SETTING_KEY = "platform_palette";
@@ -98,5 +102,41 @@ export function settingValueError(key: string, value: string): string | null {
   if (key === PALETTE_SETTING_KEY && value !== "" && !parsePalette(value)) {
     return "Palette must be JSON with primary, secondary, text and accent as #rrggbb colours";
   }
+  if (key === "commission_percent") {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0 || n > MAX_COMMISSION_PERCENT) {
+      return `Commission must be between 0 and ${MAX_COMMISSION_PERCENT}`;
+    }
+  }
+  if (key === RETIRED_CHATBOT_HTML_KEY && value !== "") {
+    return "Raw chatbot HTML is no longer supported. Pick a chat provider instead.";
+  }
+  if (key === CHAT_EMBED_SETTING_KEY && value !== "" && !parseChatEmbed(value)) {
+    return "Chat widget must be a supported provider with a valid widget ID";
+  }
+  if (key === "whatsapp_url" && value !== "" && !isWhatsappTarget(value)) {
+    return "Use a wa.me link or a phone number";
+  }
+  if ((key === "platform_logo_url" || key === "platform_logo_square_url") && value !== "" && !isHttpsUrl(value)) {
+    return "Logo must be an https:// URL";
+  }
+  if (key === "homepage_banners" && value !== "") {
+    try {
+      const slides = JSON.parse(value) as unknown;
+      if (!Array.isArray(slides)) return "Banners must be a JSON array";
+      for (const s of slides as Record<string, unknown>[]) {
+        if (typeof s?.imageUrl === "string" && s.imageUrl && !isHttpsUrl(s.imageUrl)) {
+          return "Banner images must be https:// URLs";
+        }
+        if (typeof s?.ctaUrl === "string" && s.ctaUrl && !isSafeLink(s.ctaUrl)) {
+          return "Banner links must be https:// URLs or paths starting with /";
+        }
+      }
+    } catch {
+      return "Banners must be valid JSON";
+    }
+  }
   return null;
 }
+
+export const RETIRED_CHATBOT_HTML_KEY = "chatbot_html";

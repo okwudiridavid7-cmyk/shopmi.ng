@@ -10,6 +10,7 @@ import { ShopLogoFallback } from "@/components/shop-logo-fallback";
 import { ThemeCycleToggle } from "@/components/theme-cycle-toggle";
 import { useCookieConsent } from "@/components/cookie-consent";
 import { useToast } from "@/components/ui/toast";
+import { safeHref } from "@/lib/safe-url";
 
 export type ShopFooterProps = {
   shopName: string;
@@ -40,8 +41,12 @@ function CookieSettingsButton() {
   );
 }
 
-function socialHref(key: SocialKey, value: string): string {
-  if (value.startsWith("http")) return value;
+function socialHref(key: SocialKey, value: string): string | undefined {
+  return safeHref(rawSocialHref(key, value)) ?? undefined;
+}
+
+function rawSocialHref(key: SocialKey, value: string): string {
+  if (/^https?:\/\//i.test(value)) return value;
   if (key === "whatsapp") {
     const digits = value.replace(/\D/g, "");
     return `https://wa.me/${digits}`;

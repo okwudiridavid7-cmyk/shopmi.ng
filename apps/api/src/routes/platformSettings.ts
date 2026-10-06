@@ -62,7 +62,6 @@ platformSettingsRouter.get("/:key", async (req, res, next) => {
     if (!setting) {
       return res.status(404).json({ error: "Setting not found" });
     }
-    await afterSettingsWrite();
     return res.json({ setting });
   } catch (err) {
     return next(err);

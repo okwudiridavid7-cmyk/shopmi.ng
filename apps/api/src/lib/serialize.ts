@@ -57,7 +57,12 @@ export function toUserPublic(user: User): UserPublic {
   };
 }
 
-export function toTenantPublic(tenant: Tenant): TenantPublic {
+/**
+ * Shop as seen by anyone. Pass `{ private: true }` only for the shop's own members
+ * or admins: it adds notification settings and plan/billing dates.
+ */
+export function toTenantPublic(tenant: Tenant, opts?: { private?: boolean }): TenantPublic {
+  const own = opts?.private === true;
   return {
     id: tenant.id,
     name: tenant.name,
@@ -66,8 +71,9 @@ export function toTenantPublic(tenant: Tenant): TenantPublic {
     status: tenant.status,
     verifiedBadge: tenant.verifiedBadge,
     themeSettings: (tenant.themeSettings as Record<string, unknown> | null) ?? null,
-    notificationSettings:
-      (tenant.notificationSettings as Record<string, unknown> | null) ?? null,
+    notificationSettings: own
+      ? ((tenant.notificationSettings as Record<string, unknown> | null) ?? null)
+      : null,
     location: tenant.location,
     countryCode: tenant.countryCode,
     stateCode: tenant.stateCode,
@@ -78,9 +84,9 @@ export function toTenantPublic(tenant: Tenant): TenantPublic {
     faqContent: parseFaqContent(tenant.faqContent),
     termsText: tenant.termsText,
     privacyText: tenant.privacyText,
-    trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null,
-    planExpiresAt: tenant.planExpiresAt?.toISOString() ?? null,
-    planId: tenant.planId,
+    trialEndsAt: own ? (tenant.trialEndsAt?.toISOString() ?? null) : null,
+    planExpiresAt: own ? (tenant.planExpiresAt?.toISOString() ?? null) : null,
+    planId: own ? tenant.planId : null,
     createdAt: tenant.createdAt.toISOString(),
   };
 }
@@ -110,8 +116,16 @@ type ProductWithRelations = Product & {
   _avgRating?: number | null;
 };
 
-export function toProductPublic(product: ProductWithRelations): ProductPublic {
-  const imageAssets = parseProductImageAssets(product.images);
+/**
+ * `includeOriginals` is for the owning shop only: unwatermarked originals must not
+ * reach shoppers, or the watermark is pointless.
+ */
+export function toProductPublic(
+  product: ProductWithRelations,
+  opts?: { includeOriginals?: boolean } | number
+): ProductPublic {
+  const includeOriginals = typeof opts === "object" && opts?.includeOriginals === true;
+  const imageAssets = includeOriginals ? parseProductImageAssets(product.images) : [];
   const images = resolveProductDisplayImages(
     product.images,
     product.watermarkEnabled
@@ -187,6 +201,9 @@ export function toOrderPublic(order: OrderWithRelations): OrderPublic {
     currency: order.currency,
     paystackReference: order.paystackReference,
     invoiceUrl: order.invoiceUrl,
+    refundStatus: order.refundStatus ?? null,
+    flag: order.flag ?? null,
+    failureReason: order.failureReason ?? null,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map(
       (item): OrderItemPublic => ({

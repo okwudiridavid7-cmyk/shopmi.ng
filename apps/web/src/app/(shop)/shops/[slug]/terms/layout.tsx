@@ -2,10 +2,15 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { buildPublicShopUrl } from "@/lib/shop-url";
 
-export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
   return {
     title: "Terms",
-    alternates: { canonical: `${buildPublicShopUrl(params.slug)}/terms` },
+    alternates: { canonical: `${buildPublicShopUrl(slug)}/terms` },
   };
 }
 

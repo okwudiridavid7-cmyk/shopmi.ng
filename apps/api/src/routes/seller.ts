@@ -1,14 +1,12 @@
-import path from "path";
-import fs from "fs";
 import { Router } from "express";
-import multer from "multer";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
-import { env } from "../config/env";
+import { cancelPaidOrder, RefundError } from "../services/orders";
 import { requireAuth } from "../auth/middleware";
-import { requireTenantFromMembership } from "../tenant/middleware";
+import { requireTenantFromMembership, requireTenantRoles } from "../tenant/middleware";
 import { tenantWhere } from "../tenant/tenantContext";
+import { setActiveShopCookie } from "../tenant/activeShop";
 import { toOrderPublic, toProductPublic, toTenantPublic } from "../lib/serialize";
 import {
   toShopBannerPublic,
@@ -19,30 +17,16 @@ import {
   serializeProductImageAssets,
 } from "../lib/productImages";
 import { resolveShopWatermarkDefault, getWatermarkPrefs } from "../lib/watermarkSettings";
-import {
-  getWatermarkQueue,
-  type WatermarkJobPayload,
-} from "../queue/connection";
-import { optimizeUpload } from "../services/images";
+import { ImageRejectedError, normalizeImage } from "../services/images";
+import { watermarkedCopy } from "../services/imageEnhance";
+import { newKey, publicUrl, putObject } from "../lib/storage";
+import { imageRef, memoryUpload, ownMediaUrl, receiveSingle, UploadError } from "../lib/uploads";
+import { chatEmbedSchema } from "../lib/chatEmbed";
+import { safeLink, whatsappTarget } from "../lib/safeUrl";
+import { redisRateLimit } from "../lib/rateLimit";
 
-fs.mkdirSync(env.uploadsDir, { recursive: true });
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, env.uploadsDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  }),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype)) {
-      return cb(new Error("Only JPEG, PNG, WebP, GIF allowed"));
-    }
-    return cb(null, true);
-  },
-});
+const upload = memoryUpload(5 * 1024 * 1024);
+const uploadLimiter = redisRateLimit({ name: "seller-upload", windowMs: 10 * 60_000, max: 120, by: "user" });
 
 const productSchema = z.object({
   title: z.string().min(2).max(200),
@@ -61,10 +45,10 @@ const productSchema = z.object({
   images: z
     .array(
       z.union([
-        z.string().min(1),
+        imageRef,
         z.object({
-          original: z.string().min(1),
-          watermarked: z.string().nullable().optional(),
+          original: imageRef,
+          watermarked: imageRef.nullable().optional(),
         }),
       ])
     )
@@ -83,59 +67,93 @@ function normalizeProductImages(
   return serializeProductImageAssets(parseProductImageAssets(images));
 }
 
+/** Category and brand are platform-wide; shop categories must belong to this shop. */
+async function invalidProductRef(
+  tenantId: string,
+  body: { categoryId?: string | null; shopCategoryId?: string | null; brandId?: string | null }
+): Promise<string | null> {
+  if (body.shopCategoryId) {
+    const ok = await prisma.shopCategory.findFirst({
+      where: { id: body.shopCategoryId, tenantId },
+      select: { id: true },
+    });
+    if (!ok) return "That shop category doesn't exist.";
+  }
+  if (body.categoryId) {
+    const ok = await prisma.category.findUnique({ where: { id: body.categoryId }, select: { id: true } });
+    if (!ok) return "That category doesn't exist.";
+  }
+  if (body.brandId) {
+    const ok = await prisma.brand.findUnique({ where: { id: body.brandId }, select: { id: true } });
+    if (!ok) return "That brand doesn't exist.";
+  }
+  return null;
+}
+
 export const sellerRouter = Router();
 
 sellerRouter.use(requireAuth, requireTenantFromMembership());
 
-sellerRouter.post("/uploads", (req, res, next) => {
-  upload.single("file")(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message || "Upload failed" });
-    }
-    if (!req.file) {
-      return res.status(400).json({ error: "file is required" });
-    }
-    const filename = await optimizeUpload(req.file.filename);
-    const url = `${env.apiUrl}/uploads/${filename}`;
-    const enqueueWatermark = req.query.watermark !== "0";
-    let watermarkJobId: string | null = null;
-    if (enqueueWatermark && req.tenant) {
-      try {
-        const tenant = await prisma.tenant.findUnique({
-          where: { id: req.tenant.tenantId },
-        });
-        const theme = (tenant?.themeSettings as Record<string, unknown> | null) ?? {};
-        const logoUrl =
-          typeof theme.logoUrl === "string" ? theme.logoUrl : null;
-        const aiJob = await prisma.aiJob.create({
-          data: {
-            tenantId: req.tenant.tenantId,
-            userId: req.user!.id,
-            type: "watermark",
-            status: "queued",
-            input: { originalUrl: url },
-          },
-        });
-        const payload: WatermarkJobPayload = {
-          aiJobId: aiJob.id,
-          tenantId: req.tenant.tenantId,
-          originalUrl: url,
-          shopName: tenant?.name ?? "Shop",
-          logoUrl,
-        };
-        await getWatermarkQueue().add("watermark", payload, { jobId: aiJob.id });
-        watermarkJobId = aiJob.id;
-      } catch (e) {
-        console.warn("[upload] watermark enqueue failed", e);
-      }
-    }
-    return res.status(201).json({
-      url,
-      path: `/uploads/${filename}`,
-      originalUrl: url,
-      watermarkJobId,
+const UPLOAD_KINDS = {
+  product: { maxSize: 1600, animated: false, watermark: true },
+  logo: { maxSize: 1024, animated: false, watermark: false },
+  banner: { maxSize: 2400, animated: false, watermark: false },
+} as const;
+
+/** Shops this user belongs to, for the dashboard shop switcher. */
+sellerRouter.get("/shops", async (req, res, next) => {
+  try {
+    const memberships = await prisma.tenantAdmin.findMany({
+      where: { userId: req.user!.id },
+      include: { tenant: { select: { id: true, name: true, slug: true } } },
+      orderBy: { tenant: { createdAt: "asc" } },
     });
-  });
+    return res.json({
+      activeTenantId: req.tenant!.tenantId,
+      shops: memberships.map((m) => ({ ...m.tenant, role: m.role })),
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+sellerRouter.post("/active-shop", async (req, res, next) => {
+  try {
+    const { tenantId } = z.object({ tenantId: z.string().min(1).max(40) }).parse(req.body);
+    const membership = await prisma.tenantAdmin.findUnique({
+      where: { tenantId_userId: { tenantId, userId: req.user!.id } },
+    });
+    if (!membership) return res.status(404).json({ error: "Shop not found" });
+    setActiveShopCookie(res, tenantId);
+    return res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: "Validation failed" });
+    return next(err);
+  }
+});
+
+sellerRouter.post("/uploads", uploadLimiter, async (req, res, next) => {
+  try {
+    const kindName =
+      (Object.keys(UPLOAD_KINDS) as (keyof typeof UPLOAD_KINDS)[]).find((k) => k === req.query.kind) ??
+      "product";
+    const kind = UPLOAD_KINDS[kindName];
+    const file = await receiveSingle(upload, "file", req, res);
+    const tenantId = req.tenant!.tenantId;
+    const { buffer } = await normalizeImage(file.buffer, { maxSize: kind.maxSize });
+    const key = newKey(`t/${tenantId}/${kindName}s`, "webp");
+    await putObject("public", key, buffer, "image/webp");
+    const url = publicUrl(key);
+
+    const watermarkedUrl = kind.watermark ? await watermarkedCopy(tenantId, buffer) : null;
+
+    return res.status(201).json({ url, originalUrl: url, watermarkedUrl });
+  } catch (err) {
+    if (err instanceof UploadError || err instanceof ImageRejectedError) {
+      return res.status(400).json({ error: err.message });
+    }
+    return next(err);
+  }
 });
 
 sellerRouter.get("/products", async (req, res, next) => {
@@ -150,7 +168,7 @@ sellerRouter.get("/products", async (req, res, next) => {
       },
       orderBy: { createdAt: "desc" },
     });
-    return res.json({ products: products.map(toProductPublic) });
+    return res.json({ products: products.map((p) => toProductPublic(p, { includeOriginals: true })) });
   } catch (err) {
     return next(err);
   }
@@ -159,6 +177,8 @@ sellerRouter.get("/products", async (req, res, next) => {
 sellerRouter.post("/products", async (req, res, next) => {
   try {
     const body = productSchema.parse(req.body);
+    const refError = await invalidProductRef(req.tenant!.tenantId, body);
+    if (refError) return res.status(400).json({ error: refError });
     if (body.status === "active") {
       const { assertCanPublishProduct, PlanLimitError } = await import(
         "../lib/plans"
@@ -202,7 +222,7 @@ sellerRouter.post("/products", async (req, res, next) => {
         tenant: { select: { id: true, name: true, slug: true, verifiedBadge: true } },
       },
     });
-    return res.status(201).json({ product: toProductPublic(product) });
+    return res.status(201).json({ product: toProductPublic(product, { includeOriginals: true }) });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: "Validation failed", details: err.flatten() });
@@ -220,6 +240,8 @@ sellerRouter.patch("/products/:id", async (req, res, next) => {
     if (!existing) {
       return res.status(404).json({ error: "Product not found" });
     }
+    const refError = await invalidProductRef(req.tenant!.tenantId, body);
+    if (refError) return res.status(400).json({ error: refError });
 
     if (body.status === "active" && existing.status !== "active") {
       const { assertCanPublishProduct, PlanLimitError } = await import(
@@ -275,7 +297,7 @@ sellerRouter.patch("/products/:id", async (req, res, next) => {
         tenant: { select: { id: true, name: true, slug: true, verifiedBadge: true } },
       },
     });
-    return res.json({ product: toProductPublic(product) });
+    return res.json({ product: toProductPublic(product, { includeOriginals: true }) });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: "Validation failed", details: err.flatten() });
@@ -284,7 +306,7 @@ sellerRouter.patch("/products/:id", async (req, res, next) => {
   }
 });
 
-sellerRouter.delete("/products/:id", async (req, res, next) => {
+sellerRouter.delete("/products/:id", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const existing = await prisma.product.findFirst({
       where: tenantWhere(req.tenant!, { id: req.params.id }),
@@ -346,13 +368,13 @@ sellerRouter.get("/orders/:id", async (req, res, next) => {
 /**
  * Seller status updates - uses existing OrderStatus enum:
  * pending_payment | paid | fulfilled | cancelled | failed
- * Sellers may fulfill paid orders or cancel unpaid ones.
+ * Sellers fulfil paid orders, cancel unpaid ones, or cancel a paid one with a full refund.
  */
 sellerRouter.patch("/orders/:id", async (req, res, next) => {
   try {
     const body = z
       .object({
-        status: z.enum(["paid", "fulfilled", "cancelled"]),
+        status: z.enum(["fulfilled", "cancelled"]),
       })
       .parse(req.body);
 
@@ -370,6 +392,9 @@ sellerRouter.patch("/orders/:id", async (req, res, next) => {
       cancelled: [],
       failed: [],
     };
+    if (body.status === "cancelled" && req.tenant!.membershipRole === "staff") {
+      return res.status(403).json({ error: "Only the owner or a manager can cancel orders" });
+    }
     const nextStatuses = allowed[existing.status] ?? [];
     if (!nextStatuses.includes(body.status)) {
       return res.status(400).json({
@@ -377,9 +402,23 @@ sellerRouter.patch("/orders/:id", async (req, res, next) => {
       });
     }
 
-    const order = await prisma.order.update({
+    if (existing.status === "paid" && body.status === "cancelled") {
+      try {
+        await cancelPaidOrder(existing.id, req.tenant!.tenantId);
+      } catch (err) {
+        if (err instanceof RefundError) return res.status(err.status).json({ error: err.message });
+        throw err;
+      }
+    } else {
+      const moved = await prisma.order.updateMany({
+        where: { id: existing.id, status: existing.status },
+        data: { status: body.status },
+      });
+      if (!moved.count) return res.status(409).json({ error: "Order changed, refresh and try again" });
+    }
+
+    const order = await prisma.order.findUniqueOrThrow({
       where: { id: existing.id },
-      data: { status: body.status },
       include: {
         items: {
           include: { product: { select: { id: true, title: true, images: true } } },
@@ -442,6 +481,27 @@ function themeFromJson(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/** Bank details are visible in full to the owner only. */
+function settlementFields(
+  t: {
+    settlementBankCode: string | null;
+    settlementAccountNumber: string | null;
+    settlementAccountName: string | null;
+    paystackSubaccountCode: string | null;
+  },
+  role: string | undefined
+) {
+  const owner = role === "owner";
+  const acct = t.settlementAccountNumber;
+  return {
+    viewerRole: role ?? null,
+    settlementBankCode: t.settlementBankCode,
+    settlementAccountName: t.settlementAccountName,
+    settlementAccountNumber: owner || !acct ? acct : `******${acct.slice(-4)}`,
+    paystackSubaccountCode: owner ? t.paystackSubaccountCode : null,
+  };
+}
+
 /** Shop profile: name/location + seller-editable Wave 1 fields. */
 sellerRouter.get("/shop", async (req, res, next) => {
   try {
@@ -450,7 +510,7 @@ sellerRouter.get("/shop", async (req, res, next) => {
     });
     if (!tenant) return res.status(404).json({ error: "Shop not found" });
     const theme = themeFromJson(tenant.themeSettings);
-    const publicTenant = toTenantPublic(tenant);
+    const publicTenant = toTenantPublic(tenant, { private: true });
     const wm = await getWatermarkPrefs(tenant.id);
     return res.json({
       shop: {
@@ -461,9 +521,7 @@ sellerRouter.get("/shop", async (req, res, next) => {
         contactFormEnabled: theme.contactFormEnabled !== false,
         watermarkDefaultOn: wm.shopOverride,
         watermarkPlatformDefault: wm.platformDefault,
-        settlementBankCode: tenant.settlementBankCode,
-        settlementAccountNumber: tenant.settlementAccountNumber,
-        paystackSubaccountCode: tenant.paystackSubaccountCode,
+        ...settlementFields(tenant, req.tenant!.membershipRole),
       },
     });
   } catch (err) {
@@ -471,7 +529,7 @@ sellerRouter.get("/shop", async (req, res, next) => {
   }
 });
 
-sellerRouter.patch("/shop", async (req, res, next) => {
+sellerRouter.patch("/shop", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const body = z
       .object({
@@ -482,7 +540,11 @@ sellerRouter.patch("/shop", async (req, res, next) => {
         address: z.string().max(2000).nullable().optional(),
         phone: z.string().min(5).max(32).nullable().optional(),
         email: z.string().email().nullable().optional(),
-        socialLinks: z.record(z.string().max(500)).nullable().optional(),
+        socialLinks: z
+          .record(z.string().max(40), z.union([safeLink(500), z.literal("")]))
+          .refine((r) => Object.keys(r).length <= 20)
+          .nullable()
+          .optional(),
         faqContent: z
           .array(
             z.object({
@@ -505,12 +567,14 @@ sellerRouter.patch("/shop", async (req, res, next) => {
         tickerSpeed: z.coerce.number().min(4).max(30).optional(),
         tickerBg: z.string().max(20).nullable().optional(),
         tickerColor: z.string().max(20).nullable().optional(),
-        whatsappUrl: z.string().max(500).nullable().optional(),
-        chatbotHtml: z.string().max(20_000).nullable().optional(),
-        settlementBankCode: z.string().min(2).max(20).nullable().optional(),
-        settlementAccountNumber: z.string().min(5).max(20).nullable().optional(),
+        whatsappUrl: whatsappTarget.nullable().optional(),
+        chatEmbed: chatEmbedSchema.nullable().optional(),
       })
       .parse(req.body);
+
+    if (req.body && typeof req.body === "object" && ("settlementBankCode" in req.body || "settlementAccountNumber" in req.body)) {
+      return res.status(400).json({ error: "Bank details are saved from the payout account form" });
+    }
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: req.tenant!.tenantId },
@@ -531,7 +595,8 @@ sellerRouter.patch("/shop", async (req, res, next) => {
     if (body.tickerBg !== undefined) theme.tickerBg = body.tickerBg;
     if (body.tickerColor !== undefined) theme.tickerColor = body.tickerColor;
     if (body.whatsappUrl !== undefined) theme.whatsappUrl = body.whatsappUrl;
-    if (body.chatbotHtml !== undefined) theme.chatbotHtml = body.chatbotHtml;
+    if (body.chatEmbed !== undefined) theme.chatEmbed = body.chatEmbed;
+    delete theme.chatbotHtml;
 
     const email =
       body.email !== undefined
@@ -588,12 +653,6 @@ sellerRouter.patch("/shop", async (req, res, next) => {
         ...(body.privacyText !== undefined
           ? { privacyText: body.privacyText }
           : {}),
-        ...(body.settlementBankCode !== undefined
-          ? { settlementBankCode: body.settlementBankCode }
-          : {}),
-        ...(body.settlementAccountNumber !== undefined
-          ? { settlementAccountNumber: body.settlementAccountNumber }
-          : {}),
         themeSettings: theme as Prisma.InputJsonValue,
         ...(body.watermarkDefaultOn !== undefined
           ? { notificationSettings: notifPrev as Prisma.InputJsonValue }
@@ -601,27 +660,12 @@ sellerRouter.patch("/shop", async (req, res, next) => {
       },
     });
 
-    if (
-      updated.verifiedBadge &&
-      !updated.paystackSubaccountCode &&
-      (updated.settlementBankCode || body.settlementBankCode) &&
-      (updated.settlementAccountNumber || body.settlementAccountNumber)
-    ) {
-      const { ensurePaystackSubaccount } = await import(
-        "../services/paystackSubaccount"
-      );
-      await ensurePaystackSubaccount(updated.id, {
-        bankCode: body.settlementBankCode ?? undefined,
-        accountNumber: body.settlementAccountNumber ?? undefined,
-      });
-    }
-
     const refreshed = await prisma.tenant.findUnique({
       where: { id: updated.id },
     });
     const finalTenant = refreshed ?? updated;
     const nextTheme = themeFromJson(finalTenant.themeSettings);
-    const publicTenant = toTenantPublic(finalTenant);
+    const publicTenant = toTenantPublic(finalTenant, { private: true });
     const wm = await getWatermarkPrefs(finalTenant.id);
     return res.json({
       shop: {
@@ -634,9 +678,7 @@ sellerRouter.patch("/shop", async (req, res, next) => {
         contactFormEnabled: nextTheme.contactFormEnabled !== false,
         watermarkDefaultOn: wm.shopOverride,
         watermarkPlatformDefault: wm.platformDefault,
-        settlementBankCode: finalTenant.settlementBankCode,
-        settlementAccountNumber: finalTenant.settlementAccountNumber,
-        paystackSubaccountCode: finalTenant.paystackSubaccountCode,
+        ...settlementFields(finalTenant, req.tenant!.membershipRole),
       },
     });
   } catch (err) {
@@ -680,31 +722,21 @@ sellerRouter.get("/branding", async (req, res, next) => {
   }
 });
 
-sellerRouter.patch("/branding", async (req, res, next) => {
+sellerRouter.patch("/branding", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const body = z
       .object({
         logoUrl: z
-          .union([
-            z.string().url(),
-            z.string().regex(/^\/uploads\//),
-            z.literal(""),
-            z.null(),
-          ])
+          .union([ownMediaUrl, z.literal(""), z.null()])
           .optional(),
         logoRectUrl: z
-          .union([
-            z.string().url(),
-            z.string().regex(/^\/uploads\//),
-            z.literal(""),
-            z.null(),
-          ])
+          .union([ownMediaUrl, z.literal(""), z.null()])
           .optional(),
         logoBuilder: z
           .object({
-            iconId: z.string().optional(),
-            color: z.string().optional(),
-            fontPairId: z.string().optional(),
+            iconId: z.string().max(64).optional(),
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+            fontPairId: z.string().max(64).optional(),
           })
           .nullable()
           .optional(),
@@ -802,7 +834,7 @@ sellerRouter.get("/shop-categories", async (req, res, next) => {
   }
 });
 
-sellerRouter.post("/shop-categories", async (req, res, next) => {
+sellerRouter.post("/shop-categories", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const body = z
       .object({
@@ -827,7 +859,7 @@ sellerRouter.post("/shop-categories", async (req, res, next) => {
   }
 });
 
-sellerRouter.patch("/shop-categories/:id", async (req, res, next) => {
+sellerRouter.patch("/shop-categories/:id", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const body = z
       .object({
@@ -855,7 +887,7 @@ sellerRouter.patch("/shop-categories/:id", async (req, res, next) => {
   }
 });
 
-sellerRouter.delete("/shop-categories/:id", async (req, res, next) => {
+sellerRouter.delete("/shop-categories/:id", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const existing = await prisma.shopCategory.findFirst({
       where: tenantWhere(req.tenant!, { id: req.params.id }),
@@ -869,14 +901,11 @@ sellerRouter.delete("/shop-categories/:id", async (req, res, next) => {
 });
 
 const bannerSchema = z.object({
-  imageUrl: z.union([
-    z.string().url(),
-    z.string().regex(/^\/uploads\//, "Must be a URL or /uploads/ path"),
-  ]),
+  imageUrl: imageRef,
   title: z.string().max(200).nullable().optional(),
   subtitle: z.string().max(500).nullable().optional(),
   ctaText: z.string().max(80).nullable().optional(),
-  ctaUrl: z.string().max(2000).nullable().optional(),
+  ctaUrl: z.union([safeLink(2000), z.literal("")]).nullable().optional(),
   scrollSpeed: z.coerce.number().int().min(1).max(100).optional(),
   displayOrder: z.coerce.number().int().optional(),
   active: z.boolean().optional(),
@@ -894,7 +923,7 @@ sellerRouter.get("/banners", async (req, res, next) => {
   }
 });
 
-sellerRouter.post("/banners", async (req, res, next) => {
+sellerRouter.post("/banners", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const body = bannerSchema.parse(req.body);
     const row = await prisma.shopBanner.create({
@@ -919,7 +948,7 @@ sellerRouter.post("/banners", async (req, res, next) => {
   }
 });
 
-sellerRouter.patch("/banners/:id", async (req, res, next) => {
+sellerRouter.patch("/banners/:id", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const body = bannerSchema.partial().parse(req.body);
     const existing = await prisma.shopBanner.findFirst({
@@ -948,7 +977,7 @@ sellerRouter.patch("/banners/:id", async (req, res, next) => {
   }
 });
 
-sellerRouter.delete("/banners/:id", async (req, res, next) => {
+sellerRouter.delete("/banners/:id", requireTenantRoles("owner", "manager"), async (req, res, next) => {
   try {
     const existing = await prisma.shopBanner.findFirst({
       where: tenantWhere(req.tenant!, { id: req.params.id }),

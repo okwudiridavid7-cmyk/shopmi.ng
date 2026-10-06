@@ -1,11 +1,12 @@
-import fs from "fs";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { requireAuth } from "../auth/middleware";
 import { toOrderPublic, toProductPublic, toUserPublic } from "../lib/serialize";
-import { getInvoiceFilePath } from "../services/orders";
+import { renderInvoicePdf } from "../services/orders";
 import { hashPassword, verifyPassword } from "../auth/password";
+import { issueRefreshToken, revokeAllSessions, signAccessToken } from "../auth/tokens";
+import { setAuthCookies } from "../auth/cookies";
 import { isShopAvailable } from "../tenant/tenantContext";
 
 export const buyerRouter = Router();
@@ -105,13 +106,20 @@ buyerRouter.post("/me/password", async (req, res, next) => {
 
     const ok = await verifyPassword(user.passwordHash, body.currentPassword);
     if (!ok) {
-      return res.status(401).json({ error: "Current password is incorrect" });
+      return res.status(400).json({ error: "Current password is incorrect" });
     }
 
     await prisma.user.update({
       where: { id: user.id },
       data: { passwordHash: await hashPassword(body.newPassword) },
     });
+    // Sign out every other device, then keep this one signed in.
+    await revokeAllSessions(user.id);
+    setAuthCookies(
+      res,
+      signAccessToken({ sub: user.id, email: user.email, role: user.role }),
+      await issueRefreshToken(user.id)
+    );
     return res.json({ ok: true });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -262,23 +270,18 @@ ordersRouter.get("/:id/invoice", requireAuth, async (req, res, next) => {
       return res.status(403).json({ error: "Not allowed to download this invoice" });
     }
 
-    // TODO(Phase 1 checkout): invoice PDF is generated on payment verify.
-    // If missing, return a clear stub response rather than crashing the UI.
-    const filepath = getInvoiceFilePath(order.id);
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({
-        error: "Invoice not ready yet",
-        // Stub hint for UI when Phase 1 invoice generation is not wired
-        stub: true,
-      });
+    if (order.status !== "paid" && order.status !== "fulfilled") {
+      return res.status(404).json({ error: "Invoice not ready yet" });
     }
+    const pdf = await renderInvoicePdf(order.id);
+    if (!pdf) return res.status(404).json({ error: "Order not found" });
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="invoice-${order.id}.pdf"`
-    );
-    return fs.createReadStream(filepath).pipe(res);
+    res.setHeader("Content-Length", String(pdf.length));
+    res.setHeader("Content-Disposition", `attachment; filename="invoice-${order.id}.pdf"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.end(pdf);
   } catch (err) {
     return next(err);
   }

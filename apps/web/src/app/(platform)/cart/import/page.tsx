@@ -42,7 +42,8 @@ function CartImportInner() {
 
   const shop = (search.get("shop") ?? "").toLowerCase();
   const items = parseItems(search.get("items") ?? "");
-  const returnUrl = safeReturnUrl(search.get("return"));
+  const requestedReturn = safeReturnUrl(search.get("return"));
+  const [returnUrl, setReturnUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (started.current) return;
@@ -51,12 +52,19 @@ function CartImportInner() {
       router.replace(shop ? `/cart?shop=${encodeURIComponent(shop)}` : "/cart");
       return;
     }
-    if (returnUrl) sessionStorage.setItem(shopReturnKey(shop), returnUrl);
-    apiFetch<{ skipped: Skipped[] }>(`/api/carts/${encodeURIComponent(shop)}/import`, {
-      method: "POST",
-      body: JSON.stringify({ items }),
-    })
+    apiFetch<{ skipped: Skipped[]; shopOrigin: string | null }>(
+      `/api/carts/${encodeURIComponent(shop)}/import`,
+      {
+        method: "POST",
+        body: JSON.stringify({ items }),
+      }
+    )
       .then((res) => {
+        // Only link back to the shop's own verified domain, never an arbitrary site.
+        if (requestedReturn && requestedReturn === res.shopOrigin) {
+          sessionStorage.setItem(shopReturnKey(shop), requestedReturn);
+          setReturnUrl(requestedReturn);
+        }
         if (res.skipped.length) {
           sessionStorage.setItem(CART_IMPORT_NOTES_KEY, JSON.stringify(res.skipped));
         }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { Mail, MapPin, Phone } from "lucide-react";
 import type { TenantPublic } from "@vendors/shared-types";
 import { ContactForm } from "@/components/contact-form";
@@ -10,18 +10,19 @@ import { parseHexColor, parseThemeSettings } from "@/lib/theme";
 export default function ShopContactPage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
+  const { slug } = use(params);
   const [tenant, setTenant] = useState<TenantPublic | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<{ tenant: TenantPublic }>(`/api/shops/${params.slug}`)
+    apiFetch<{ tenant: TenantPublic }>(`/api/shops/${slug}`)
       .then((r) => setTenant(r.tenant))
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Failed to load")
       );
-  }, [params.slug]);
+  }, [slug]);
 
   if (error) {
     return <p className="text-sm text-danger">{error}</p>;
@@ -125,7 +126,7 @@ export default function ShopContactPage({
           ) : (
             <div className="mt-token-6">
               <ContactForm
-                endpoint={`/api/contact/shops/${params.slug}`}
+                endpoint={`/api/contact/shops/${slug}`}
                 accent={brand}
               />
             </div>

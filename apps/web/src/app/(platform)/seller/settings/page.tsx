@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TeamMemberPublic } from "@vendors/shared-types";
-import { Globe, Mail, Phone, Settings, Store, Users } from "lucide-react";
+import { Mail, Phone, Settings, Store, Users } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState, QueryErrorState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
@@ -18,6 +18,7 @@ import { apiFetch } from "@/lib/api";
 import { useSellerShop, useSellerTeam } from "@/hooks/use-seller";
 import { SellerDomainLink } from "@/components/domain/seller-domain-link";
 import { useToast } from "@/components/ui/toast";
+import { PayoutAccountCard } from "@/components/payout-account-card";
 
 export default function SellerSettingsPage() {
   const shopQ = useSellerShop();
@@ -33,8 +34,6 @@ export default function SellerSettingsPage() {
   const [address, setAddress] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [settlementBankCode, setSettlementBankCode] = useState("");
-  const [settlementAccountNumber, setSettlementAccountNumber] = useState("");
   const [shopErr, setShopErr] = useState<string | null>(null);
   const [shopBusy, setShopBusy] = useState(false);
 
@@ -52,8 +51,6 @@ export default function SellerSettingsPage() {
       setAddress(shopQ.data.address ?? "");
       setContactEmail(shopQ.data.contactEmail ?? shopQ.data.email ?? "");
       setContactPhone(shopQ.data.contactPhone ?? shopQ.data.phone ?? "");
-      setSettlementBankCode(shopQ.data.settlementBankCode ?? "");
-      setSettlementAccountNumber(shopQ.data.settlementAccountNumber ?? "");
     }
   }, [shopQ.data]);
 
@@ -75,8 +72,6 @@ export default function SellerSettingsPage() {
           contactPhone: contactPhone || null,
           email: contactEmail || null,
           phone: contactPhone || null,
-          settlementBankCode: settlementBankCode || null,
-          settlementAccountNumber: settlementAccountNumber || null,
         }),
       });
       await qc.invalidateQueries({ queryKey: ["seller", "shop"] });
@@ -105,6 +100,20 @@ export default function SellerSettingsPage() {
       await qc.invalidateQueries({ queryKey: ["seller", "team"] });
     } catch (err) {
       setTeamErr(err instanceof Error ? err.message : "Invite failed");
+    }
+  }
+
+  async function cancelInvite(id: string) {
+    try {
+      await apiFetch(`/api/seller/team/invites/${id}`, { method: "DELETE" });
+      await qc.invalidateQueries({ queryKey: ["seller", "team"] });
+      toast({ title: "Invite cancelled", tone: "success" });
+    } catch (err) {
+      toast({
+        title: "Couldn't cancel the invite",
+        description: err instanceof Error ? err.message : undefined,
+        tone: "danger",
+      });
     }
   }
 
@@ -137,12 +146,13 @@ export default function SellerSettingsPage() {
     );
   }
 
-  const members: TeamMemberPublic[] = teamQ.data ?? [];
+  const members: TeamMemberPublic[] = teamQ.data?.members ?? [];
+  const invites = teamQ.data?.invites ?? [];
   return (
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Shop profile, team admins, and custom domain."
+        description="Shop profile, payout account, team admins, and custom domain."
         icon={Settings}
       />
 
@@ -213,30 +223,7 @@ export default function SellerSettingsPage() {
                   placeholder="+234 xxx xxx xxxx"
                 />
               </Label>
-              <Label>
-                <span>Settlement bank code</span>
-                <InputWithIcon
-                  icon={<Globe />}
-                  value={settlementBankCode}
-                  onChange={(e) => setSettlementBankCode(e.target.value)}
-                  placeholder="Paystack bank code (e.g. 058)"
-                />
-              </Label>
-              <Label>
-                <span>Settlement account number</span>
-                <InputWithIcon
-                  icon={<Store />}
-                  value={settlementAccountNumber}
-                  onChange={(e) => setSettlementAccountNumber(e.target.value)}
-                  placeholder="10-digit NUBAN"
-                />
-              </Label>
             </div>
-            {shopQ.data?.paystackSubaccountCode ? (
-              <p className="text-xs text-muted-foreground">
-                Paystack subaccount: {shopQ.data.paystackSubaccountCode}
-              </p>
-            ) : null}
             {shopQ.data && (
               <p className="text-xs text-muted-foreground">
                 Slug:{" "}
@@ -254,6 +241,8 @@ export default function SellerSettingsPage() {
           </form>
         </CardBody>
       </Card>
+
+      {shopQ.data ? <PayoutAccountCard shop={shopQ.data} /> : null}
 
       <Card id="team" className="overflow-hidden rounded-2xl">
         <CardHeader className="bg-muted/30">
@@ -295,6 +284,31 @@ export default function SellerSettingsPage() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {invites.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">Pending invites</p>
+              <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                {invites.map((i) => (
+                  <li
+                    key={i.id}
+                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{i.email}</p>
+                      <p className="text-muted-foreground">
+                        <span className="capitalize">{i.role}</span> · expires{" "}
+                        {new Date(i.expiresAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => void cancelInvite(i.id)}>
+                      Cancel
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <form onSubmit={invite} className="max-w-md space-y-4">

@@ -14,6 +14,8 @@ import {
   User,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { uploadSellerFile } from "@/hooks/use-seller";
+import { useAuthCaptcha } from "@/components/auth-captcha";
 import { slugifyShopName } from "@/lib/slugify";
 import { markWalkthroughPending } from "@/components/walkthrough";
 import { CategoryPicker } from "@/components/category-picker";
@@ -107,6 +109,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const captcha = useAuthCaptcha();
   const [done, setDone] = useState(false);
   const [congrats, setCongrats] = useState(false);
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
@@ -144,12 +147,20 @@ export default function OnboardingPage() {
     stateCode: "",
   });
   const [logoTab, setLogoTab] = useState<"upload" | "generate">("upload");
-  const [logo, setLogo] = useState({
+  // The logo stays in the browser until the account exists, then uploads with the session.
+  const [logo, setLogo] = useState<{
+    initials: string;
+    color: string;
+    url: string;
+    file: File | null;
+    mode: "upload" | "generate" | null;
+  }>({
     initials: "",
     color: "#ff822e",
     url: "",
+    file: null,
+    mode: null,
   });
-  const [logoBusy, setLogoBusy] = useState(false);
   const [logoPresets, setLogoPresets] = useState<
     { id: string; color: string; label: string }[]
   >([]);
@@ -243,40 +254,48 @@ export default function OnboardingPage() {
       });
   }, []);
 
-  async function uploadLogo(file: File) {
-    setLogoBusy(true);
+  function uploadLogo(file: File) {
     setError(null);
-    try {
-      const body = new FormData();
-      body.append("file", file);
-      const res = await apiFetch<{ url: string }>("/api/logo/upload", {
-        method: "POST",
-        body,
-      });
-      setLogo((l) => ({ ...l, url: res.url }));
-      setLogoTab("upload");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setLogoBusy(false);
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError("Use a PNG, JPG or WebP image");
+      return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Logo must be 2MB or smaller");
+      return;
+    }
+    setLogo((l) => {
+      if (l.url.startsWith("blob:")) URL.revokeObjectURL(l.url);
+      return { ...l, file, mode: "upload", url: URL.createObjectURL(file) };
+    });
+    setLogoTab("upload");
   }
 
-  async function generateLogo() {
-    setLogoBusy(true);
+  function generateLogo() {
     setError(null);
-    try {
-      const initials =
-        logo.initials || shop.shopName.slice(0, 2).toUpperCase() || "SH";
-      const res = await apiFetch<{ url: string }>("/api/logo/generate", {
-        method: "POST",
-        body: JSON.stringify({ initials, color: logo.color }),
+    const initials = (logo.initials || shop.shopName.slice(0, 2) || "SH")
+      .replace(/[^\p{L}\p{N}]/gu, "")
+      .slice(0, 3)
+      .toUpperCase() || "SH";
+    setLogo((l) => {
+      if (l.url.startsWith("blob:")) URL.revokeObjectURL(l.url);
+      return { ...l, initials, file: null, mode: "generate", url: initialsLogoPreview(initials, l.color) };
+    });
+  }
+
+  /** Runs after the account and shop exist, so it uses the seller's own session. */
+  async function saveOnboardingLogo() {
+    if (logo.mode === "upload" && logo.file) {
+      const res = await uploadSellerFile(logo.file, "logo");
+      await apiFetch("/api/seller/branding", {
+        method: "PATCH",
+        body: JSON.stringify({ logoUrl: res.url }),
       });
-      setLogo((l) => ({ ...l, initials, url: res.url }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Logo failed");
-    } finally {
-      setLogoBusy(false);
+    } else if (logo.mode === "generate") {
+      await apiFetch("/api/seller/tools/logo/generate", {
+        method: "POST",
+        body: JSON.stringify({ initials: logo.initials, color: logo.color, saveToTenant: true }),
+      });
     }
   }
 
@@ -297,6 +316,7 @@ export default function OnboardingPage() {
           ...(alreadyAuthed
             ? {}
             : {
+                captchaToken: captcha.token,
                 account: {
                   name: account.name.trim() || undefined,
                   email: account.email,
@@ -309,7 +329,6 @@ export default function OnboardingPage() {
           location: shop.location || undefined,
           countryCode: "NG",
           stateCode: shop.stateCode || undefined,
-          logoUrl: logo.url || undefined,
           answers,
           ...(withProduct && product.title.trim()
             ? {
@@ -333,11 +352,15 @@ export default function OnboardingPage() {
             : {}),
         }),
       });
+      await saveOnboardingLogo().catch(() => {
+        /* the shop exists; the logo can be added later from Branding */
+      });
       markWalkthroughPending();
       setCreatedSlug(res.tenant.slug);
       setDone(true);
       setCongrats(true);
     } catch (err) {
+      captcha.reset();
       setError(err instanceof Error ? err.message : "Onboarding failed");
     } finally {
       setBusy(false);
@@ -406,6 +429,10 @@ export default function OnboardingPage() {
     }
   }
 
+  const finalStep =
+    currentStepId === "product" || (currentStepId === "shop" && !includeProduct);
+  const needsCaptcha = !alreadyAuthed;
+
   const titles: Record<string, string> = {
     account: "Create your seller account",
     business: "About your business",
@@ -444,7 +471,7 @@ export default function OnboardingPage() {
               ? "Create shop & product"
               : undefined
         }
-        continueDisabled={busy || logoBusy || congrats}
+        continueDisabled={busy || congrats || (finalStep && needsCaptcha && captcha.waiting)}
         continueBusy={busy}
         complete={done && !congrats}
         completeTitle="Shop ready"
@@ -456,6 +483,7 @@ export default function OnboardingPage() {
             {error}
           </p>
         ) : null}
+        {finalStep && needsCaptcha ? captcha.field : null}
 
         {currentStepId === "account" && !authChecked && (
           <div className="h-64 animate-pulse rounded-2xl bg-muted" aria-hidden />
@@ -717,19 +745,18 @@ export default function OnboardingPage() {
                 <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center transition hover:border-accent/40 hover:bg-accent/5">
                   <ImagePlus className="h-8 w-8 text-muted-foreground" />
                   <span className="text-sm font-medium text-foreground">
-                    {logoBusy ? "Uploading…" : "Drop or click to upload"}
+                    Drop or click to upload
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    PNG or JPG · max 2MB
+                    PNG, JPG or WebP · max 2MB
                   </span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp"
                     className="sr-only"
-                    disabled={logoBusy}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) void uploadLogo(file);
+                      if (file) uploadLogo(file);
                     }}
                   />
                 </label>
@@ -773,13 +800,8 @@ export default function OnboardingPage() {
                         className="h-11"
                       />
                     </Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={logoBusy}
-                      onClick={() => void generateLogo()}
-                    >
-                      {logoBusy ? "Generating…" : "Generate"}
+                    <Button type="button" variant="outline" onClick={generateLogo}>
+                      Generate
                     </Button>
                   </div>
                 </div>
@@ -884,4 +906,16 @@ export default function OnboardingPage() {
       </MultiStepShell>
     </div>
   );
+}
+
+/** Browser-side preview of the initials logo the server generates after signup. */
+function initialsLogoPreview(initials: string, color: string): string {
+  const safeColor = /^#[0-9a-f]{6}$/i.test(color) ? color : "#1f6b4a";
+  const text = initials.replace(/[<>&"']/g, "");
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">` +
+    `<rect width="512" height="512" rx="96" fill="${safeColor}"/>` +
+    `<text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" fill="#f5faf7" font-size="180" font-family="Georgia, serif" font-weight="700">${text}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

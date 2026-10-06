@@ -166,7 +166,7 @@ export function BannerManager({
   async function onUpload(file: File | null) {
     if (!file || !draft) return;
     try {
-      const res = await uploadSellerFile(file);
+      const res = await uploadSellerFile(file, "banner");
       setDraft({ ...draft, imageUrl: res.url });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Upload failed");

@@ -4,7 +4,7 @@ import { API_URL, SITE_NAME } from "@/lib/seo";
 import { buildPublicShopUrl } from "@/lib/shop-url";
 import { ProductDetailClient } from "./product-detail-client";
 
-type Props = { params: { slug: string; id: string } };
+type Props = { params: Promise<{ slug: string; id: string }> };
 
 type ProductMeta = {
   id: string;
@@ -20,7 +20,7 @@ type ProductMeta = {
 
 async function loadProduct(slug: string, id: string): Promise<ProductMeta | null> {
   try {
-    const res = await fetch(`${API_URL}/api/shops/${slug}/products/${id}`, {
+    const res = await fetch(`${API_URL}/api/shops/${encodeURIComponent(slug)}/products/${encodeURIComponent(id)}`, {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;
@@ -42,12 +42,13 @@ function firstImage(images: unknown): string | null {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const p = await loadProduct(params.slug, params.id);
+  const { slug, id } = await params;
+  const p = await loadProduct(slug, id);
   if (!p) return { title: { absolute: `Product | ${SITE_NAME}` }, robots: { index: false } };
   const shopName = p.tenant?.name ?? SITE_NAME;
   const title = `${p.title} | ${shopName}`;
   const description = p.description.replace(/\s+/g, " ").trim().slice(0, 160);
-  const url = `${buildPublicShopUrl(params.slug)}/products/${params.id}`;
+  const url = `${buildPublicShopUrl(slug)}/products/${id}`;
   return {
     title: { absolute: title },
     description,
@@ -68,7 +69,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductDetailPage({ params }: Props) {
-  const p = await loadProduct(params.slug, params.id);
+  const { slug, id } = await params;
+  const p = await loadProduct(slug, id);
   const image = p ? firstImage(p.images) : null;
   const jsonLd = p
     ? {
@@ -80,7 +82,7 @@ export default async function ProductDetailPage({ params }: Props) {
         ...(p.brandName ? { brand: { "@type": "Brand", name: p.brandName } } : {}),
         offers: {
           "@type": "Offer",
-          url: `${buildPublicShopUrl(params.slug)}/products/${params.id}`,
+          url: `${buildPublicShopUrl(slug)}/products/${id}`,
           priceCurrency: p.currency || "NGN",
           price: String(p.price),
           availability:
@@ -94,7 +96,7 @@ export default async function ProductDetailPage({ params }: Props) {
   return (
     <>
       {jsonLd ? <JsonLd data={jsonLd} /> : null}
-      <ProductDetailClient slug={params.slug} id={params.id} />
+      <ProductDetailClient slug={slug} id={id} />
     </>
   );
 }

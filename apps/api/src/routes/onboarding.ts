@@ -1,5 +1,5 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
+import { redisRateLimit } from "../lib/rateLimit";
 import { z } from "zod";
 import crypto from "crypto";
 import type { User } from "@prisma/client";
@@ -12,12 +12,14 @@ import { setAuthCookies } from "../auth/cookies";
 import { issueRefreshToken, signAccessToken } from "../auth/tokens";
 import { isReservedSlug } from "../lib/slugify";
 import { toProductPublic, toTenantPublic, toUserPublic } from "../lib/serialize";
+import { imageRef, ownMediaUrl } from "../lib/uploads";
+import { CaptchaError, verifyAuthCaptcha } from "../lib/turnstile";
 
-const onboardingLimiter = rateLimit({
+const onboardingLimiter = redisRateLimit({
+  name: "onboarding",
   windowMs: 15 * 60 * 1000,
   max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
+  by: "ip",
 });
 
 const accountSchema = z.object({
@@ -39,7 +41,7 @@ const onboardingSchema = z.object({
   location: z.string().min(2).max(120).optional(),
   countryCode: z.string().length(2).optional(),
   stateCode: z.string().max(10).optional(),
-  logoUrl: z.string().min(1).optional(),
+  logoUrl: ownMediaUrl.optional(),
   answers: z
     .object({
       categoryFocus: z.string().optional(),
@@ -66,7 +68,7 @@ const onboardingSchema = z.object({
       location: z.string().max(120).optional(),
       countryCode: z.string().length(2).optional(),
       stateCode: z.string().max(10).optional(),
-      images: z.array(z.string()).max(10).default([]),
+      images: z.array(imageRef).max(10).default([]),
       status: z.enum(["draft", "active"]).default("active"),
     })
     .optional(),
@@ -86,6 +88,29 @@ onboardingRouter.post(
   async (req, res, next) => {
     try {
       const body = onboardingSchema.parse(req.body);
+      // A signed-in user always onboards as themselves.
+      if (req.user) delete body.account;
+      if (!req.user) {
+        if (!body.account) {
+          return res.status(400).json({ error: "Create an account to open a shop" });
+        }
+        try {
+          await verifyAuthCaptcha(req.body?.captchaToken, req.ip);
+        } catch (err) {
+          if (err instanceof CaptchaError) {
+            return res.status(400).json({ error: err.message, code: err.code });
+          }
+          throw err;
+        }
+      }
+      if (body.firstProduct?.categoryId) {
+        const cat = await prisma.category.findUnique({ where: { id: body.firstProduct.categoryId } });
+        if (!cat) body.firstProduct.categoryId = undefined;
+      }
+      if (body.firstProduct?.brandId) {
+        const brand = await prisma.brand.findUnique({ where: { id: body.firstProduct.brandId } });
+        if (!brand) body.firstProduct.brandId = undefined;
+      }
       const slug = body.slug.toLowerCase();
 
       if (!req.user && !body.account) {
@@ -199,7 +224,7 @@ onboardingRouter.post(
               currency: fp.currency,
               stockQty: fp.stockQty,
               categoryId: fp.categoryId ?? null,
-              shopCategoryId: fp.shopCategoryId ?? null,
+              shopCategoryId: null,
               brandName: fp.brandName ?? null,
               brandId: fp.brandId ?? null,
               location: fp.location ?? body.location ?? null,
@@ -249,8 +274,8 @@ onboardingRouter.post(
 
       return res.status(201).json({
         user: toUserPublic(result.user),
-        tenant: toTenantPublic(result.tenant),
-        product: result.product ? toProductPublic(result.product) : null,
+        tenant: toTenantPublic(result.tenant, { private: true }),
+        product: result.product ? toProductPublic(result.product, { includeOriginals: true }) : null,
       });
     } catch (err) {
       if (err instanceof z.ZodError) {

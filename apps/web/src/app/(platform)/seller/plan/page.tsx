@@ -12,7 +12,18 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { TextLink } from "@/components/ui/text-link";
 import { apiFetch, formatMoney } from "@/lib/api";
 import { usePlatformBranding } from "@/hooks/use-branding";
-import { useSellerPlan, type SellerPlanInfo } from "@/hooks/use-seller";
+import { useSellerPlan, useSellerShop, type SellerPlanInfo } from "@/hooks/use-seller";
+
+const TERMS = [
+  { months: 1, label: "Monthly", discount: 0 },
+  { months: 6, label: "6 months", discount: 0.15 },
+  { months: 12, label: "Yearly", discount: 0.3 },
+] as const;
+type Term = (typeof TERMS)[number];
+
+function termTotal(monthly: number, term: Term) {
+  return Math.round(monthly * term.months * (1 - term.discount));
+}
 
 function planBenefits(p: Pick<PlanPublic, "featureFlags">): string[] {
   const f = (p.featureFlags ?? {}) as Record<string, unknown>;
@@ -39,6 +50,9 @@ export default function SellerPlanPage() {
     branding.isSuccess && branding.data?.billingEnabled === false;
   const queryClient = useQueryClient();
   const planQ = useSellerPlan();
+  const shopQ = useSellerShop();
+  const isOwner = shopQ.data?.viewerRole === "owner";
+  const [term, setTerm] = useState<Term>(TERMS[2]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -76,6 +90,34 @@ export default function SellerPlanPage() {
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not change plan");
     } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function pay(target: SellerPlanInfo["plans"][number], info: SellerPlanInfo) {
+    setActionError(null);
+    setNote(null);
+    const overBy = target.productLimit != null ? info.liveCount - target.productLimit : 0;
+    const warnings = [
+      info.planExpiresAt && info.plan && info.plan.id !== target.id && info.daysLeft > 0
+        ? `The ${info.daysLeft} day${info.daysLeft === 1 ? "" : "s"} left on ${info.plan.name} carry over to ${target.name}, adjusted for the price difference.`
+        : "",
+      overBy > 0
+        ? `${target.name} allows ${target.productLimit} live products, so ${overBy} of your products will be paused (hidden, not deleted).`
+        : "",
+    ].filter(Boolean);
+    if (warnings.length > 0 && !window.confirm(`${warnings.join(" ")} Continue to payment?`)) {
+      return;
+    }
+    setBusyId(target.id);
+    try {
+      const res = await apiFetch<{ authorizationUrl: string }>("/api/seller/plan/checkout", {
+        method: "POST",
+        body: JSON.stringify({ planId: target.id, months: term.months }),
+      });
+      window.location.href = res.authorizationUrl;
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not start payment");
       setBusyId(null);
     }
   }
@@ -126,8 +168,7 @@ export default function SellerPlanPage() {
           <p className="font-semibold">Your storefront is unavailable to shoppers.</p>
           <p className="mt-1 text-muted-foreground">
             Your plan has ended. Your dashboard still works and you can fulfil existing orders.
-            Choose a plan below or <TextLink href="/contact">contact us</TextLink> to renew, and your
-            shop comes back straight away.
+            Pay for a plan below and your shop comes back straight away.
           </p>
         </div>
       ) : null}
@@ -184,55 +225,97 @@ export default function SellerPlanPage() {
       {plans.length === 0 ? (
         <EmptyState kind="empty" title="No plans available" icon={CreditCard} />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {plans.map((p) => {
-            const current = plan?.id === p.id;
-            const paidLocked = p.price > 0 && !trialActive && !current;
-            return (
-              <Card key={p.id} className="overflow-hidden rounded-2xl">
-                <CardBody className="flex h-full flex-col">
-                  <p className="text-lg font-semibold text-foreground">{p.name}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {p.price === 0 ? "Free" : `${formatMoney(p.price, p.currency)}/mo`} ·{" "}
-                    {limitLabel(p.productLimit).toLowerCase()}
-                  </p>
-                  <ul className="mt-3 flex-1 space-y-1 text-sm text-muted-foreground">
-                    {planBenefits(p)
-                      .filter((b) => !/live products|unlimited products/i.test(b))
-                      .map((b) => (
-                        <li key={b}>{b}</li>
-                      ))}
-                  </ul>
-                  <Button
-                    type="button"
-                    variant={current ? "outline" : "primary"}
-                    size="sm"
-                    disabled={current || paidLocked || busyId !== null}
-                    onClick={() => void choose(p, info)}
-                    className="mt-4"
-                  >
-                    {current
-                      ? "Current plan"
-                      : busyId === p.id
-                        ? "Switching…"
-                        : paidLocked
-                          ? "Available soon"
-                          : `Switch to ${p.name}`}
-                  </Button>
-                </CardBody>
-              </Card>
-            );
-          })}
-        </div>
+        <>
+          <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Billing period">
+            {TERMS.map((t) => (
+              <button
+                key={t.months}
+                type="button"
+                role="radio"
+                aria-checked={term.months === t.months}
+                onClick={() => setTerm(t)}
+                className={
+                  term.months === t.months
+                    ? "rounded-full border border-foreground bg-foreground px-4 py-1.5 text-sm font-medium text-background"
+                    : "rounded-full border border-border px-4 py-1.5 text-sm text-foreground hover:bg-muted"
+                }
+              >
+                {t.label}
+                {t.discount > 0 ? ` · save ${Math.round(t.discount * 100)}%` : ""}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {plans.map((p) => {
+              const current = plan?.id === p.id;
+              const paid = p.price > 0;
+              const total = paid ? termTotal(p.price, term) : 0;
+              return (
+                <Card key={p.id} className="overflow-hidden rounded-2xl">
+                  <CardBody className="flex h-full flex-col">
+                    <p className="text-lg font-semibold text-foreground">{p.name}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {paid ? `${formatMoney(p.price, p.currency)}/mo` : "Free"} ·{" "}
+                      {limitLabel(p.productLimit).toLowerCase()}
+                    </p>
+                    <ul className="mt-3 flex-1 space-y-1 text-sm text-muted-foreground">
+                      {planBenefits(p)
+                        .filter((b) => !/live products|unlimited products/i.test(b))
+                        .map((b) => (
+                          <li key={b}>{b}</li>
+                        ))}
+                    </ul>
+                    {paid ? (
+                      <div className="mt-4 space-y-2">
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          className="w-full"
+                          disabled={!isOwner || busyId !== null}
+                          onClick={() => void pay(p, info)}
+                        >
+                          {busyId === p.id
+                            ? "Opening Paystack…"
+                            : `${current && !trialActive ? "Renew" : "Pay"} ${formatMoney(total, p.currency)}`}
+                        </Button>
+                        {trialActive && !current ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full"
+                            disabled={!isOwner || busyId !== null}
+                            onClick={() => void choose(p, info)}
+                          >
+                            Try {p.name} for the rest of your trial
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={current || !isOwner || busyId !== null}
+                        onClick={() => void choose(p, info)}
+                        className="mt-4"
+                      >
+                        {current ? "Current plan" : busyId === p.id ? "Switching…" : `Switch to ${p.name}`}
+                      </Button>
+                    )}
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {isOwner
+              ? `Paid securely with Paystack for ${term.months === 1 ? "one month" : `${term.months} months`}. Renewing early adds the time to your current period.`
+              : "Only the shop owner can change or pay for the plan."}
+          </p>
+        </>
       )}
-
-      {!trialActive && plans.some((p) => p.price > 0) ? (
-        <p className="text-sm text-muted-foreground">
-          Online payment for paid plans is coming soon.{" "}
-          <TextLink href="/contact">Contact us</TextLink>{" "}
-          {planExpiresAt ? "to renew or change your plan." : "if you need a bigger plan now."}
-        </p>
-      ) : null}
 
       {note && <p className="text-sm text-emerald-700 dark:text-emerald-400">{note}</p>}
       {actionError && <p className="text-sm text-red-700 dark:text-red-400">{actionError}</p>}

@@ -5,6 +5,7 @@ import {
   TenantIsolationError,
   type TenantContext,
 } from "./tenantContext";
+import { readActiveShopCookie } from "./activeShop";
 
 declare global {
   namespace Express {
@@ -28,7 +29,7 @@ export function requireTenantFromMembership() {
       if (!req.user?.id) {
         return res.status(401).json({ error: "Authentication required" });
       }
-      req.tenant = await resolveTenantFromMembership(req.user.id);
+      req.tenant = await resolveTenantFromMembership(req.user.id, readActiveShopCookie(req));
       return next();
     } catch (err) {
       return handleTenantError(err, res, next);

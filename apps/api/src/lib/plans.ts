@@ -244,24 +244,63 @@ export async function sendPlanReminders(): Promise<number> {
   return sent;
 }
 
+/** Paid terms sellers can buy, with the discount shown on the pricing page. */
+export const BILLING_TERMS = [
+  { months: 1, discount: 0 },
+  { months: 6, discount: 0.15 },
+  { months: 12, discount: 0.3 },
+] as const;
+
+export type BillingMonths = (typeof BILLING_TERMS)[number]["months"];
+
+export function isBillingMonths(n: number): n is BillingMonths {
+  return BILLING_TERMS.some((t) => t.months === n);
+}
+
+/** Server-side price for a term. Matches the rounding on the pricing page. */
+export function termPrice(monthlyPrice: number, months: BillingMonths): number {
+  const term = BILLING_TERMS.find((t) => t.months === months)!;
+  return Math.round(monthlyPrice * months * (1 - term.discount));
+}
+
+/** Calendar months, clamped so Jan 31 + 1 month is Feb 28/29, not Mar 3. */
+export function addMonths(from: Date, months: number): Date {
+  const d = new Date(from);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay));
+  return d;
+}
+
 /**
- * Start or renew a paid plan for a number of months (offline payment until
- * online billing is live). Renewing the same plan early extends from the
- * current end date. Free plans have no end date.
+ * Start or renew a paid plan for a number of months. Renewing the same plan
+ * extends from the current end date. Switching from another paid plan with time
+ * left carries that time over, converted at the two plans' monthly prices.
+ * Free plans have no end date.
  */
 export async function activatePlan(tenantId: string, planId: string, months: number) {
   const [tenant, plan] = await Promise.all([
-    prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
+    prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { plan: true } }),
     prisma.plan.findUniqueOrThrow({ where: { id: planId } }),
   ]);
   const isFree = Number(plan.price) <= 0;
   const now = new Date();
-  const base =
-    tenant.planId === plan.id && tenant.planExpiresAt && tenant.planExpiresAt > now
-      ? tenant.planExpiresAt
-      : now;
-  const expiresAt = new Date(base);
-  expiresAt.setMonth(expiresAt.getMonth() + months);
+  const remainingMs =
+    tenant.planExpiresAt && tenant.planExpiresAt > now ? tenant.planExpiresAt.getTime() - now.getTime() : 0;
+
+  let expiresAt: Date;
+  if (tenant.planId === plan.id && remainingMs > 0) {
+    expiresAt = addMonths(tenant.planExpiresAt!, months);
+  } else {
+    expiresAt = addMonths(now, months);
+    const oldPrice = Number(tenant.plan?.price ?? 0);
+    const newPrice = Number(plan.price);
+    if (remainingMs > 0 && oldPrice > 0 && newPrice > 0) {
+      expiresAt = new Date(expiresAt.getTime() + Math.floor((remainingMs * oldPrice) / newPrice));
+    }
+  }
 
   await prisma.tenant.update({
     where: { id: tenantId },
@@ -295,14 +334,31 @@ export async function switchPlan(tenantId: string, planId: string) {
   return applyProductLimit(tenantId);
 }
 
-export type PlanFeature = "ai" | "customDomain" | "freeDomain";
+export type PlanFeature = "ai" | "customDomain" | "freeDomain" | "whatsapp";
 
 type PlanFlags = {
   ai?: boolean;
+  aiDescriptionsPerMonth?: number;
+  imageEnhancePerMonth?: number;
   customDomain?: boolean;
   freeDomain?: boolean;
+  whatsapp?: boolean;
   staffAccounts?: number;
 };
+
+export type AiQuotaKind = "description" | "enhance";
+
+/** Applies to shops without a plan (legacy rows) and plans that predate the quota flags. */
+const DEFAULT_AI_QUOTA: Record<AiQuotaKind, number> = { description: 200, enhance: 50 };
+
+/** Monthly allowance for an AI tool on the shop's current plan. */
+export async function aiMonthlyQuota(tenantId: string, kind: AiQuotaKind): Promise<number> {
+  const plan = await tenantPlan(tenantId);
+  const flags = (plan?.featureFlags as PlanFlags | null) ?? null;
+  if (plan && !flags?.ai) return 0;
+  const value = kind === "description" ? flags?.aiDescriptionsPerMonth : flags?.imageEnhancePerMonth;
+  return typeof value === "number" ? value : DEFAULT_AI_QUOTA[kind];
+}
 
 async function tenantPlan(tenantId: string) {
   await expirePlans(tenantId);

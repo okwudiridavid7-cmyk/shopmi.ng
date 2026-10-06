@@ -54,7 +54,7 @@ export default function SellerBrandingPage() {
     if (!file) return;
     setErr(null);
     try {
-      const res = await uploadSellerFile(file);
+      const res = await uploadSellerFile(file, "logo");
       setLogoUrl(res.url);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Square logo upload failed");
@@ -65,7 +65,7 @@ export default function SellerBrandingPage() {
     if (!file) return;
     setErr(null);
     try {
-      const res = await uploadSellerFile(file);
+      const res = await uploadSellerFile(file, "logo");
       setLogoRectUrl(res.url);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Wide logo upload failed");

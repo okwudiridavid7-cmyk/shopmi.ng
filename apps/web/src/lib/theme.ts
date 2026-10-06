@@ -1,4 +1,5 @@
 import type { ShopThemeSettings, StoreThemeId } from "@vendors/shared-types";
+import { isValidChatEmbed } from "@/lib/chat-embed";
 
 /** Default CTA label color on brand-colored buttons. */
 export const BRAND_BUTTON_TEXT = "#ffffff";
@@ -42,7 +43,7 @@ export function parseThemeSettings(
     tickerBg: typeof t.tickerBg === "string" ? t.tickerBg : null,
     tickerColor: typeof t.tickerColor === "string" ? t.tickerColor : null,
     whatsappUrl: typeof t.whatsappUrl === "string" ? t.whatsappUrl : null,
-    chatbotHtml: typeof t.chatbotHtml === "string" ? t.chatbotHtml : null,
+    chatEmbed: isValidChatEmbed(t.chatEmbed) ? t.chatEmbed : null,
     storeTheme: parseStoreThemeId(t.storeTheme),
   };
 }

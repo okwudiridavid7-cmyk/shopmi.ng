@@ -78,19 +78,32 @@ async function deliverTransactionalMail(
   });
 }
 
-/** Per-recipient cooldown via Redis (seconds). */
-async function assertRecipientThrottle(
-  to: string,
-  kind: string,
-  cooldownSec = 30
-): Promise<boolean> {
+/**
+ * Duplicate guard. Mails with an idempotency key are sent once per key (a second
+ * order from the same buyer has a different key, so it still goes out). Mails
+ * without one get a short per-recipient cooldown against resend spam.
+ * The marker is only kept after a successful send, so retries are never dropped.
+ */
+function dedupeKey(payload: TransactionalMailJobPayload): { key: string; ttlSec: number } {
+  if (payload.idempotencyKey) {
+    return { key: `mail:sent:${payload.idempotencyKey}`, ttlSec: 7 * 24 * 3600 };
+  }
+  return { key: `mail:throttle:${payload.kind}:${payload.to.toLowerCase()}`, ttlSec: 20 };
+}
+
+async function claimSend(key: string, ttlSec: number): Promise<boolean> {
   try {
-    const redis = getRedisConnection();
-    const key = `mail:throttle:${kind}:${to.toLowerCase()}`;
-    const set = await redis.set(key, "1", "EX", cooldownSec, "NX");
-    return set === "OK";
+    return (await getRedisConnection().set(key, "1", "EX", ttlSec, "NX")) === "OK";
   } catch {
     return true;
+  }
+}
+
+async function releaseSend(key: string): Promise<void> {
+  try {
+    await getRedisConnection().del(key);
+  } catch {
+    /* best effort */
   }
 }
 
@@ -99,14 +112,17 @@ export function startTransactionalMailWorker(): Worker<TransactionalMailJobPaylo
     QUEUE_TRANSACTIONAL_MAIL,
     async (job: Job<TransactionalMailJobPayload>) => {
       const { to, kind } = job.data;
-      const allowed = await assertRecipientThrottle(to, kind, 20);
-      if (!allowed) {
-        console.info(
-          `[email] throttled ${kind} → ${to} (cooldown) - skipping duplicate`
-        );
+      const { key, ttlSec } = dedupeKey(job.data);
+      if (!(await claimSend(key, ttlSec))) {
+        console.info(`[email] duplicate ${kind} → ${to} skipped`);
         return;
       }
-      await deliverTransactionalMail(job.data);
+      try {
+        await deliverTransactionalMail(job.data);
+      } catch (err) {
+        await releaseSend(key);
+        throw err;
+      }
       console.info(`[email] sent ${kind} → ${to}`);
     },
     {

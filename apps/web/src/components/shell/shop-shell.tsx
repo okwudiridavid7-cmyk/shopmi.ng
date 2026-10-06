@@ -190,7 +190,7 @@ export function ShopShell({
         )}
         <ChatWidgets
           whatsappUrl={theme.whatsappUrl}
-          chatbotHtml={theme.chatbotHtml}
+          chatEmbed={theme.chatEmbed}
         />
         {preview ? <PreviewBar themeId={preview} onExit={exit} /> : null}
       </div>

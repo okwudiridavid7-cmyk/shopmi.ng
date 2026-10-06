@@ -96,3 +96,22 @@ export async function verifyTurnstileToken(
     );
   }
 }
+
+/**
+ * Sign-in, signup and password reset use Turnstile once both keys are configured.
+ * Unlike the contact form this doesn't fail closed, so a missing key can't lock
+ * every user out of their account.
+ */
+export function isAuthCaptchaEnabled(): boolean {
+  if (env.contactCaptchaBypass && !env.isProd) return false;
+  return Boolean(env.turnstileSecretKey && env.turnstileSiteKey);
+}
+
+export async function verifyAuthCaptcha(token: unknown, remoteIp: string | undefined): Promise<void> {
+  if (!isAuthCaptchaEnabled()) return;
+  await verifyTurnstileToken(typeof token === "string" ? token : null, remoteIp ?? null, {
+    secret: env.turnstileSecretKey,
+    isProd: true,
+    bypass: false,
+  });
+}

@@ -13,7 +13,7 @@ export function getOrSetCartSessionId(req: Request, res: Response): string {
   res.cookie(CART_SESSION_COOKIE, id, {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: env.isProd ? "none" : "lax",
+    sameSite: "lax",
     domain: env.cookieDomain === "localhost" ? undefined : env.cookieDomain,
     path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000,

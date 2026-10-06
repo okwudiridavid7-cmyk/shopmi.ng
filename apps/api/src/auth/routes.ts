@@ -1,5 +1,6 @@
 import { Router } from "express";
-import rateLimit from "express-rate-limit";
+import { redisRateLimit } from "../lib/rateLimit";
+import { CaptchaError, verifyAuthCaptcha } from "../lib/turnstile";
 import { z } from "zod";
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
@@ -15,10 +16,12 @@ import {
 import {
   issueRefreshToken,
   rotateRefreshToken,
+  revokeAllSessions,
   revokeRefreshToken,
   signAccessToken,
 } from "./tokens";
 import { requireAuth } from "./middleware";
+import { consumeOAuthState, createOAuthState, safeLocalPath } from "./oauthState";
 import { mergeGuestCarts } from "../services/cartMerge";
 import { CART_SESSION_COOKIE } from "../lib/cartSession";
 import { enqueueTransactionalMail } from "../queue/transactionalMail";
@@ -35,12 +38,40 @@ async function mergeCartAfterAuth(
   }
 }
 
-const authLimiter = rateLimit({
+const authLimiter = redisRateLimit({
+  name: "auth",
   windowMs: 15 * 60 * 1000,
-  max: 50,
-  standardHeaders: true,
-  legacyHeaders: false,
+  max: 30,
+  by: "ip",
 });
+
+/** Per-account brute-force cap, independent of IP (attackers rotate IPs). */
+const loginEmailLimiter = redisRateLimit({
+  name: "auth-login-email",
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  by: (req) => {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    return `e:${crypto.createHash("sha256").update(email).digest("hex").slice(0, 32)}`;
+  },
+  message: "Too many sign-in attempts for this account. Try again in 15 minutes or reset your password.",
+});
+
+async function captchaOk(
+  req: import("express").Request,
+  res: import("express").Response
+): Promise<boolean> {
+  try {
+    await verifyAuthCaptcha(req.body?.captchaToken, req.ip);
+    return true;
+  } catch (err) {
+    if (err instanceof CaptchaError) {
+      res.status(400).json({ error: err.message, code: err.code });
+      return false;
+    }
+    throw err;
+  }
+}
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -70,11 +101,10 @@ async function issueSession(
 
 export const authRouter = Router();
 
-authRouter.use(authLimiter);
-
-authRouter.post("/signup", async (req, res, next) => {
+authRouter.post("/signup", authLimiter, async (req, res, next) => {
   try {
     const body = signupSchema.parse(req.body);
+    if (!(await captchaOk(req, res))) return;
     const existing = await prisma.user.findUnique({
       where: { email: body.email.toLowerCase() },
     });
@@ -132,9 +162,10 @@ authRouter.post("/signup", async (req, res, next) => {
   }
 });
 
-authRouter.post("/login", async (req, res, next) => {
+authRouter.post("/login", authLimiter, loginEmailLimiter, async (req, res, next) => {
   try {
     const body = loginSchema.parse(req.body);
+    if (!(await captchaOk(req, res))) return;
     const user = await prisma.user.findUnique({
       where: { email: body.email.toLowerCase() },
     });
@@ -203,16 +234,17 @@ authRouter.get("/me", requireAuth, async (req, res) => {
   return res.json({ user: toUserPublic(req.user!) });
 });
 
-const forgotLimiter = rateLimit({
+const forgotLimiter = redisRateLimit({
+  name: "auth-forgot",
   windowMs: 15 * 60 * 1000,
   max: 8,
-  standardHeaders: true,
-  legacyHeaders: false,
+  by: "ip",
 });
 
 authRouter.post("/forgot-password", forgotLimiter, async (req, res, next) => {
   try {
     const { email } = z.object({ email: z.string().email() }).parse(req.body);
+    if (!(await captchaOk(req, res))) return;
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -282,6 +314,7 @@ authRouter.post("/reset-password", forgotLimiter, async (req, res, next) => {
         passwordResetExpires: null,
       },
     });
+    await revokeAllSessions(user.id);
     await issueSession(user, res);
     return res.json({ user: toUserPublic(user) });
   } catch (err) {
@@ -294,11 +327,11 @@ authRouter.post("/reset-password", forgotLimiter, async (req, res, next) => {
   }
 });
 
-const verifyLimiter = rateLimit({
+const verifyLimiter = redisRateLimit({
+  name: "auth-verify",
   windowMs: 15 * 60 * 1000,
   max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
+  by: "ip",
 });
 
 /** Confirm email via token from the verification message. */
@@ -387,15 +420,14 @@ authRouter.get("/google", (req, res) => {
     env.googleClientSecret,
     env.googleCallbackUrl
   );
-  const returnTo =
-    typeof req.query.returnTo === "string" ? req.query.returnTo : "";
-  const role = req.query.role === "seller" ? "seller" : "";
-  const statePayload = JSON.stringify({ returnTo, role });
+  const state = createOAuthState(res, {
+    returnTo: safeLocalPath(req.query.returnTo),
+    role: req.query.role === "seller" ? "seller" : null,
+  });
   const url = client.generateAuthUrl({
-    access_type: "offline",
-    prompt: "consent",
     scope: ["openid", "email", "profile"],
-    state: Buffer.from(statePayload).toString("base64url"),
+    prompt: "select_account",
+    state,
   });
   return res.redirect(url);
 });
@@ -406,9 +438,13 @@ authRouter.get("/google/callback", async (req, res, next) => {
       return res.status(503).send("Google OAuth is not configured");
     }
 
+    const intent = consumeOAuthState(req, res);
+    if (!intent) {
+      return res.redirect(`${env.webUrl}/login?error=google_state`);
+    }
     const code = req.query.code;
     if (typeof code !== "string") {
-      return res.status(400).send("Missing authorization code");
+      return res.redirect(`${env.webUrl}/login?error=google_cancelled`);
     }
 
     const client = new OAuth2Client(
@@ -426,6 +462,11 @@ authRouter.get("/google/callback", async (req, res, next) => {
     const payload = ticket.getPayload();
     if (!payload?.email || !payload.sub) {
       return res.status(400).send("Google account missing email");
+    }
+    // Only trust the address if Google has verified it; otherwise anyone could
+    // claim an existing account's email through an unverified Google profile.
+    if (payload.email_verified !== true) {
+      return res.redirect(`${env.webUrl}/login?error=google_unverified`);
     }
 
     const email = payload.email.toLowerCase();
@@ -458,18 +499,7 @@ authRouter.get("/google/callback", async (req, res, next) => {
       }
     } else {
       isNewUser = true;
-      let intendedRole: "buyer" | "seller" = "buyer";
-      if (typeof req.query.state === "string" && req.query.state) {
-        try {
-          const decoded = Buffer.from(req.query.state, "base64url").toString(
-            "utf8"
-          );
-          const parsed = JSON.parse(decoded) as { role?: string };
-          if (parsed.role === "seller") intendedRole = "seller";
-        } catch {
-          /* ignore */
-        }
-      }
+      const intendedRole: "buyer" | "seller" = intent.role === "seller" ? "seller" : "buyer";
       user = await prisma.user.create({
         data: {
           email,
@@ -499,31 +529,7 @@ authRouter.get("/google/callback", async (req, res, next) => {
     await issueSession(user, res);
     await mergeCartAfterAuth(req, user.id);
 
-    let returnTo: string | null = null;
-    if (typeof req.query.state === "string" && req.query.state) {
-      try {
-        const decoded = Buffer.from(req.query.state, "base64url").toString(
-          "utf8"
-        );
-        if (decoded.startsWith("/") && !decoded.startsWith("//")) {
-          returnTo = decoded;
-        } else {
-          const parsed = JSON.parse(decoded) as {
-            returnTo?: string;
-            role?: string;
-          };
-          if (
-            typeof parsed.returnTo === "string" &&
-            parsed.returnTo.startsWith("/") &&
-            !parsed.returnTo.startsWith("//")
-          ) {
-            returnTo = parsed.returnTo;
-          }
-        }
-      } catch {
-        /* ignore bad state */
-      }
-    }
+    const returnTo = intent.returnTo;
     const roleHome =
       user.role === "super_admin"
         ? "/admin"

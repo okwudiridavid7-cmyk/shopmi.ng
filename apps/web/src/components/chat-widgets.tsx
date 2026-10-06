@@ -1,44 +1,47 @@
 "use client";
 
 import { useEffect } from "react";
+import type { ChatEmbed } from "@vendors/shared-types";
 import { useCookieConsent } from "@/components/cookie-consent";
+import { chatScriptSrc } from "@/lib/chat-embed";
+import { whatsappHref } from "@/lib/safe-url";
 
 export function ChatWidgets({
   whatsappUrl,
-  chatbotHtml,
+  chatEmbed,
 }: {
   whatsappUrl?: string | null;
-  chatbotHtml?: string | null;
+  chatEmbed?: ChatEmbed | null;
 }) {
   const { hasConsent } = useCookieConsent();
   // Third-party chat embeds set their own cookies - load only after functional consent.
   const chatAllowed = hasConsent("functional");
+  const provider = chatEmbed?.provider;
+  const embedId = chatEmbed?.id;
 
   useEffect(() => {
-    if (!chatAllowed || !chatbotHtml?.trim()) return;
-    const host = document.createElement("div");
-    host.id = "vendors-chatbot-host";
-    host.innerHTML = chatbotHtml;
-    document.body.appendChild(host);
-    const scripts = Array.from(host.querySelectorAll("script"));
-    for (const old of scripts) {
-      const s = document.createElement("script");
-      for (const attr of Array.from(old.attributes)) {
-        s.setAttribute(attr.name, attr.value);
-      }
-      s.textContent = old.textContent;
-      old.replaceWith(s);
+    if (!chatAllowed || !provider || !embedId) return;
+    const embed = { provider, id: embedId };
+    const src = chatScriptSrc(embed);
+    if (!src) return;
+    if (provider === "crisp") {
+      const w = window as unknown as { $crisp?: unknown[]; CRISP_WEBSITE_ID?: string };
+      w.$crisp = [];
+      w.CRISP_WEBSITE_ID = embedId;
     }
+    const s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+    s.id = "shopmi-chat-widget";
+    s.referrerPolicy = "strict-origin-when-cross-origin";
+    document.body.appendChild(s);
     return () => {
-      host.remove();
+      s.remove();
     };
-  }, [chatAllowed, chatbotHtml]);
+  }, [chatAllowed, provider, embedId]);
 
-  if (!whatsappUrl?.trim()) return null;
-
-  const href = whatsappUrl.startsWith("http")
-    ? whatsappUrl
-    : `https://wa.me/${whatsappUrl.replace(/\D/g, "")}`;
+  const href = whatsappHref(whatsappUrl);
+  if (!href) return null;
 
   return (
     <a

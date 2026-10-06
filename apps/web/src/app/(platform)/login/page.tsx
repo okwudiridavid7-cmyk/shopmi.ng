@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { Lock, Mail } from "lucide-react";
 import type { AuthTokensResponse } from "@vendors/shared-types";
+import { useAuthCaptcha } from "@/components/auth-captcha";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -21,6 +22,12 @@ import { SettingsCard } from "@/components/ui/settings-card";
 import { AuthSplitLayout } from "@/components/auth-split";
 import { GoogleContinueButton } from "@/components/google-button";
 
+const GOOGLE_ERRORS: Record<string, string> = {
+  google_state: "That Google sign-in link expired. Please try again.",
+  google_cancelled: "Google sign-in was cancelled.",
+  google_unverified: "Your Google account's email isn't verified. Verify it with Google or sign in with email.",
+};
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -29,10 +36,12 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
+  const captcha = useAuthCaptcha();
 
   const returnTo =
     safeReturnTo(searchParams.get("returnTo")) ??
     safeReturnTo(searchParams.get("next"));
+  const googleError = GOOGLE_ERRORS[searchParams.get("error") ?? ""] ?? null;
 
   // Already signed in → leave /login for the dashboard (or returnTo).
   useEffect(() => {
@@ -53,6 +62,7 @@ function LoginForm() {
         body: JSON.stringify({
           email: form.get("email"),
           password: form.get("password"),
+          captchaToken: captcha.token,
         }),
       });
       await refresh();
@@ -63,6 +73,7 @@ function LoginForm() {
       });
     } catch (err) {
       useAuthTransition.getState().clear();
+      captcha.reset();
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
@@ -76,6 +87,7 @@ function LoginForm() {
     >
       {!emailMode ? (
         <div className="space-y-4">
+          {googleError && <p className="text-sm text-danger">{googleError}</p>}
           <GoogleContinueButton returnTo={returnTo} />
           <Button
             type="button"
@@ -119,10 +131,11 @@ function LoginForm() {
                 />
               </div>
             </Label>
+            {captcha.field}
             {error && <p className="text-sm text-danger">{error}</p>}
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || captcha.waiting}
               className="h-12 w-full"
               size="lg"
             >

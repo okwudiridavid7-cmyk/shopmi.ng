@@ -12,6 +12,11 @@ coverage
 apps/api/prisma/*.db
 apps/api/prisma/*.db-journal
 apps/api/uploads
+apps/api/uploads-private
+apps/api/fonts/fonts.conf
+apps/web/e2e/.auth
+apps/web/test-results
+apps/web/playwright-report
 .cursor
 agent-transcripts
 *.canvas.tsx

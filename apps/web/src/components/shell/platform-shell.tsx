@@ -92,7 +92,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
       {!isDashboard && <PlatformFooter />}
       <ChatWidgets
         whatsappUrl={branding?.whatsappUrl}
-        chatbotHtml={branding?.chatbotHtml}
+        chatEmbed={branding?.chatEmbed}
       />
     </div>
   );

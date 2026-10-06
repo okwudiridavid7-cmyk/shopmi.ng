@@ -52,9 +52,17 @@ function CallbackInner() {
 
     async function run() {
       try {
-        const res = await apiFetch<{ order: OrderPublic }>(
-          `/api/checkout/verify/${reference}`
-        );
+        const verify = () =>
+          apiFetch<{ order: OrderPublic }>(
+            `/api/checkout/verify/${encodeURIComponent(reference)}`
+          );
+        let res = await verify();
+        // The webhook can land a few seconds after Paystack redirects back.
+        for (let attempt = 0; attempt < 5 && res.order.status === "pending_payment"; attempt++) {
+          await new Promise((r) => setTimeout(r, 2500));
+          if (cancelled) return;
+          res = await verify();
+        }
         if (cancelled) return;
         setOrder(res.order);
 

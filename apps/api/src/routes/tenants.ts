@@ -8,6 +8,7 @@ import { tenantWhere } from "../tenant/tenantContext";
 import { toTenantPublic } from "../lib/serialize";
 import { isReservedSlug } from "../lib/slugify";
 import { cached, CACHE_KEYS, setPublicCache } from "../lib/cache";
+import { CHAT_EMBED_SETTING_KEY, parseChatEmbed } from "../lib/chatEmbed";
 
 const createTenantSchema = z.object({
   name: z.string().min(2).max(100),
@@ -81,7 +82,7 @@ async function loadPublicConfig() {
       logoSquareUrl,
       tickerRaw,
       whatsappUrl,
-      chatbotHtml,
+      chatEmbedRaw,
       webUrlSetting,
       palette,
     ] = await Promise.all([
@@ -95,7 +96,7 @@ async function loadPublicConfig() {
       getPlatformSetting("platform_logo_square_url", ""),
       getPlatformSetting("homepage_ticker", ""),
       getPlatformSetting("whatsapp_url", ""),
-      getPlatformSetting("chatbot_html", ""),
+      getPlatformSetting(CHAT_EMBED_SETTING_KEY, ""),
       getPlatformSetting("web_url", env.webUrl),
       getPlatformPalette(),
     ]);
@@ -114,7 +115,7 @@ async function loadPublicConfig() {
         supportEmail,
         ticker: parseTicker(tickerRaw || null),
         whatsappUrl: whatsappUrl || null,
-        chatbotHtml: chatbotHtml || null,
+        chatEmbed: parseChatEmbed(chatEmbedRaw),
         turnstileSiteKey: env.turnstileSiteKey || null,
         shopContactConfirmRequired: env.shopContactConfirmRequired,
         billingEnabled,
@@ -214,7 +215,7 @@ tenantsRouter.post("/", requireAuth, async (req, res, next) => {
       return created;
     });
 
-    return res.status(201).json({ tenant: toTenantPublic(tenant) });
+    return res.status(201).json({ tenant: toTenantPublic(tenant, { private: true }) });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res
@@ -241,7 +242,7 @@ tenantsRouter.get(
       }
 
       return res.json({
-        tenant: toTenantPublic(membership.tenant),
+        tenant: toTenantPublic(membership.tenant, { private: true }),
         context: req.tenant,
         membershipRole: membership.role,
       });

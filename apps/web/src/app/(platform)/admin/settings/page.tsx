@@ -29,9 +29,28 @@ import { useToast } from "@/components/ui/toast";
 import { useAdminSettings, useSaveAdminSettings } from "@/hooks/use-admin";
 import { apiFetch } from "@/lib/api";
 import { PALETTE_SETTING_KEY } from "@/lib/palette";
+import { isValidChatEmbed } from "@/lib/chat-embed";
+import {
+  ChatEmbedFields,
+  draftFromEmbed,
+  embedFromDraft,
+  type ChatEmbedDraft,
+} from "@/components/chat-embed-fields";
 
-/** Keys with their own admin page, kept out of the generic "Other keys" list. */
-const MANAGED_ELSEWHERE = new Set([PALETTE_SETTING_KEY]);
+const CHAT_EMBED_KEY = "chat_embed";
+
+/** Keys with their own editor (or retired), kept out of the generic "Other keys" list. */
+const MANAGED_ELSEWHERE = new Set([PALETTE_SETTING_KEY, CHAT_EMBED_KEY, "chatbot_html"]);
+
+function parseEmbedSetting(raw: string | undefined): ChatEmbedDraft {
+  if (!raw) return { provider: "", id: "" };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return draftFromEmbed(isValidChatEmbed(parsed) ? parsed : null);
+  } catch {
+    return { provider: "", id: "" };
+  }
+}
 
 const SETTING_META: {
   key: string;
@@ -169,15 +188,6 @@ const SETTING_META: {
     icon: Link2,
     wide: true,
   },
-  {
-    key: "chatbot_html",
-    placeholder: "Paste the embed code from your chat provider",
-    label: "Custom chatbot embed",
-    type: "text",
-    defaultValue: "",
-    icon: Bot,
-    wide: true,
-  },
 ];
 
 export default function AdminSettingsPage() {
@@ -186,6 +196,7 @@ export default function AdminSettingsPage() {
   const { toast } = useToast();
   const [values, setValues] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [chatDraft, setChatDraft] = useState<ChatEmbedDraft>({ provider: "", id: "" });
 
   useEffect(() => {
     if (!settings) return;
@@ -198,6 +209,7 @@ export default function AdminSettingsPage() {
       if (!(s.key in next) && !MANAGED_ELSEWHERE.has(s.key)) next[s.key] = s.value;
     }
     setValues(next);
+    setChatDraft(parseEmbedSetting(settings.find((s) => s.key === CHAT_EMBED_KEY)?.value));
   }, [settings]);
 
   const known = useMemo(() => new Set(SETTING_META.map((m) => m.key)), []);
@@ -208,14 +220,20 @@ export default function AdminSettingsPage() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (embedFromDraft(chatDraft) === undefined) {
+      toast({ title: "Check the live chat widget ID", tone: "danger" });
+      return;
+    }
     setConfirmOpen(true);
   }
 
   async function confirmSave() {
     try {
-      await save.mutateAsync(
-        Object.entries(values).map(([key, value]) => ({ key, value }))
-      );
+      const embed = embedFromDraft(chatDraft);
+      await save.mutateAsync([
+        ...Object.entries(values).map(([key, value]) => ({ key, value })),
+        { key: CHAT_EMBED_KEY, value: embed ? JSON.stringify(embed) : "" },
+      ]);
       setConfirmOpen(false);
       toast({
         title: "Settings saved",
@@ -386,7 +404,7 @@ export default function AdminSettingsPage() {
                       {meta.label}
                     </span>
                     <Textarea
-                      rows={meta.key === "chatbot_html" ? 6 : 8}
+                      rows={8}
                       className="font-mono text-xs"
                       placeholder={meta.placeholder}
                       value={values[meta.key] ?? ""}
@@ -406,6 +424,8 @@ export default function AdminSettingsPage() {
                 );
               })}
             </div>
+
+            <ChatEmbedFields value={chatDraft} onChange={setChatDraft} />
 
             {unknownKeys.length > 0 && (
               <div className="space-y-3 border-t border-border pt-4">

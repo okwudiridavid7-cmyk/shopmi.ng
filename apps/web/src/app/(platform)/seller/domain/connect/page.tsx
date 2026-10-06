@@ -319,6 +319,10 @@ function ConnectWizard() {
                   <code className="rounded bg-muted px-1">{info.aliasTarget}</code> instead.
                 </p>
               ) : null}
+              <p className="text-xs text-muted-foreground">
+                If you use Cloudflare, set these records to DNS only (grey cloud). With the proxy on (orange
+                cloud) we can&apos;t verify the domain or issue its SSL certificate.
+              </p>
               {nav()}
             </>
           ) : null}
@@ -330,6 +334,7 @@ function ConnectWizard() {
                 In the same DNS settings, add this record.
               </StepTitle>
               <RecordTable rows={[wwwRow]} />
+              <p className="text-xs text-muted-foreground">On Cloudflare, keep this one DNS only (grey cloud) too.</p>
               {nav()}
             </>
           ) : null}

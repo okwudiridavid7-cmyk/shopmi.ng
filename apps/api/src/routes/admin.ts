@@ -1,11 +1,7 @@
 import { Router } from "express";
-import path from "path";
-import fs from "fs";
-import multer from "multer";
 import { z } from "zod";
 import type { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "../db/prisma";
-import { env } from "../config/env";
 import { requireAuth, requireRoles } from "../auth/middleware";
 import { decimalToNumber, toTenantPublic, toUserPublic } from "../lib/serialize";
 import {
@@ -13,7 +9,8 @@ import {
   deleteContactInquiriesByEmail,
   toContactInquiryAdmin,
 } from "../services/contactRetention";
-import { optimizeUpload } from "../services/images";
+import { ImageRejectedError, storePublicImage } from "../services/images";
+import { memoryUpload, receiveSingle, UploadError } from "../lib/uploads";
 
 /**
  * All routes on this router require authenticated super_admin.
@@ -23,33 +20,19 @@ export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireRoles("super_admin"));
 
-fs.mkdirSync(env.uploadsDir, { recursive: true });
+const upload = memoryUpload(5 * 1024 * 1024);
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, env.uploadsDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".png";
-      cb(null, `platform-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  }),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (!["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"].includes(file.mimetype)) {
-      return cb(new Error("Only JPEG, PNG, WebP, GIF, SVG allowed"));
+adminRouter.post("/uploads", async (req, res, next) => {
+  try {
+    const file = await receiveSingle(upload, "file", req, res);
+    const { url } = await storePublicImage(file.buffer, "platform", { maxSize: 2400 });
+    return res.status(201).json({ url });
+  } catch (err) {
+    if (err instanceof UploadError || err instanceof ImageRejectedError) {
+      return res.status(400).json({ error: err.message });
     }
-    cb(null, true);
-  },
-});
-
-adminRouter.post("/uploads", (req, res, next) => {
-  upload.single("file")(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
-    if (!req.file) return res.status(400).json({ error: "file is required" });
-    const filename = await optimizeUpload(req.file.filename);
-    const url = `${env.apiUrl}/uploads/${filename}`;
-    return res.status(201).json({ url, path: `/uploads/${filename}` });
-  });
+    return next(err);
+  }
 });
 
 type Period = "today" | "week" | "month";
@@ -209,7 +192,7 @@ adminRouter.get("/tenants", async (req, res, next) => {
     });
     return res.json({
       tenants: tenants.map((t) => ({
-        ...toTenantPublic(t),
+        ...toTenantPublic(t, { private: true }),
         plan: t.plan
           ? {
               id: t.plan.id,
@@ -269,7 +252,7 @@ adminRouter.get("/tenants/:id", async (req, res, next) => {
 
     return res.json({
       tenant: {
-        ...toTenantPublic(tenant),
+        ...toTenantPublic(tenant, { private: true }),
         plan: tenant.plan
           ? {
               id: tenant.plan.id,
@@ -405,7 +388,7 @@ adminRouter.patch("/tenants/:id", async (req, res, next) => {
 
     return res.json({
       tenant: {
-        ...toTenantPublic(tenant),
+        ...toTenantPublic(tenant, { private: true }),
         plan: tenant.plan
           ? {
               id: tenant.plan.id,

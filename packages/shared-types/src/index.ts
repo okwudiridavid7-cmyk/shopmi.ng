@@ -273,6 +273,11 @@ export interface OrderPublic {
   currency: string;
   paystackReference: string | null;
   invoiceUrl: string | null;
+  /** pending | processed | failed, once a paid order is cancelled. */
+  refundStatus?: string | null;
+  /** amount_mismatch | oversold | paid_after_cancel */
+  flag?: string | null;
+  failureReason?: string | null;
   createdAt: string;
   items: OrderItemPublic[];
   tenant?: Pick<TenantPublic, "id" | "name" | "slug" | "verifiedBadge"> | null;
@@ -310,10 +315,14 @@ export interface ShopThemeSettings {
   tickerBg?: string | null;
   tickerColor?: string | null;
   whatsappUrl?: string | null;
-  chatbotHtml?: string | null;
+  chatEmbed?: ChatEmbed | null;
   /** Storefront theme id; missing means "classic". */
   storeTheme?: StoreThemeId;
 }
+
+/** Live-chat widget from a vetted provider. Rendered by our own loader, never as raw HTML. */
+export type ChatProvider = "tawk" | "crisp" | "tidio";
+export type ChatEmbed = { provider: ChatProvider; id: string };
 
 export type StoreThemeId =
   | "classic"
@@ -339,7 +348,7 @@ export type PlatformBranding = {
   supportEmail: string;
   ticker: AnnouncementTicker | null;
   whatsappUrl: string | null;
-  chatbotHtml: string | null;
+  chatEmbed: ChatEmbed | null;
   /** Cloudflare Turnstile site key for public contact forms (null if disabled). */
   turnstileSiteKey?: string | null;
   /** When true, shop contact requires submitter email confirmation (REM-17). */
@@ -476,7 +485,6 @@ export interface CampaignPublic {
 export interface ReviewPublic {
   id: string;
   productId: string;
-  buyerId: string;
   rating: number;
   comment: string;
   createdAt: string;

@@ -1,7 +1,4 @@
-import path from "path";
-import fs from "fs";
 import { Router } from "express";
-import multer from "multer";
 import { z } from "zod";
 import type { VerificationRequest } from "@prisma/client";
 import type { VerificationRequestPublic } from "@vendors/shared-types";
@@ -13,39 +10,65 @@ import {
   requireTenantRoles,
 } from "../tenant/middleware";
 import { tenantWhere } from "../tenant/tenantContext";
+import { ImageRejectedError, normalizeImage } from "../services/images";
+import { newKey, putObject } from "../lib/storage";
+import {
+  displayFilename,
+  memoryUpload,
+  receiveArray,
+  sendPrivateObject,
+  UploadError,
+} from "../lib/uploads";
+import { redisRateLimit } from "../lib/rateLimit";
 
-const verificationDir = path.join(env.uploadsDir, "verification");
-fs.mkdirSync(verificationDir, { recursive: true });
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, verificationDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".pdf";
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  }),
-  limits: { fileSize: 8 * 1024 * 1024, files: 5 },
-  fileFilter: (_req, file, cb) => {
-    const ok = [
-      "image/jpeg",
-      "image/png",
-      "image/webp",
-      "application/pdf",
-    ].includes(file.mimetype);
-    if (!ok) return cb(new Error("Only JPEG, PNG, WebP, or PDF allowed"));
-    return cb(null, true);
-  },
+const upload = memoryUpload(8 * 1024 * 1024, 5);
+const submitLimiter = redisRateLimit({
+  name: "verification-submit",
+  windowMs: 60 * 60_000,
+  max: 10,
+  by: "tenant",
 });
+
+/** Stored shape. Legacy rows carry a public `url` instead of a private `key`. */
+type StoredDoc = { name: string; key?: string; contentType?: string; url?: string };
+
+function storedDocs(row: VerificationRequest): StoredDoc[] {
+  return Array.isArray(row.submittedDocs) ? (row.submittedDocs as StoredDoc[]) : [];
+}
+
+const isPdf = (b: Buffer) => b.subarray(0, 5).toString("latin1") === "%PDF-";
+
+/** PDFs are stored as-is (private, download-only); images are re-encoded. */
+async function storeDocument(
+  tenantId: string,
+  file: Express.Multer.File
+): Promise<StoredDoc> {
+  const baseName = displayFilename(file.originalname.replace(/\.[^.]+$/, ""));
+  if (isPdf(file.buffer)) {
+    const key = newKey(`t/${tenantId}/verification`, "pdf");
+    await putObject("private", key, file.buffer, "application/pdf");
+    return { name: `${baseName}.pdf`, key, contentType: "application/pdf" };
+  }
+  const { buffer } = await normalizeImage(file.buffer, { maxSize: 2400 });
+  const key = newKey(`t/${tenantId}/verification`, "webp");
+  await putObject("private", key, buffer, "image/webp");
+  return { name: `${baseName}.webp`, key, contentType: "image/webp" };
+}
 
 function toVerificationPublic(
   row: VerificationRequest & {
     tenant?: { id: string; name: string; slug: string; verifiedBadge: boolean } | null;
-  }
+  },
+  audience: "seller" | "admin"
 ): VerificationRequestPublic {
-  const docs = Array.isArray(row.submittedDocs)
-    ? (row.submittedDocs as { name: string; url: string }[])
-    : [];
+  const base =
+    audience === "admin"
+      ? `${env.apiUrl}/api/admin/verification-requests/${row.id}/docs`
+      : `${env.apiUrl}/api/seller/verification/${row.id}/docs`;
+  const docs = storedDocs(row).map((d, i) => ({
+    name: d.name,
+    url: d.key ? `${base}/${i}` : (d.url ?? ""),
+  }));
   return {
     id: row.id,
     tenantId: row.tenantId,
@@ -64,6 +87,18 @@ function toVerificationPublic(
         }
       : null,
   };
+}
+
+async function sendDoc(
+  res: import("express").Response,
+  row: VerificationRequest | null,
+  index: string
+) {
+  const doc = row ? storedDocs(row)[Number.parseInt(index, 10)] : undefined;
+  if (!doc?.key || !doc.contentType) {
+    return res.status(404).json({ error: "File not found" });
+  }
+  return sendPrivateObject(res, doc.key, { contentType: doc.contentType, filename: doc.name });
 }
 
 export const sellerVerificationRouter = Router();
@@ -88,8 +123,19 @@ sellerVerificationRouter.get("/", async (req, res, next) => {
     return res.json({
       verifiedBadge: tenant?.verifiedBadge ?? false,
       tenantStatus: tenant?.status,
-      request: latest ? toVerificationPublic(latest) : null,
+      request: latest ? toVerificationPublic(latest, "seller") : null,
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+sellerVerificationRouter.get("/:id/docs/:index", async (req, res, next) => {
+  try {
+    const row = await prisma.verificationRequest.findFirst({
+      where: tenantWhere(req.tenant!, { id: req.params.id }),
+    });
+    return await sendDoc(res, row, req.params.index);
   } catch (err) {
     return next(err);
   }
@@ -98,12 +144,13 @@ sellerVerificationRouter.get("/", async (req, res, next) => {
 sellerVerificationRouter.post(
   "/",
   requireTenantRoles("owner", "manager"),
-  (req, res, next) => {
-  upload.array("docs", 5)(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message || "Upload failed" });
-    }
+  submitLimiter,
+  async (req, res, next) => {
     try {
+      const files = await receiveArray(upload, "docs", 5, req, res);
+      if (files.length === 0) {
+        return res.status(400).json({ error: "At least one document is required" });
+      }
       const pending = await prisma.verificationRequest.findFirst({
         where: tenantWhere(req.tenant!, { status: "pending" as const }),
       });
@@ -113,15 +160,10 @@ sellerVerificationRouter.post(
         });
       }
 
-      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-      if (files.length === 0) {
-        return res.status(400).json({ error: "At least one document is required" });
+      const submittedDocs: StoredDoc[] = [];
+      for (const f of files) {
+        submittedDocs.push(await storeDocument(req.tenant!.tenantId, f));
       }
-
-      const submittedDocs = files.map((f) => ({
-        name: f.originalname,
-        url: `${env.apiUrl}/uploads/verification/${f.filename}`,
-      }));
 
       const created = await prisma.verificationRequest.create({
         data: {
@@ -136,16 +178,33 @@ sellerVerificationRouter.post(
         },
       });
 
-      return res.status(201).json({ request: toVerificationPublic(created) });
+      return res.status(201).json({ request: toVerificationPublic(created, "seller") });
     } catch (e) {
+      if (e instanceof UploadError || e instanceof ImageRejectedError) {
+        return res.status(400).json({
+          error:
+            e instanceof ImageRejectedError
+              ? "Upload PDF, JPEG, PNG or WebP files only."
+              : e.message,
+        });
+      }
       return next(e);
     }
-  });
-});
+  }
+);
 
 export const adminVerificationRouter = Router();
 
 adminVerificationRouter.use(requireAuth, requireRoles("super_admin"));
+
+adminVerificationRouter.get("/:id/docs/:index", async (req, res, next) => {
+  try {
+    const row = await prisma.verificationRequest.findUnique({ where: { id: req.params.id } });
+    return await sendDoc(res, row, req.params.index);
+  } catch (err) {
+    return next(err);
+  }
+});
 
 adminVerificationRouter.get("/", async (req, res, next) => {
   try {
@@ -164,7 +223,7 @@ adminVerificationRouter.get("/", async (req, res, next) => {
       },
       take: 100,
     });
-    return res.json({ requests: requests.map(toVerificationPublic) });
+    return res.json({ requests: requests.map((r) => toVerificationPublic(r, "admin")) });
   } catch (err) {
     return next(err);
   }
@@ -270,7 +329,7 @@ adminVerificationRouter.post("/:id/review", async (req, res, next) => {
       }
     }
 
-    return res.json({ request: toVerificationPublic(updated) });
+    return res.json({ request: toVerificationPublic(updated, "admin") });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: "Validation failed", details: err.flatten() });

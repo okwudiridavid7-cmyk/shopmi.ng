@@ -8,16 +8,21 @@ export type AccessTokenPayload = {
   sub: string;
   email: string;
   role: UserRole;
+  iat?: number;
 };
+
+/** A refresh token presented again shortly after rotation is a race between tabs, not theft. */
+const REUSE_GRACE_MS = 30_000;
 
 export function signAccessToken(payload: AccessTokenPayload): string {
   return jwt.sign(payload, env.jwtAccessSecret, {
+    algorithm: "HS256",
     expiresIn: env.jwtAccessExpiresIn,
   } as jwt.SignOptions);
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  return jwt.verify(token, env.jwtAccessSecret) as AccessTokenPayload;
+  return jwt.verify(token, env.jwtAccessSecret, { algorithms: ["HS256"] }) as AccessTokenPayload;
 }
 
 function hashToken(raw: string): string {
@@ -50,27 +55,37 @@ export async function rotateRefreshToken(
   rawToken: string
 ): Promise<{ userId: string; newRawToken: string } | null> {
   const tokenHash = hashToken(rawToken);
-  const existing = await prisma.refreshToken.findFirst({
-    where: { tokenHash, revokedAt: null },
-  });
+  const existing = await prisma.refreshToken.findFirst({ where: { tokenHash } });
+  if (!existing) return null;
 
-  if (!existing || existing.expiresAt < new Date()) {
-    if (existing) {
-      await prisma.refreshToken.update({
-        where: { id: existing.id },
-        data: { revokedAt: new Date() },
-      });
+  if (existing.revokedAt) {
+    // A rotated-out token came back: someone else has a copy. End every session.
+    if (Date.now() - existing.revokedAt.getTime() > REUSE_GRACE_MS) {
+      await revokeAllSessions(existing.userId);
     }
     return null;
   }
 
-  await prisma.refreshToken.update({
-    where: { id: existing.id },
+  const claimed = await prisma.refreshToken.updateMany({
+    where: { id: existing.id, revokedAt: null },
     data: { revokedAt: new Date() },
   });
+  if (claimed.count === 0 || existing.expiresAt < new Date()) return null;
 
   const newRawToken = await issueRefreshToken(existing.userId);
   return { userId: existing.userId, newRawToken };
+}
+
+/** Signs the user out everywhere: refresh tokens revoked, outstanding access tokens rejected. */
+export async function revokeAllSessions(userId: string): Promise<void> {
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: now },
+    }),
+    prisma.user.update({ where: { id: userId }, data: { sessionsRevokedAt: now } }),
+  ]);
 }
 
 export async function revokeRefreshToken(rawToken: string): Promise<void> {

@@ -86,6 +86,7 @@ export const LOGO_ICON_CATALOG: {
   },
 ];
 
+/** Family names must match the bundled files in apps/api/fonts (see lib/fonts.ts). */
 export const LOGO_FONT_PAIRS: {
   id: string;
   label: string;
@@ -95,26 +96,26 @@ export const LOGO_FONT_PAIRS: {
   {
     id: "modern",
     label: "Modern",
-    headingFont: "system-ui, -apple-system, sans-serif",
-    bodyFont: "Georgia, 'Times New Roman', serif",
+    headingFont: "Inter, DejaVu Sans, sans-serif",
+    bodyFont: "Lora, DejaVu Serif, serif",
   },
   {
     id: "classic",
     label: "Classic",
-    headingFont: "Georgia, 'Times New Roman', serif",
-    bodyFont: "system-ui, -apple-system, sans-serif",
+    headingFont: "Lora, DejaVu Serif, serif",
+    bodyFont: "Inter, DejaVu Sans, sans-serif",
   },
   {
     id: "bold",
     label: "Bold sans",
-    headingFont: "'Arial Black', 'Helvetica Neue', sans-serif",
-    bodyFont: "system-ui, -apple-system, sans-serif",
+    headingFont: "Montserrat, Inter, DejaVu Sans, sans-serif",
+    bodyFont: "Inter, DejaVu Sans, sans-serif",
   },
   {
     id: "elegant",
     label: "Elegant",
-    headingFont: "'Palatino Linotype', Palatino, serif",
-    bodyFont: "system-ui, sans-serif",
+    headingFont: "'Playfair Display', Lora, DejaVu Serif, serif",
+    bodyFont: "Inter, DejaVu Sans, sans-serif",
   },
 ];
 

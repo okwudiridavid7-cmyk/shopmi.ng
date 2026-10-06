@@ -3,11 +3,13 @@ import IORedis from "ioredis";
 import { env } from "../config/env";
 
 export const QUEUE_AI_DESCRIPTION = "ai-description";
-export const QUEUE_IMAGE_WATERMARK = "image-watermark";
+export const QUEUE_AI_IMAGE = "ai-image";
 export const QUEUE_CONTACT_MAIL = "contact-mail";
 export const QUEUE_CONTACT_PURGE = "contact-purge";
 export const QUEUE_PLAN_LIFECYCLE = "plan-lifecycle";
 export const QUEUE_DOMAINS = "domains";
+export const QUEUE_ORDER_EVENTS = "order-events";
+export const QUEUE_WHATSAPP = "whatsapp";
 
 let connection: IORedis | null = null;
 
@@ -45,34 +47,31 @@ export type DescriptionJobPayload = {
   shopCategoryName?: string;
   brandName?: string;
   location?: string;
-  price?: number;
-  currency?: string;
   productId?: string;
 };
 
-export type WatermarkJobPayload = {
+export type EnhanceJobPayload = {
   aiJobId: string;
   tenantId: string;
-  originalUrl: string;
-  shopName: string;
-  logoUrl?: string | null;
+  sourceKey: string;
 };
 
-let watermarkQueue: Queue | null = null;
+let imageQueue: Queue<EnhanceJobPayload> | null = null;
 
-export function getWatermarkQueue(): Queue {
-  if (!watermarkQueue) {
-    watermarkQueue = new Queue(QUEUE_IMAGE_WATERMARK, {
+/** Photoroom background removal; paid per call, so only one retry. */
+export function getImageEnhanceQueue(): Queue<EnhanceJobPayload> {
+  if (!imageQueue) {
+    imageQueue = new Queue<EnhanceJobPayload>(QUEUE_AI_IMAGE, {
       connection: getRedisConnection(),
       defaultJobOptions: {
         removeOnComplete: 100,
         removeOnFail: 50,
         attempts: 2,
-        backoff: { type: "exponential", delay: 1500 },
+        backoff: { type: "exponential", delay: 5000 },
       },
     });
   }
-  return watermarkQueue;
+  return imageQueue;
 }
 
 /** Payload for async contact email delivery (REM-15). */
@@ -156,6 +155,28 @@ export function getDomainsQueue(): Queue<DomainJobPayload> {
     });
   }
   return domainsQueue;
+}
+
+export type OrderEventPayload =
+  | { kind: "paid"; orderId: string }
+  | { kind: "refunded"; orderId: string };
+
+let orderEventsQueue: Queue<OrderEventPayload> | null = null;
+
+/** Side effects of order state changes (invoice, emails, WhatsApp), retried independently of the webhook. */
+export function getOrderEventsQueue(): Queue<OrderEventPayload> {
+  if (!orderEventsQueue) {
+    orderEventsQueue = new Queue<OrderEventPayload>(QUEUE_ORDER_EVENTS, {
+      connection: getRedisConnection(),
+      defaultJobOptions: {
+        removeOnComplete: 500,
+        removeOnFail: 500,
+        attempts: 6,
+        backoff: { type: "exponential", delay: 10_000 },
+      },
+    });
+  }
+  return orderEventsQueue;
 }
 
 /** Hourly sweep: plan reminders, then expiry to the free plan (idempotent). */

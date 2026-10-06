@@ -326,7 +326,13 @@ cartsRouter.post("/:slug/import", async (req, res, next) => {
       });
     }
 
-    return res.json({ cart: await loadCart(owner, tenantId), skipped });
+    const shop = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { customDomain: true, customDomainVerifiedAt: true },
+    });
+    const shopOrigin =
+      shop?.customDomain && shop.customDomainVerifiedAt ? `https://${shop.customDomain}` : null;
+    return res.json({ cart: await loadCart(owner, tenantId), skipped, shopOrigin });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: "Invalid cart items" });

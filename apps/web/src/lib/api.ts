@@ -1,3 +1,5 @@
+import { isCustomDomainHost } from "@/lib/shop-host";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export class ApiClientError extends Error {
@@ -78,7 +80,11 @@ export async function apiFetch<T>(
 
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    credentials: "include",
+    // On a seller's own domain the API only allows anonymous CORS (no cookies).
+    credentials:
+      typeof window !== "undefined" && isCustomDomainHost(window.location.host)
+        ? "omit"
+        : "include",
     headers,
   });
 

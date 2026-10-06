@@ -61,7 +61,8 @@ model Plan {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  tenants Tenant[]
+  tenants  Tenant[]
+  payments PlanPayment[]
 
   @@map("plans")
 }
@@ -78,6 +79,10 @@ model Tenant {
   customDomainVerifiedAt  DateTime?    @map("custom_domain_verified_at")
   customDomainCheckedAt   DateTime?    @map("custom_domain_checked_at")
   customDomainError       String?      @map("custom_domain_error")
+  /// When the current domain was claimed; unverified claims are released after 72 hours.
+  customDomainClaimedAt   DateTime?    @map("custom_domain_claimed_at")
+  /// Consecutive daily re-checks where a verified domain no longer pointed at us.
+  customDomainFailures    Int          @default(0) @map("custom_domain_failures")
   status                  TenantStatus @default(pending_verification)
   verifiedBadge           Boolean      @default(false) @map("verified_badge")
   themeSettings           Json?        @map("theme_settings")
@@ -107,11 +112,14 @@ model Tenant {
   /// Optional bank details used to create/update the Paystack subaccount.
   settlementBankCode      String?      @map("settlement_bank_code")
   settlementAccountNumber String?      @map("settlement_account_number")
+  /// Account holder name returned by Paystack's resolve endpoint.
+  settlementAccountName   String?      @map("settlement_account_name")
   createdAt               DateTime     @default(now()) @map("created_at")
 
   owner                User                  @relation("TenantOwner", fields: [ownerUserId], references: [id])
   plan                 Plan?                 @relation(fields: [planId], references: [id], onDelete: SetNull)
   tenantAdmins         TenantAdmin[]
+  teamInvites          TeamInvite[]
   products             Product[]
   carts                Cart[]
   orders               Order[]
@@ -122,6 +130,8 @@ model Tenant {
   shopBanners          ShopBanner[]
   contactInquiries     ContactInquiry[]
   registeredDomains    RegisteredDomain[]
+  ledgerEntries        SellerLedgerEntry[]
+  planPayments         PlanPayment[]
 
   @@index([planId])
   @@index([countryCode])
@@ -142,6 +152,8 @@ model User {
   passwordResetToken       String?   @unique @map("password_reset_token")
   passwordResetExpires     DateTime? @map("password_reset_expires")
   emailVerifiedAt          DateTime? @map("email_verified_at")
+  /// Access tokens issued before this instant are rejected (password change/reset, token reuse).
+  sessionsRevokedAt        DateTime? @map("sessions_revoked_at")
   emailVerificationToken   String?   @unique @map("email_verification_token")
   emailVerificationExpires DateTime? @map("email_verification_expires")
   createdAt                DateTime  @default(now()) @map("created_at")
@@ -173,6 +185,25 @@ model TenantAdmin {
   @@index([tenantId])
   @@index([userId])
   @@map("tenant_admins")
+}
+
+/// Pending team invite. Membership is only created when the invitee accepts with the emailed token.
+model TeamInvite {
+  id          String          @id @default(cuid())
+  tenantId    String          @map("tenant_id")
+  email       String
+  role        TenantAdminRole @default(staff)
+  tokenHash   String          @unique @map("token_hash")
+  invitedById String?         @map("invited_by_id")
+  expiresAt   DateTime        @map("expires_at")
+  acceptedAt  DateTime?       @map("accepted_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("team_invites")
 }
 
 /// Super-admin editable sitewide settings (app name, feature toggles, etc.).
@@ -386,17 +417,77 @@ model Order {
   currency          String      @default("NGN")
   paystackReference String?     @unique @map("paystack_reference")
   invoiceUrl        String?     @map("invoice_url")
+  /// Paystack subaccount the payment was split to; null means the platform holds the seller's share.
+  splitSubaccount   String?     @map("split_subaccount")
+  serviceFee        Decimal?    @map("service_fee") @db.Decimal(12, 2)
+  paidAt            DateTime?   @map("paid_at")
+  /// pending | processed | failed
+  refundStatus      String?     @map("refund_status")
+  refundedAt        DateTime?   @map("refunded_at")
+  /// Needs attention: amount_mismatch | oversold | paid_after_cancel
+  flag              String?
+  /// Why a pending order did not complete, e.g. expired | declined.
+  failureReason     String?     @map("failure_reason")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  buyer  User        @relation("BuyerOrders", fields: [buyerId], references: [id])
-  items  OrderItem[]
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  buyer         User                @relation("BuyerOrders", fields: [buyerId], references: [id])
+  items         OrderItem[]
+  ledgerEntries SellerLedgerEntry[]
 
   @@index([tenantId])
   @@index([buyerId])
   @@index([status])
+  @@index([status, createdAt])
   @@map("orders")
+}
+
+/// A seller paying for a plan term through Paystack. Reference starts with pln_.
+model PlanPayment {
+  id          String    @id @default(cuid())
+  tenantId    String    @map("tenant_id")
+  planId      String    @map("plan_id")
+  months      Int
+  amount      Decimal   @db.Decimal(12, 2)
+  currency    String    @default("NGN")
+  reference   String    @unique
+  /// pending | paid | failed
+  status      String    @default("pending")
+  paidAt      DateTime? @map("paid_at")
+  createdById String    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+  @@map("plan_payments")
+}
+
+/// What the platform owes a seller for sales that were not split to their Paystack subaccount.
+/// sale = +seller share, refund = -seller share, payout = -amount paid out by bank transfer.
+model SellerLedgerEntry {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  orderId     String?  @map("order_id")
+  /// sale | refund | payout
+  kind        String
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String   @default("NGN")
+  /// Bank transfer reference for payouts.
+  reference   String?
+  note        String?
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order  Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([orderId, kind])
+  @@index([tenantId, createdAt])
+  @@map("seller_ledger_entries")
 }
 
 model OrderItem {
@@ -492,6 +583,7 @@ model Review {
 enum AiJobType {
   description
   watermark
+  enhance
 }
 
 enum AiJobStatus {
@@ -517,6 +609,7 @@ model AiJob {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([tenantId, type, createdAt])
   @@index([status])
   @@map("ai_jobs")
 }
@@ -600,6 +693,10 @@ enum DomainPaymentStatus {
   pending
   paid
   failed
+  /// Checkout closed before payment (abandoned or the domain went to someone else).
+  expired
+  /// Paid, then refunded because the domain could not be registered or renewed.
+  refunded
 }
 
 /// A domain bought through Shopmi.ng and held with the registrar on the seller's behalf.
@@ -633,6 +730,8 @@ model RegisteredDomain {
 model DomainPayment {
   id                 String              @id @default(cuid())
   registeredDomainId String              @map("registered_domain_id")
+  /// Shop that paid. A late payment for a domain now held by another shop is refunded.
+  tenantId           String?             @map("tenant_id")
   /// "register" or "renew".
   kind               String
   years              Int                 @default(1)

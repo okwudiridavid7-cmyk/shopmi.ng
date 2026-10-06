@@ -20,6 +20,7 @@ import {
 } from "@/lib/default-banners";
 import { brandButtonTextColor, parseHexColor } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { safeHref } from "@/lib/safe-url";
 
 type Props = {
   slides: BannerSlide[];
@@ -253,7 +254,7 @@ function BannerSlideCard({
   height: string;
   className?: string;
 }) {
-  const ctaHref = slide.ctaUrl?.trim() || undefined;
+  const ctaHref = safeHref(slide.ctaUrl) ?? undefined;
   const isHash = ctaHref?.startsWith("#");
   const isExternal = ctaHref?.startsWith("http");
 

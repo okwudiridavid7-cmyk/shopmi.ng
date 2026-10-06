@@ -6,11 +6,12 @@ import { API_URL, SITE_NAME } from "@/lib/seo";
 import { buildPublicShopUrl } from "@/lib/shop-url";
 import { parseThemeSettings } from "@/lib/theme";
 
-type Params = { slug: string };
+type Params = Promise<{ slug: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { slug } = await params;
   try {
-    const res = await fetch(`${API_URL}/api/shops/${encodeURIComponent(params.slug)}`, {
+    const res = await fetch(`${API_URL}/api/shops/${encodeURIComponent(slug)}`, {
       next: { revalidate: 120 },
     });
     if (!res.ok) return { title: "Shop not found", robots: { index: false } };
@@ -40,12 +41,13 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   }
 }
 
-export default function ShopLayout({
+export default async function ShopLayout({
   children,
   params,
 }: {
   children: ReactNode;
   params: Params;
 }) {
-  return <ShopShell slug={params.slug}>{children}</ShopShell>;
+  const { slug } = await params;
+  return <ShopShell slug={slug}>{children}</ShopShell>;
 }

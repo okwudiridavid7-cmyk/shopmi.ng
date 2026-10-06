@@ -28,6 +28,8 @@ export const PLATFORM_ONLY_PREFIXES = [
   "/forgot-password",
   "/reset-password",
   "/cookies",
+  "/invite",
+  "/verify-email",
 ] as const;
 
 export function getHostname(host: string): string {

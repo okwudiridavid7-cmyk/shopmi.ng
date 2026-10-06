@@ -3,7 +3,10 @@ import type { UserRole } from "@vendors/shared-types";
 /** Safe internal path for post-login redirects - blocks open redirects. */
 export function safeReturnTo(value: string | null | undefined): string | null {
   if (!value) return null;
-  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  // Browsers treat "/\host" like "//host", and strip tabs/newlines before parsing.
+  if (!value.startsWith("/") || /^\/[/\\]/.test(value) || /[\u0000-\u001f\\]/.test(value)) {
+    return null;
+  }
   if (value.startsWith("/login") || value.startsWith("/signup")) return null;
   return value;
 }

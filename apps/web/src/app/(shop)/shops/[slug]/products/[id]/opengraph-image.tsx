@@ -26,9 +26,14 @@ function firstImage(images: unknown): string | null {
   return null;
 }
 
-export default async function Image({ params }: { params: { slug: string; id: string } }) {
+export default async function Image({
+  params,
+}: {
+  params: Promise<{ slug: string; id: string }>;
+}) {
+  const { slug, id } = await params;
   const res = await fetch(
-    `${API_URL}/api/shops/${encodeURIComponent(params.slug)}/products/${encodeURIComponent(params.id)}`
+    `${API_URL}/api/shops/${encodeURIComponent(slug)}/products/${encodeURIComponent(id)}`
   ).catch(() => null);
   const product = res?.ok ? ((await res.json()) as { product: Product }).product : null;
   if (!product) {
@@ -44,6 +49,6 @@ export default async function Image({ params }: { params: { slug: string; id: st
     title: product.title.length > 60 ? `${product.title.slice(0, 57)}...` : product.title,
     subtitle: `Sold by ${product.tenant?.name ?? "an independent shop"}. Pay securely with Paystack.`,
     imageUrl: firstImage(product.images),
-    footer: `shopmi.ng/shops/${params.slug}`,
+    footer: `shopmi.ng/shops/${slug}`,
   });
 }

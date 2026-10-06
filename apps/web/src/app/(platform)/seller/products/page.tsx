@@ -28,7 +28,7 @@ import {
   formatMoney,
   productImageUrl,
 } from "@/lib/api";
-import { generateProductDescription, pollWatermarkJob } from "@/lib/ai-jobs";
+import { enhanceProductImage, generateProductDescription } from "@/lib/ai-jobs";
 import {
   productDisplayUrl,
   uploadSellerFile,
@@ -93,6 +93,13 @@ export default function SellerProductsPage() {
 
   const [busy, setBusy] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [enhanceBusy, setEnhanceBusy] = useState<number | null>(null);
+  const [enhancePreview, setEnhancePreview] = useState<{
+    index: number;
+    before: string;
+    after: string;
+    afterWatermarked: string | null;
+  } | null>(null);
   const [watermarkBusy, setWatermarkBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -181,12 +188,9 @@ export default function SellerProductsPage() {
     setWatermarkBusy(true);
     setFormError(null);
     try {
-      const res = await uploadSellerFile(file);
+      const res = await uploadSellerFile(file, "product");
       const original = res.originalUrl ?? res.url;
-      let watermarked: string | null = null;
-      if (res.watermarkJobId) {
-        watermarked = await pollWatermarkJob(res.watermarkJobId);
-      }
+      const watermarked = res.watermarkedUrl ?? null;
       setForm((f) => ({
         ...f,
         imageAssets: [
@@ -215,7 +219,6 @@ export default function SellerProductsPage() {
         shopCategoryId: form.shopCategoryId || undefined,
         brandName: form.brandName || undefined,
         location: form.location || undefined,
-        price: form.price ? Number(form.price) : undefined,
         productId: editing?.id,
       });
       setForm((f) => ({
@@ -230,6 +233,41 @@ export default function SellerProductsPage() {
     } finally {
       setAiGenerating(false);
     }
+  }
+
+  async function onEnhanceImage(index: number) {
+    const asset = form.imageAssets[index];
+    if (!asset) return;
+    setEnhanceBusy(index);
+    setFormError(null);
+    setEnhancePreview(null);
+    try {
+      const result = await enhanceProductImage(asset.original);
+      setEnhancePreview({
+        index,
+        before: asset.original,
+        after: result.originalUrl,
+        afterWatermarked: result.watermarkedUrl,
+      });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Enhancement failed");
+    } finally {
+      setEnhanceBusy(null);
+    }
+  }
+
+  function useEnhancedImage() {
+    if (!enhancePreview) return;
+    const { index, after, afterWatermarked } = enhancePreview;
+    setForm((f) => ({
+      ...f,
+      imageAssets: f.imageAssets.map((a, i) =>
+        i === index
+          ? { original: after, watermarked: afterWatermarked }
+          : a
+      ),
+    }));
+    setEnhancePreview(null);
   }
 
   function removeImage(index: number) {
@@ -573,11 +611,61 @@ export default function SellerProductsPage() {
                         >
                           ×
                         </button>
+                        {features?.imageEnhanceEnabled ? (
+                          <button
+                            type="button"
+                            className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-[10px] text-white disabled:opacity-60"
+                            disabled={enhanceBusy !== null}
+                            onClick={() => void onEnhanceImage(i)}
+                          >
+                            {enhanceBusy === i ? "…" : "Enhance"}
+                          </button>
+                        ) : null}
                       </li>
                     );
                   })}
                 </ul>
               )}
+              {enhancePreview ? (
+                <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3">
+                  <p className="text-sm font-medium text-foreground">
+                    Background removed — use this on the listing?
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="mb-1 text-xs text-muted-foreground">Before</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={enhancePreview.before}
+                        alt=""
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs text-muted-foreground">After</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={enhancePreview.after}
+                        alt=""
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="primary" size="sm" onClick={useEnhancedImage}>
+                      Use this
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEnhancePreview(null)}
+                    >
+                      Keep original
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {formError && (
                 <p className="text-sm text-red-700 dark:text-red-400">
                   {formError}

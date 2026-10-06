@@ -82,17 +82,11 @@ export async function resolveTenantFromMembership(
     throw new TenantIsolationError("User has no tenant membership", 403);
   }
 
-  let membership = memberships[0];
-  if (preferredTenantId) {
-    const match = memberships.find((m) => m.tenantId === preferredTenantId);
-    if (!match) {
-      throw new TenantIsolationError(
-        "Preferred tenant is not in user's memberships",
-        403
-      );
-    }
-    membership = match;
-  }
+  // The shop the user picked; otherwise the shop they own; otherwise their oldest membership.
+  const membership =
+    (preferredTenantId && memberships.find((m) => m.tenantId === preferredTenantId)) ||
+    memberships.find((m) => m.role === "owner") ||
+    memberships[0]!;
 
   return {
     tenantId: membership.tenantId,

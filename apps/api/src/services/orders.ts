@@ -1,17 +1,26 @@
-import crypto from "crypto";
-import fs from "fs";
-import path from "path";
 import PDFDocument from "pdfkit";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { decimalToNumber } from "../lib/serialize";
 import { escapeHtml } from "../lib/htmlEscape";
 import { enqueueTransactionalMail } from "../queue/transactionalMail";
+import { getOrderEventsQueue, type OrderEventPayload } from "../queue/connection";
+import { enqueueWhatsApp } from "../queue/whatsappWorker";
+import { alertAdmins } from "./adminAlerts";
+import {
+  PaystackError,
+  paystackConfigured,
+  refundTransaction,
+  toMinorUnits,
+  verifyTransaction,
+  type PaystackCharge,
+} from "./paystack";
 
-const invoicesDir = path.join(env.uploadsDir, "invoices");
-fs.mkdirSync(invoicesDir, { recursive: true });
-
-export async function generateInvoicePdf(orderId: string): Promise<string> {
+/**
+ * Invoices are rendered on demand for an authorised viewer, so no PDF is ever
+ * stored where it could be fetched by URL.
+ */
+export async function renderInvoicePdf(orderId: string): Promise<Buffer | null> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -20,17 +29,14 @@ export async function generateInvoicePdf(orderId: string): Promise<string> {
       tenant: true,
     },
   });
-  if (!order) {
-    throw new Error("Order not found");
-  }
+  if (!order) return null;
 
-  const filename = `invoice-${order.id}.pdf`;
-  const filepath = path.join(invoicesDir, filename);
-
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50 });
-    const stream = fs.createWriteStream(filepath);
-    doc.pipe(stream);
+    const chunks: Buffer[] = [];
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
 
     doc.fontSize(20).text("Invoice", { align: "left" });
     doc.moveDown();
@@ -61,21 +67,14 @@ export async function generateInvoicePdf(orderId: string): Promise<string> {
       );
 
     doc.end();
-    stream.on("finish", () => resolve());
-    stream.on("error", reject);
   });
-
-  const invoiceUrl = `${env.apiUrl}/api/orders/${order.id}/invoice`;
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { invoiceUrl },
-  });
-
-  return filepath;
 }
 
-export function getInvoiceFilePath(orderId: string): string {
-  return path.join(invoicesDir, `invoice-${orderId}.pdf`);
+async function markInvoiceReady(orderId: string): Promise<void> {
+  await prisma.order.updateMany({
+    where: { id: orderId },
+    data: { invoiceUrl: `${env.apiUrl}/api/orders/${orderId}/invoice` },
+  });
 }
 
 export async function sendOrderConfirmationEmail(orderId: string): Promise<void> {
@@ -146,84 +145,321 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
   }
 }
 
-/** Mark order paid (idempotent), decrement stock, invoice + email. */
-export async function fulfillPaidOrder(paystackReference: string): Promise<void> {
-  const order = await prisma.order.findUnique({
-    where: { paystackReference },
-    include: { items: true },
-  });
-  if (!order) {
-    throw new Error(`Order not found for reference ${paystackReference}`);
+export type ChargeOutcome = "fulfilled" | "already" | "unknown" | "ignored" | "flagged" | "refunding";
+
+const orderEmailInclude = {
+  items: true,
+} as const;
+
+async function enqueueOrderEvent(payload: OrderEventPayload): Promise<void> {
+  try {
+    await getOrderEventsQueue().add(payload.kind, payload, {
+      jobId: `order-${payload.kind}-${payload.orderId}`,
+    });
+  } catch (err) {
+    console.warn(
+      `[orders] queue unavailable, running ${payload.kind} side effects inline:`,
+      err instanceof Error ? err.message : err
+    );
+    await runOrderEvent(payload).catch((e) =>
+      console.error("[orders] inline side effects failed:", e instanceof Error ? e.message : e)
+    );
   }
-  if (order.status === "paid" || order.status === "fulfilled") {
+}
+
+/** Worker handler: everything a buyer or seller should hear about after a state change. */
+export async function runOrderEvent(payload: OrderEventPayload): Promise<void> {
+  if (payload.kind === "paid") {
+    await markInvoiceReady(payload.orderId);
+    await sendOrderConfirmationEmail(payload.orderId);
+    await enqueueWhatsApp({ kind: "new_order", orderId: payload.orderId }).catch((err) =>
+      console.error("[orders] WhatsApp enqueue failed:", err instanceof Error ? err.message : err)
+    );
     return;
   }
+  if (payload.kind === "refunded") {
+    await sendRefundEmail(payload.orderId);
+  }
+}
 
-  await prisma.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id: order.id },
-      data: { status: "paid" },
+/**
+ * Applies a verified Paystack charge to its order. Safe to call any number of times
+ * from the webhook, the callback page and the expiry sweep: the status claim is atomic,
+ * so stock, ledger and notifications happen exactly once.
+ */
+export async function applyOrderCharge(charge: PaystackCharge): Promise<ChargeOutcome> {
+  const order = await prisma.order.findUnique({
+    where: { paystackReference: charge.reference },
+    include: orderEmailInclude,
+  });
+  if (!order) return "unknown";
+  if (charge.status !== "success") return "ignored";
+  if (order.status === "paid" || order.status === "fulfilled") return "already";
+
+  const expected = toMinorUnits(decimalToNumber(order.total));
+  if (charge.amount !== expected || charge.currency !== order.currency.toUpperCase()) {
+    const flagged = await prisma.order.updateMany({
+      where: { id: order.id, flag: null },
+      data: { flag: "amount_mismatch" },
     });
+    if (flagged.count) {
+      await alertAdmins({
+        title: "Payment amount mismatch",
+        lines: [
+          `Order ${order.id} (${charge.reference}) expected ${order.currency} ${expected / 100}.`,
+          `Paystack reported ${charge.currency} ${charge.amount / 100}. The order was not fulfilled.`,
+          "Check the transaction in Paystack and refund it if needed.",
+        ],
+        idempotencyKey: `alert-mismatch:${order.id}`,
+      });
+    }
+    return "flagged";
+  }
 
+  if (order.status === "cancelled") {
+    // Paid after the seller cancelled the unpaid order: give the money back.
+    const claimed = await prisma.order.updateMany({
+      where: { id: order.id, status: "cancelled", refundStatus: null },
+      data: { refundStatus: "pending", flag: "paid_after_cancel", paidAt: new Date() },
+    });
+    if (claimed.count) await startRefund(order.id, charge.reference, "Order was cancelled before payment");
+    return "refunding";
+  }
+
+  const fulfilled = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.order.updateMany({
+      where: { id: order.id, status: { in: ["pending_payment", "failed"] } },
+      data: { status: "paid", paidAt: new Date(), failureReason: null },
+    });
+    if (!claimed.count) return false;
+
+    let oversold = false;
     for (const item of order.items) {
-      await tx.product.update({
-        where: { id: item.productId },
+      const dec = await tx.product.updateMany({
+        where: { id: item.productId, stockQty: { gte: item.qty } },
         data: { stockQty: { decrement: item.qty } },
+      });
+      if (!dec.count) {
+        oversold = true;
+        await tx.product.updateMany({ where: { id: item.productId }, data: { stockQty: 0 } });
+      }
+    }
+    if (oversold) {
+      await tx.order.update({ where: { id: order.id }, data: { flag: "oversold" } });
+    }
+
+    const cart = await tx.cart.findUnique({
+      where: { tenantId_userId: { tenantId: order.tenantId, userId: order.buyerId } },
+      select: { id: true },
+    });
+    if (cart) {
+      await tx.cartItem.deleteMany({
+        where: { cartId: cart.id, productId: { in: order.items.map((i) => i.productId) } },
       });
     }
 
-    // Clear cart for this buyer+tenant
-    const cart = await tx.cart.findUnique({
-      where: {
-        tenantId_userId: { tenantId: order.tenantId, userId: order.buyerId },
-      },
+    if (!order.splitSubaccount) {
+      const share = decimalToNumber(order.total) - decimalToNumber(order.serviceFee ?? 0);
+      await tx.sellerLedgerEntry.createMany({
+        data: [
+          {
+            tenantId: order.tenantId,
+            orderId: order.id,
+            kind: "sale",
+            amount: Math.max(0, Math.round(share * 100) / 100),
+            currency: order.currency,
+          },
+        ],
+        skipDuplicates: true,
+      });
+    }
+    return true;
+  });
+
+  if (!fulfilled) return "already";
+  await enqueueOrderEvent({ kind: "paid", orderId: order.id });
+  const after = await prisma.order.findUnique({ where: { id: order.id }, select: { flag: true } });
+  if (after?.flag === "oversold") {
+    await alertAdmins({
+      title: "Order paid but stock ran out",
+      lines: [
+        `Order ${order.id} (${charge.reference}) was paid after an item sold out.`,
+        "The seller should restock or cancel the order, which refunds the buyer.",
+      ],
+      idempotencyKey: `alert-oversold:${order.id}`,
     });
-    if (cart) {
-      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+  }
+  return "fulfilled";
+}
+
+/** A declined attempt. Paystack lets the buyer retry on the same reference, so this is not final. */
+export async function applyOrderChargeFailed(reference: string): Promise<void> {
+  await prisma.order.updateMany({
+    where: { paystackReference: reference, status: "pending_payment" },
+    data: { status: "failed", failureReason: "declined" },
+  });
+}
+
+/** Asks Paystack for the refund. The order must already be claimed with refundStatus "pending". */
+async function startRefund(orderId: string, reference: string, reason: string): Promise<boolean> {
+  try {
+    await refundTransaction(reference, { reason });
+    return true;
+  } catch (err) {
+    await prisma.order.update({ where: { id: orderId }, data: { refundStatus: "failed" } });
+    await alertAdmins({
+      title: "Refund could not be started",
+      lines: [
+        `Order ${orderId} (${reference}): ${err instanceof Error ? err.message : "unknown error"}.`,
+        "Refund it from the Paystack dashboard.",
+      ],
+      idempotencyKey: `alert-refund-start:${orderId}`,
+    });
+    return false;
+  }
+}
+
+export class RefundError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Seller cancels a paid order: refund through Paystack, put the stock back, reverse
+ * the ledger, tell the buyer. If Paystack refuses, the order stays paid.
+ */
+export async function cancelPaidOrder(orderId: string, tenantId: string): Promise<void> {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId },
+    include: { items: true },
+  });
+  if (!order) throw new RefundError("Order not found", 404);
+  if (!order.paystackReference) throw new RefundError("This order has no payment to refund", 400);
+
+  const claimed = await prisma.order.updateMany({
+    where: { id: order.id, status: "paid", refundStatus: null },
+    data: { status: "cancelled", refundStatus: "pending" },
+  });
+  if (!claimed.count) throw new RefundError("This order can no longer be cancelled", 409);
+
+  try {
+    await refundTransaction(order.paystackReference, { reason: "Cancelled by seller" });
+  } catch (err) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "paid", refundStatus: null },
+    });
+    const message = err instanceof PaystackError ? err.message : "Refund failed";
+    throw new RefundError(`Paystack could not refund this order: ${message}`, 502);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of order.items) {
+      await tx.product.updateMany({
+        where: { id: item.productId },
+        data: { stockQty: { increment: item.qty } },
+      });
+    }
+    const sale = await tx.sellerLedgerEntry.findUnique({
+      where: { orderId_kind: { orderId: order.id, kind: "sale" } },
+    });
+    if (sale) {
+      await tx.sellerLedgerEntry.createMany({
+        data: [
+          {
+            tenantId: order.tenantId,
+            orderId: order.id,
+            kind: "refund",
+            amount: sale.amount.negated(),
+            currency: sale.currency,
+          },
+        ],
+        skipDuplicates: true,
+      });
     }
   });
-
-  await generateInvoicePdf(order.id);
-  await sendOrderConfirmationEmail(order.id);
-  await notifySellerWhatsApp(order.id);
+  await enqueueOrderEvent({ kind: "refunded", orderId: order.id });
 }
 
-async function notifySellerWhatsApp(orderId: string): Promise<void> {
-  const { sendWhatsAppText } = await import("./whatsapp");
+/** refund.processed / refund.failed webhooks. */
+export async function applyRefundEvent(reference: string, status: "processed" | "failed"): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { paystackReference: reference },
+    select: { id: true, refundStatus: true },
+  });
+  if (!order || order.refundStatus === status) return;
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { refundStatus: status, ...(status === "processed" ? { refundedAt: new Date() } : {}) },
+  });
+  if (status === "failed") {
+    await alertAdmins({
+      title: "Refund failed",
+      lines: [`Paystack could not complete the refund for order ${order.id} (${reference}).`],
+      idempotencyKey: `alert-refund-failed:${order.id}`,
+    });
+  }
+}
+
+const PENDING_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Closes checkouts abandoned for over an hour. Each one is checked with Paystack
+ * first, so a payment whose webhook got lost is fulfilled instead of expired.
+ */
+export async function expireStaleOrders(): Promise<{ expired: number; recovered: number }> {
+  const stale = await prisma.order.findMany({
+    where: { status: "pending_payment", createdAt: { lt: new Date(Date.now() - PENDING_TTL_MS) } },
+    select: { id: true, paystackReference: true },
+    orderBy: { createdAt: "asc" },
+    take: 50,
+  });
+  let expired = 0;
+  let recovered = 0;
+  for (const o of stale) {
+    if (o.paystackReference && paystackConfigured()) {
+      try {
+        const charge = await verifyTransaction(o.paystackReference);
+        if (charge?.status === "success") {
+          if ((await applyOrderCharge(charge)) === "fulfilled") recovered += 1;
+          continue;
+        }
+        if (charge && ["ongoing", "pending", "processing", "queued"].includes(charge.status)) continue;
+      } catch (err) {
+        // "Transaction reference not found" means checkout was never opened.
+        if (!(err instanceof PaystackError) || err.status !== 400) continue;
+      }
+    }
+    const res = await prisma.order.updateMany({
+      where: { id: o.id, status: "pending_payment" },
+      data: { status: "failed", failureReason: "expired" },
+    });
+    expired += res.count;
+  }
+  return { expired, recovered };
+}
+
+async function sendRefundEmail(orderId: string): Promise<void> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: {
-      tenant: { include: { owner: true } },
-      items: { include: { product: { select: { title: true } } } },
-    },
+    include: { buyer: true, tenant: true },
   });
   if (!order) return;
-
-  const settings =
-    (order.tenant.notificationSettings as {
-      whatsappOrdersEnabled?: boolean;
-    } | null) ?? {};
-  if (!settings.whatsappOrdersEnabled) return;
-
-  const to =
-    order.tenant.owner.whatsappNumber || order.tenant.owner.phone || null;
-  if (!to) return;
-
-  const lines = order.items
-    .map((i) => `${i.qty}× ${i.product?.title ?? "item"}`)
-    .join(", ");
-  const body = `New order on ${order.tenant.name}: ${order.currency} ${Number(order.total).toFixed(2)}. ${lines}. Ref ${order.paystackReference ?? order.id}`;
-  await sendWhatsAppText(to, body);
-}
-
-export function verifyPaystackSignature(
-  rawBody: Buffer,
-  signature: string | undefined
-): boolean {
-  if (!env.paystackSecretKey || !signature) return false;
-  const hash = crypto
-    .createHmac("sha512", env.paystackSecretKey)
-    .update(rawBody)
-    .digest("hex");
-  return hash === signature;
+  await enqueueTransactionalMail({
+    kind: "order_refunded",
+    to: order.buyer.email,
+    data: {
+      name: order.buyer.name,
+      shopName: order.tenant.name,
+      totalLabel: `${order.currency} ${decimalToNumber(order.total).toFixed(2)}`,
+      reference: order.paystackReference,
+      orderId: order.id,
+      orderUrl: `${env.webUrl}/buyer/orders/${order.id}`,
+    },
+    idempotencyKey: `order-refund:${order.id}`,
+  });
 }

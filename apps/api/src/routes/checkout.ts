@@ -4,23 +4,46 @@ import { env } from "../config/env";
 import { requireAuth } from "../auth/middleware";
 import { requireTenantFromSlugParam } from "../tenant/middleware";
 import { decimalToNumber, toOrderPublic } from "../lib/serialize";
-import { fulfillPaidOrder } from "../services/orders";
+import { applyOrderCharge } from "../services/orders";
 import { getCommissionPercent, getPlatformSetting } from "../lib/platformSettings";
 import { ensurePaystackSubaccount } from "../services/paystackSubaccount";
 import { isShopAvailable } from "../tenant/tenantContext";
+import { redisRateLimit } from "../lib/rateLimit";
+import {
+  PaystackError,
+  initializeTransaction,
+  newReference,
+  paystackConfigured,
+  toMinorUnits,
+  verifyTransaction,
+} from "../services/paystack";
 
 export const checkoutRouter = Router();
+
+const checkoutLimiter = redisRateLimit({
+  name: "checkout",
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  by: "user",
+  message: "Too many checkout attempts. Please wait a few minutes.",
+});
+
+const verifyLimiter = redisRateLimit({
+  name: "checkout-verify",
+  windowMs: 60 * 1000,
+  max: 30,
+  by: "user",
+});
 
 checkoutRouter.post(
   "/:slug/initialize",
   requireAuth,
+  checkoutLimiter,
   requireTenantFromSlugParam("slug"),
   async (req, res, next) => {
     try {
-      if (!env.paystackSecretKey) {
-        return res.status(503).json({
-          error: "Paystack is not configured. Set PAYSTACK_SECRET_KEY in .env",
-        });
+      if (!paystackConfigured()) {
+        return res.status(503).json({ error: "Payments are not available right now" });
       }
 
       const emailVerificationRequired =
@@ -94,12 +117,35 @@ checkoutRouter.post(
       }
 
       const currency = cart.items[0]!.product.currency;
-      const subtotal = cart.items.reduce(
-        (sum, item) => sum + decimalToNumber(item.product.price) * item.qty,
-        0
-      );
+      if (cart.items.some((item) => item.product.currency !== currency)) {
+        return res.status(400).json({
+          error: "Items in this cart use different currencies. Check out one currency at a time.",
+        });
+      }
+      const subtotal =
+        Math.round(
+          cart.items.reduce(
+            (sum, item) => sum + decimalToNumber(item.product.price) * item.qty,
+            0
+          ) * 100
+        ) / 100;
+      if (subtotal <= 0) {
+        return res.status(400).json({ error: "Cart total must be above zero" });
+      }
 
-      const reference = `ord_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const commissionPercent = await getCommissionPercent(5);
+      const amountKobo = toMinorUnits(subtotal);
+      const serviceFeeKobo = Math.max(0, Math.round(amountKobo * (commissionPercent / 100)));
+
+      // Verified sellers: ensure/use Paystack subaccount + Shopmi Service Fee split.
+      // See apps/api/docs/PAYSTACK_SPLITS.md
+      let subaccountCode: string | null = tenant.paystackSubaccountCode;
+      if (tenant.verifiedBadge && !subaccountCode) {
+        subaccountCode = await ensurePaystackSubaccount(tenant.id);
+      }
+      const splits = Boolean(tenant.verifiedBadge && subaccountCode && serviceFeeKobo > 0);
+
+      const reference = newReference("ord_");
 
       const order = await prisma.order.create({
         data: {
@@ -110,6 +156,8 @@ checkoutRouter.post(
           total: subtotal,
           currency,
           paystackReference: reference,
+          splitSubaccount: splits ? subaccountCode : null,
+          serviceFee: serviceFeeKobo / 100,
           items: {
             create: cart.items.map((item) => ({
               productId: item.productId,
@@ -124,22 +172,7 @@ checkoutRouter.post(
         },
       });
 
-      // Paystack amounts are in kobo (smallest currency unit) for NGN
-      const amountKobo = Math.round(subtotal * 100);
-      const callbackUrl = `${env.webUrl}/checkout/callback?reference=${reference}&shop=${req.tenant!.slug}`;
-
-      const commissionPercent = await getCommissionPercent(5);
-      const serviceFeeKobo = Math.max(
-        0,
-        Math.round(amountKobo * (commissionPercent / 100))
-      );
-
-      // Verified sellers: ensure/use Paystack subaccount + Shopmi Service Fee split.
-      // See apps/api/docs/PAYSTACK_SPLITS.md
-      let subaccountCode: string | null = tenant.paystackSubaccountCode;
-      if (tenant.verifiedBadge && !subaccountCode) {
-        subaccountCode = await ensurePaystackSubaccount(tenant.id);
-      }
+      const callbackUrl = `${env.webUrl}/checkout/callback?reference=${reference}&shop=${encodeURIComponent(req.tenant!.slug)}`;
 
       const customFields: {
         display_name: string;
@@ -168,7 +201,7 @@ checkoutRouter.post(
         },
       };
 
-      if (tenant.verifiedBadge && subaccountCode && serviceFeeKobo > 0) {
+      if (splits) {
         customFields.push({
           display_name: "Shopmi Service Fee",
           variable_name: "shopmi_service_fee",
@@ -184,38 +217,22 @@ checkoutRouter.post(
         initPayload.bearer = "account";
       }
 
-      const paystackRes = await fetch(
-        "https://api.paystack.co/transaction/initialize",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${env.paystackSecretKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(initPayload),
-        }
-      );
-
-      const paystackJson = (await paystackRes.json()) as {
-        status: boolean;
-        message: string;
-        data?: { authorization_url: string; access_code: string; reference: string };
-      };
-
-      if (!paystackRes.ok || !paystackJson.status || !paystackJson.data) {
+      let init: Awaited<ReturnType<typeof initializeTransaction>>;
+      try {
+        init = await initializeTransaction(initPayload);
+      } catch (err) {
         await prisma.order.update({
           where: { id: order.id },
-          data: { status: "failed" },
+          data: { status: "failed", failureReason: "init_failed" },
         });
-        return res.status(502).json({
-          error: paystackJson.message || "Paystack initialize failed",
-        });
+        console.error("[checkout] Paystack initialize failed:", err instanceof Error ? err.message : err);
+        return res.status(502).json({ error: "Could not start payment. Please try again." });
       }
 
       return res.json({
         order: toOrderPublic(order),
-        authorizationUrl: paystackJson.data.authorization_url,
-        reference: paystackJson.data.reference,
+        authorizationUrl: init.authorization_url,
+        reference: init.reference,
         publicKey: env.paystackPublicKey,
       });
     } catch (err) {
@@ -224,52 +241,34 @@ checkoutRouter.post(
   }
 );
 
-/** Optional server-side verify after Paystack redirect (webhook remains source of truth). */
-checkoutRouter.get(
-  "/verify/:reference",
-  requireAuth,
-  async (req, res, next) => {
-    try {
-      const reference = req.params.reference;
-      let order = await prisma.order.findFirst({
-        where: { paystackReference: reference, buyerId: req.user!.id },
-        include: {
-          items: { include: { product: { select: { id: true, title: true, images: true } } } },
-          tenant: { select: { id: true, name: true, slug: true, verifiedBadge: true } },
-        },
-      });
-      if (!order) {
-        return res.status(404).json({ error: "Order not found" });
-      }
-
-      if (order.status === "pending_payment" && env.paystackSecretKey) {
-        const verifyRes = await fetch(
-          `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-          {
-            headers: { Authorization: `Bearer ${env.paystackSecretKey}` },
-          }
-        );
-        const verifyJson = (await verifyRes.json()) as {
-          status: boolean;
-          data?: { status: string; reference: string };
-        };
-        if (verifyJson.status && verifyJson.data?.status === "success") {
-          await fulfillPaidOrder(reference);
-          order = await prisma.order.findUniqueOrThrow({
-            where: { id: order.id },
-            include: {
-              items: {
-                include: { product: { select: { id: true, title: true, images: true } } },
-              },
-              tenant: { select: { id: true, name: true, slug: true, verifiedBadge: true } },
-            },
-          });
-        }
-      }
-
-      return res.json({ order: toOrderPublic(order) });
-    } catch (err) {
-      return next(err);
+/** Callback page check. The webhook is the source of truth; this only speeds things up. */
+checkoutRouter.get("/verify/:reference", requireAuth, verifyLimiter, async (req, res, next) => {
+  try {
+    const reference = req.params.reference;
+    const include = {
+      items: { include: { product: { select: { id: true, title: true, images: true } } } },
+      tenant: { select: { id: true, name: true, slug: true, verifiedBadge: true } },
+    } as const;
+    const where = { paystackReference: reference, buyerId: req.user!.id };
+    let order = await prisma.order.findFirst({ where, include });
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
     }
+
+    if ((order.status === "pending_payment" || order.status === "failed") && paystackConfigured()) {
+      try {
+        const charge = await verifyTransaction(reference);
+        if (charge?.status === "success") {
+          await applyOrderCharge(charge);
+          order = await prisma.order.findFirstOrThrow({ where, include });
+        }
+      } catch (err) {
+        if (!(err instanceof PaystackError)) throw err;
+      }
+    }
+
+    return res.json({ order: toOrderPublic(order) });
+  } catch (err) {
+    return next(err);
   }
-);
+});

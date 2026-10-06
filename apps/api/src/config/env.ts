@@ -36,8 +36,9 @@ export const env = {
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   emailFrom: process.env.EMAIL_FROM ?? "Vendors <onboarding@resend.dev>",
-  openaiApiKey: process.env.OPENAI_API_KEY ?? "",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  /** Photoroom background removal for the image enhancer. Enhancer is hidden without it. */
+  photoroomApiKey: process.env.PHOTOROOM_API_KEY ?? "",
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   shopBaseDomain: process.env.SHOP_BASE_DOMAIN ?? "localhost:3000",
@@ -61,7 +62,22 @@ export const env = {
     (process.env.SHOP_CONTACT_CONFIRM_REQUIRED ?? "").toLowerCase() === "true",
   whatsappToken: process.env.WHATSAPP_TOKEN ?? "",
   whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
+  whatsappGraphVersion: process.env.WHATSAPP_GRAPH_VERSION || "v21.0",
+  whatsappTemplateNewOrder: process.env.WHATSAPP_TEMPLATE_NEW_ORDER || "new_order",
+  whatsappTemplateLang: process.env.WHATSAPP_TEMPLATE_LANG || "en",
+  whatsappAppSecret: process.env.WHATSAPP_APP_SECRET ?? "",
+  whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "",
   uploadsDir: path.resolve(__dirname, "../../uploads"),
+  /** Local fallback for invoices / KYC when R2 isn't configured. Never served statically. */
+  privateUploadsDir: path.resolve(__dirname, "../../uploads-private"),
+  /** Cloudflare R2 (S3 API). When unset, files go to local disk (dev only). */
+  r2AccountId: process.env.R2_ACCOUNT_ID ?? "",
+  r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+  r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+  r2PublicBucket: process.env.R2_PUBLIC_BUCKET ?? "",
+  r2PrivateBucket: process.env.R2_PRIVATE_BUCKET ?? "",
+  /** Public origin of the media bucket, e.g. https://media.shopmi.ng (cookieless). */
+  mediaUrl: (process.env.MEDIA_URL ?? "").replace(/\/$/, ""),
   /** Seller custom domains: subdomains CNAME here, root domains use the A record. */
   customDomainCnameTarget:
     process.env.CUSTOM_DOMAIN_CNAME_TARGET || "shopmi-web.onrender.com",

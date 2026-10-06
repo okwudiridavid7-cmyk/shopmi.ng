@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { CampaignPublic } from "@vendors/shared-types";
 import { apiFetch } from "@/lib/api";
+import { safeHref } from "@/lib/safe-url";
 
 export function CampaignPopup({ slug }: { slug: string }) {
   const [campaign, setCampaign] = useState<CampaignPublic | null>(null);
@@ -45,9 +46,9 @@ export function CampaignPopup({ slug }: { slug: string }) {
         </h2>
         <p className="mt-3 text-sm text-muted-foreground">{content.body}</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          {content.ctaLabel && content.ctaUrl && (
+          {content.ctaLabel && safeHref(content.ctaUrl) && (
             <a
-              href={content.ctaUrl}
+              href={safeHref(content.ctaUrl)!}
               className="rounded-md bg-accent-strong px-4 py-2 text-sm font-medium text-accent-foreground"
             >
               {content.ctaLabel}

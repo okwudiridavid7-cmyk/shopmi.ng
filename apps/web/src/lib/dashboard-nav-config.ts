@@ -18,6 +18,7 @@ import {
   User,
   Users,
   Mail,
+  Wallet,
   Wrench,
 } from "lucide-react";
 
@@ -246,6 +247,13 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
     id: "operations",
     label: "Operations",
     items: [
+      {
+        id: "payouts",
+        href: "/admin/payouts",
+        label: "Payouts",
+        icon: Wallet,
+        keywords: ["ledger", "balances", "bank transfer", "settlement"],
+      },
       {
         id: "contact-inquiries",
         href: "/admin/contact-inquiries",
