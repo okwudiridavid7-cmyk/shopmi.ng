@@ -140,3 +140,35 @@ export async function upsertPlans(prisma: PrismaClient) {
     });
   }
 }
+
+/** Pre-Freemi tiers, mapped to the closest current plan at the same or better terms. */
+const LEGACY_PLAN_MAP: Record<string, string[]> = {
+  free: ["freemi"],
+  starter: ["lemi", "yomi"],
+  pro: ["dami", "lemi", "yomi"],
+};
+
+/** Move shops off legacy plans, then hide those plans. Returns shops moved per legacy slug. */
+export async function retireLegacyPlans(prisma: PrismaClient) {
+  const moved: Record<string, number> = {};
+  for (const [slug, targets] of Object.entries(LEGACY_PLAN_MAP)) {
+    const legacy = await prisma.plan.findUnique({ where: { slug } });
+    if (!legacy) continue;
+    const target = await prisma.plan.findFirst({
+      where: { slug: { in: targets }, active: true },
+      orderBy: { price: "desc" },
+    });
+    if (target) {
+      const { count } = await prisma.tenant.updateMany({
+        where: { planId: legacy.id },
+        data: { planId: target.id },
+      });
+      moved[slug] = count;
+    }
+    await prisma.plan.update({
+      where: { id: legacy.id },
+      data: { active: false },
+    });
+  }
+  return moved;
+}

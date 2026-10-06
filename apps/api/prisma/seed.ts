@@ -7,7 +7,7 @@ import {
   MARKETPLACE_TAXONOMY,
   type CategorySeedNode,
 } from "./taxonomy";
-import { upsertPlans } from "./plans";
+import { retireLegacyPlans, upsertPlans } from "./plans";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -218,31 +218,7 @@ async function main() {
   }
 
   await upsertPlans(prisma);
-
-  // Remap tenants on legacy free/starter/pro → Yomi/Lemi/Dami, then deactivate legacy.
-  const yomi = await prisma.plan.findUnique({ where: { slug: "yomi" } });
-  const lemi = await prisma.plan.findUnique({ where: { slug: "lemi" } });
-  const dami = await prisma.plan.findUnique({ where: { slug: "dami" } });
-  const planLegacyMap: Record<string, string | undefined> = {
-    free: yomi?.id,
-    starter: lemi?.id ?? yomi?.id,
-    pro: dami?.id ?? lemi?.id ?? yomi?.id,
-  };
-  for (const slug of LEGACY_PLAN_SLUGS) {
-    const legacy = await prisma.plan.findUnique({ where: { slug } });
-    if (!legacy) continue;
-    const nextId = planLegacyMap[slug];
-    if (nextId) {
-      await prisma.tenant.updateMany({
-        where: { planId: legacy.id },
-        data: { planId: nextId },
-      });
-    }
-    await prisma.plan.update({
-      where: { id: legacy.id },
-      data: { active: false },
-    });
-  }
+  await retireLegacyPlans(prisma);
 
   await seedGeo();
 
