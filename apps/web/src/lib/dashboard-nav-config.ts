@@ -31,6 +31,8 @@ export type NavItem = {
   icon: LucideIcon;
   keywords?: string[];
   children?: Omit<NavItem, "children" | "icon">[];
+  /** Hide from staff (Plan / Domain / Team writes). */
+  ownerOnly?: boolean;
 };
 
 export type NavGroup = {
@@ -156,12 +158,7 @@ export const SELLER_NAV_GROUPS: NavGroup[] = [
         label: "Domain",
         icon: Earth,
         keywords: ["custom domain", "buy domain", "com.ng", "dns", "url"],
-      },
-      {
-        id: "branding",
-        href: "/seller/branding",
-        label: "Branding",
-        icon: Palette,
+        ownerOnly: true,
       },
       {
         id: "campaigns",
@@ -193,6 +190,14 @@ export const SELLER_NAV_GROUPS: NavGroup[] = [
         href: "/seller/plan",
         label: "Plan",
         icon: CreditCard,
+        ownerOnly: true,
+      },
+      {
+        id: "earnings",
+        href: "/seller/earnings",
+        label: "Earnings",
+        icon: Wallet,
+        keywords: ["payouts", "ledger", "bank", "balance"],
       },
       {
         id: "settings",
@@ -248,6 +253,13 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
     label: "Operations",
     items: [
       {
+        id: "orders",
+        href: "/admin/orders",
+        label: "Orders",
+        icon: ShoppingBag,
+        keywords: ["flagged", "refund", "mismatch", "oversold"],
+      },
+      {
         id: "payouts",
         href: "/admin/payouts",
         label: "Payouts",
@@ -298,14 +310,33 @@ export const BUYER_NAV: NavItem[] = BUYER_NAV_GROUPS.flatMap((g) => g.items);
 export const SELLER_NAV: NavItem[] = SELLER_NAV_GROUPS.flatMap((g) => g.items);
 export const ADMIN_NAV: NavItem[] = ADMIN_NAV_GROUPS.flatMap((g) => g.items);
 
-export function navGroupsForMode(mode: DashboardMode): NavGroup[] {
+export type SellerViewerRole = "owner" | "manager" | "staff";
+
+/** Nav items staff should not see (plan/domain writes live behind owner/manager gates). */
+const STAFF_HIDDEN_SELLER_IDS = new Set(["plan", "domain"]);
+
+export function navGroupsForMode(
+  mode: DashboardMode,
+  opts?: { viewerRole?: SellerViewerRole | null }
+): NavGroup[] {
   if (mode === "buyer") return BUYER_NAV_GROUPS;
-  if (mode === "seller") return SELLER_NAV_GROUPS;
-  return ADMIN_NAV_GROUPS;
+  if (mode === "admin") return ADMIN_NAV_GROUPS;
+
+  const role = opts?.viewerRole;
+  if (role === "staff") {
+    return SELLER_NAV_GROUPS.map((g) => ({
+      ...g,
+      items: g.items.filter((item) => !STAFF_HIDDEN_SELLER_IDS.has(item.id)),
+    })).filter((g) => g.items.length > 0);
+  }
+  return SELLER_NAV_GROUPS;
 }
 
-export function navForMode(mode: DashboardMode): NavItem[] {
-  return navGroupsForMode(mode).flatMap((g) => g.items);
+export function navForMode(
+  mode: DashboardMode,
+  opts?: { viewerRole?: SellerViewerRole | null }
+): NavItem[] {
+  return navGroupsForMode(mode, opts).flatMap((g) => g.items);
 }
 
 export function flattenNavItems(items: NavItem[]): {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { CategoryPublic } from "@vendors/shared-types";
 import {
   Briefcase,
@@ -105,7 +106,9 @@ const STORE_COUNT = [
  * Seamless seller onboarding: account → business → shop → optional product.
  * Progress rail shrinks when first product is skipped.
  */
-export default function OnboardingPage() {
+function OnboardingInner() {
+  const searchParams = useSearchParams();
+  const planSlug = (searchParams.get("plan") ?? "").trim() || undefined;
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -326,6 +329,7 @@ export default function OnboardingPage() {
               }),
           shopName: shop.shopName,
           slug: shop.slug,
+          ...(planSlug ? { planSlug } : {}),
           location: shop.location || undefined,
           countryCode: "NG",
           stateCode: shop.stateCode || undefined,
@@ -905,6 +909,14 @@ export default function OnboardingPage() {
         )}
       </MultiStepShell>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<p className="p-10 text-center text-sm text-muted-foreground">Loading…</p>}>
+      <OnboardingInner />
+    </Suspense>
   );
 }
 

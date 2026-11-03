@@ -28,6 +28,7 @@ function SignupAccountForm() {
   const [emailMode, setEmailMode] = useState(false);
   const wantsSeller = searchParams.get("role") === "seller";
   const returnTo = safeReturnTo(searchParams.get("returnTo")) ?? "/explore";
+  const prefillEmail = (searchParams.get("email") ?? "").trim();
   const [countryCode, setCountryCode] = useState("NG");
   const [stateCode, setStateCode] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
@@ -37,6 +38,10 @@ function SignupAccountForm() {
   useEffect(() => {
     if (wantsSeller) router.replace("/onboarding");
   }, [wantsSeller, router]);
+
+  useEffect(() => {
+    if (prefillEmail) setEmailMode(true);
+  }, [prefillEmail]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -55,7 +60,7 @@ function SignupAccountForm() {
           email: form.get("email"),
           password: password || form.get("password"),
           role: "buyer",
-          countryCode: "NG",
+          countryCode: countryCode || "NG",
           stateCode: stateCode || undefined,
           location: locationLabel || undefined,
           captchaToken: captcha.token,
@@ -122,6 +127,7 @@ function SignupAccountForm() {
                 required
                 autoComplete="email"
                 className="h-12"
+                defaultValue={prefillEmail}
               />
             </Label>
             <PasswordStrengthField

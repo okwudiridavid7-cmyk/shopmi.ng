@@ -1,0 +1,30 @@
+# Nightly read-only production smoke (TLS, health, catalog, CSP, media origin).
+# Override targets with repo Variables: SMOKE_BASE, SMOKE_API, SMOKE_MEDIA.
+name: Production smoke
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --prod=false
+      - name: Run production smoke
+        env:
+          # Optional repo Variables override defaults inside scripts/smoke-production.ts
+          SMOKE_BASE: ${{ vars.SMOKE_BASE }}
+          SMOKE_API: ${{ vars.SMOKE_API }}
+          SMOKE_MEDIA: ${{ vars.SMOKE_MEDIA }}
+        run: pnpm smoke

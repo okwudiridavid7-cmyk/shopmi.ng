@@ -28,10 +28,15 @@ export interface UserPublic {
   googleLinked: boolean;
   /** ISO timestamp when email was verified; null if pending. */
   emailVerifiedAt: string | null;
+  /** ISO timestamp when mobile was verified via WhatsApp OTP; null if pending. */
+  phoneVerifiedAt: string | null;
   notificationPrefs: {
     orderEmails: boolean;
+    /** Order updates / reminders on WhatsApp (requires phoneVerifiedAt). */
     whatsappOrders: boolean;
   };
+  /** ISO timestamp when the user requested account deletion; null if none. */
+  deletionRequestAt?: string | null;
   createdAt: string;
 }
 
@@ -248,6 +253,8 @@ export interface CartPublic {
   currency: string;
   /** False when the shop is hidden from shoppers; items can be removed, not bought. */
   available?: boolean;
+  /** Shop offers buyer pickup (from onboarding answers). */
+  offersPickup?: boolean;
 }
 
 export interface CartSummary {
@@ -262,6 +269,8 @@ export interface OrderItemPublic {
   unitPrice: number;
   product?: Pick<ProductPublic, "id" | "title" | "images"> | null;
 }
+
+export type FulfillmentMethod = "delivery" | "pickup";
 
 export interface OrderPublic {
   id: string;
@@ -278,10 +287,23 @@ export interface OrderPublic {
   /** amount_mismatch | oversold | paid_after_cancel */
   flag?: string | null;
   failureReason?: string | null;
+  fulfillmentMethod?: FulfillmentMethod | null;
+  buyerPhone?: string | null;
+  deliveryName?: string | null;
+  deliveryAddress?: string | null;
+  deliveryCity?: string | null;
+  deliveryState?: string | null;
+  deliveryCountry?: string | null;
+  deliveryNote?: string | null;
+  trackingNumber?: string | null;
+  trackingCarrier?: string | null;
+  shippedAt?: string | null;
+  /** True when this order used a Paystack subaccount split (direct seller settlement). */
+  splitSettled?: boolean;
   createdAt: string;
   items: OrderItemPublic[];
   tenant?: Pick<TenantPublic, "id" | "name" | "slug" | "verifiedBadge"> | null;
-  buyer?: Pick<UserPublic, "id" | "email" | "name"> | null;
+  buyer?: Pick<UserPublic, "id" | "email" | "name" | "phone"> | null;
 }
 
 /** Persisted in tenants.theme_settings JSON. */

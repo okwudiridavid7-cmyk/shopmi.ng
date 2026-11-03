@@ -155,6 +155,9 @@ services:
         sync: false
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
+      # Optional free-tier error tracking (no-op when unset)
+      - key: SENTRY_DSN
+        sync: false
 
   # ---- BullMQ worker (mail, AI, image enhance, domains, plan lifecycle, order events, WhatsApp) ----
   - type: worker
@@ -236,6 +239,10 @@ services:
         value: en
       - key: ADMIN_ALERT_EMAIL
         sync: false
+      # Optional free-tier error tracking (no-op when unset)
+      - key: SENTRY_DSN
+        sync: false
+      # Must match shopmi-api JWT secrets (Blueprint sync: false — set manually)
 
   # Redis-compatible Key Value — BullMQ + rate limits + stats cache
   - type: keyvalue

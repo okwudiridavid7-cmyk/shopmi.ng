@@ -13,6 +13,7 @@ import {
   advanceCheckoutQueue,
   checkoutProgress,
   clearCheckoutQueue,
+  readCheckoutDelivery,
   readCheckoutQueue,
 } from "@/lib/multi-checkout";
 import { shopReturnKey } from "@/lib/cart-handoff";
@@ -89,9 +90,15 @@ function CallbackInner() {
 
         if (nextSlug) {
           setPhase("continuing");
+          const delivery = readCheckoutDelivery();
+          if (!delivery) {
+            setError("Delivery details expired. Return to cart and try again.");
+            setPhase("error");
+            return;
+          }
           const init = await apiFetch<{ authorizationUrl: string }>(
             `/api/checkout/${nextSlug}/initialize`,
-            { method: "POST" }
+            { method: "POST", body: JSON.stringify(delivery) }
           );
           if (cancelled) return;
           window.location.href = init.authorizationUrl;

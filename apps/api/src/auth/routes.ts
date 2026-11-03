@@ -25,6 +25,11 @@ import { consumeOAuthState, createOAuthState, safeLocalPath } from "./oauthState
 import { mergeGuestCarts } from "../services/cartMerge";
 import { CART_SESSION_COOKIE } from "../lib/cartSession";
 import { enqueueTransactionalMail } from "../queue/transactionalMail";
+import {
+  confirmPhoneOtp,
+  PhoneVerificationError,
+  requestPhoneOtp,
+} from "../services/phoneVerification";
 
 async function mergeCartAfterAuth(
   req: import("express").Request,
@@ -79,6 +84,9 @@ const signupSchema = z.object({
   name: z.string().trim().min(1).max(120),
   role: z.enum(["buyer", "seller"]).default("buyer"),
   phone: z.string().min(5).max(32).optional(),
+  countryCode: z.string().length(2).optional(),
+  stateCode: z.string().max(10).optional(),
+  location: z.string().max(120).optional(),
 });
 
 const loginSchema = z.object({
@@ -123,6 +131,9 @@ authRouter.post("/signup", authLimiter, async (req, res, next) => {
         role: body.role,
         name: body.name,
         phone: body.phone,
+        countryCode: body.countryCode?.toUpperCase() ?? null,
+        stateCode: body.stateCode ?? null,
+        location: body.location ?? null,
         emailVerificationToken: verifyHash,
         emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
@@ -366,6 +377,63 @@ authRouter.post("/verify-email", verifyLimiter, async (req, res, next) => {
     return next(err);
   }
 });
+
+const phoneOtpLimiter = redisRateLimit({
+  name: "auth-phone-otp",
+  windowMs: 60 * 60 * 1000,
+  max: 8,
+  by: "user",
+  message: "Too many verification attempts. Try again later.",
+});
+
+/** Send a WhatsApp OTP to verify a mobile number. */
+authRouter.post(
+  "/phone/request-otp",
+  requireAuth,
+  phoneOtpLimiter,
+  async (req, res, next) => {
+    try {
+      const body = z
+        .object({ phone: z.string().min(7).max(32) })
+        .parse(req.body);
+      const result = await requestPhoneOtp(req.user!.id, body.phone);
+      return res.json(result);
+    } catch (err) {
+      if (err instanceof PhoneVerificationError) {
+        return res.status(err.status).json({ error: err.message });
+      }
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ error: "Enter a phone number." });
+      }
+      return next(err);
+    }
+  }
+);
+
+/** Confirm the WhatsApp OTP and mark the phone verified. */
+authRouter.post(
+  "/phone/verify-otp",
+  requireAuth,
+  phoneOtpLimiter,
+  async (req, res, next) => {
+    try {
+      const body = z.object({ code: z.string().min(4).max(12) }).parse(req.body);
+      await confirmPhoneOtp(req.user!.id, body.code);
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { id: req.user!.id },
+      });
+      return res.json({ ok: true, user: toUserPublic(user) });
+    } catch (err) {
+      if (err instanceof PhoneVerificationError) {
+        return res.status(err.status).json({ error: err.message });
+      }
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ error: "Enter the code from WhatsApp." });
+      }
+      return next(err);
+    }
+  }
+);
 
 /** Resend verification email (auth required). */
 authRouter.post(

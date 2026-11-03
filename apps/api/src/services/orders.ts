@@ -112,6 +112,7 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
 
   const totalLabel = `${order.currency} ${decimalToNumber(order.total).toFixed(2)}`;
   const orderUrl = `${env.webUrl}/buyer/orders/${order.id}`;
+  const deliveryHtml = formatDeliveryHtml(order);
 
   await enqueueTransactionalMail({
     kind: "order_buyer",
@@ -123,6 +124,7 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
       reference: order.paystackReference,
       orderId: order.id,
       itemsHtml,
+      deliveryHtml,
       orderUrl,
     },
     idempotencyKey: `order-buyer:${order.id}`,
@@ -137,12 +139,44 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
         name: order.tenant.owner.name,
         totalLabel,
         buyerEmail: order.buyer.email,
+        buyerPhone: order.buyerPhone ?? order.buyer.phone,
         itemsHtml,
+        deliveryHtml,
         ordersUrl: `${env.webUrl}/seller/orders/${order.id}`,
       },
       idempotencyKey: `order-seller:${order.id}`,
     });
   }
+}
+
+function formatDeliveryHtml(order: {
+  fulfillmentMethod: string | null;
+  buyerPhone: string | null;
+  deliveryName: string | null;
+  deliveryAddress: string | null;
+  deliveryCity: string | null;
+  deliveryState: string | null;
+  deliveryCountry: string | null;
+  deliveryNote: string | null;
+}): string {
+  if (!order.fulfillmentMethod && !order.deliveryName) return "";
+  if (order.fulfillmentMethod === "pickup") {
+    return `<p style="margin:12px 0 0;"><strong>Pickup</strong> · ${escapeHtml(order.deliveryName ?? "Buyer")}${
+      order.buyerPhone ? ` · ${escapeHtml(order.buyerPhone)}` : ""
+    }${order.deliveryNote ? `<br/><span style="color:#6b7280;">Note: ${escapeHtml(order.deliveryNote)}</span>` : ""}</p>`;
+  }
+  const line = [
+    order.deliveryName,
+    order.deliveryAddress,
+    [order.deliveryCity, order.deliveryState].filter(Boolean).join(", "),
+    order.deliveryCountry,
+  ]
+    .filter(Boolean)
+    .map((s) => escapeHtml(String(s)))
+    .join("<br/>");
+  return `<p style="margin:12px 0 0;"><strong>Deliver to</strong><br/>${line}${
+    order.buyerPhone ? `<br/>${escapeHtml(order.buyerPhone)}` : ""
+  }${order.deliveryNote ? `<br/><span style="color:#6b7280;">Note: ${escapeHtml(order.deliveryNote)}</span>` : ""}</p>`;
 }
 
 export type ChargeOutcome = "fulfilled" | "already" | "unknown" | "ignored" | "flagged" | "refunding";
@@ -173,13 +207,42 @@ export async function runOrderEvent(payload: OrderEventPayload): Promise<void> {
     await markInvoiceReady(payload.orderId);
     await sendOrderConfirmationEmail(payload.orderId);
     await enqueueWhatsApp({ kind: "new_order", orderId: payload.orderId }).catch((err) =>
-      console.error("[orders] WhatsApp enqueue failed:", err instanceof Error ? err.message : err)
+      console.error("[orders] WhatsApp seller enqueue failed:", err instanceof Error ? err.message : err)
+    );
+    await enqueueWhatsApp({
+      kind: "order_update",
+      orderId: payload.orderId,
+      status: "paid",
+    }).catch((err) =>
+      console.error("[orders] WhatsApp buyer enqueue failed:", err instanceof Error ? err.message : err)
+    );
+    return;
+  }
+  if (payload.kind === "fulfilled") {
+    await enqueueWhatsApp({
+      kind: "order_update",
+      orderId: payload.orderId,
+      status: "fulfilled",
+    }).catch((err) =>
+      console.error("[orders] WhatsApp fulfill enqueue failed:", err instanceof Error ? err.message : err)
     );
     return;
   }
   if (payload.kind === "refunded") {
     await sendRefundEmail(payload.orderId);
+    await enqueueWhatsApp({
+      kind: "order_update",
+      orderId: payload.orderId,
+      status: "refunded",
+    }).catch((err) =>
+      console.error("[orders] WhatsApp refund enqueue failed:", err instanceof Error ? err.message : err)
+    );
   }
+}
+
+/** Call after a seller marks an order fulfilled (tracking optional). */
+export async function notifyOrderFulfilled(orderId: string): Promise<void> {
+  await enqueueOrderEvent({ kind: "fulfilled", orderId });
 }
 
 /**

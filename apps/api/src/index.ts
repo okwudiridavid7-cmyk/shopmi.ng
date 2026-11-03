@@ -5,12 +5,11 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { env } from "./config/env";
+import { initSentry } from "./lib/sentry";
 import { ensureFontconfig } from "./lib/fonts";
 import { originTrust, requireTrustedOrigin } from "./lib/originCheck";
 import { clientIpMiddleware } from "./lib/clientIp";
 import { r2Configured } from "./lib/storage";
-
-ensureFontconfig();
 import { authRouter } from "./auth/routes";
 import { tenantsRouter } from "./routes/tenants";
 import { shopsRouter } from "./routes/shops";
@@ -50,6 +49,9 @@ import {
   sellerPlanRouter,
   teamInvitesRouter,
 } from "./routes/sellerPhase4";
+
+initSentry("api");
+ensureFontconfig();
 
 const app = express();
 

@@ -16,6 +16,11 @@ export function toE164Digits(raw: string, defaultCountry = "234"): string {
   return digits;
 }
 
+export function formatE164(raw: string): string | null {
+  const digits = toE164Digits(raw);
+  return digits ? `+${digits}` : null;
+}
+
 export function whatsappConfigured(): boolean {
   return Boolean(env.whatsappToken && env.whatsappPhoneNumberId);
 }
@@ -27,27 +32,58 @@ export type NewOrderTemplateParams = {
   reference: string;
 };
 
+export type OrderUpdateTemplateParams = {
+  statusLabel: string;
+  shopName: string;
+  detail: string;
+  reference: string;
+};
+
+export type ReminderTemplateParams = {
+  title: string;
+  body: string;
+  actionHint: string;
+};
+
+type SendResult = { sent: boolean; skipped?: boolean; messageId?: string };
+
 function graphUrl(path: string): string {
   const version = env.whatsappGraphVersion.replace(/^\/+|\/+$/g, "") || "v21.0";
   return `https://graph.facebook.com/${version}/${path.replace(/^\//, "")}`;
 }
 
-/**
- * Sends the approved `new_order` utility template. Free-form text is rejected by
- * Meta outside the 24-hour customer-care window, so templates are required.
- */
-export async function sendNewOrderTemplate(
+async function sendTemplate(
   toRaw: string,
-  params: NewOrderTemplateParams
-): Promise<{ sent: boolean; skipped?: boolean; messageId?: string }> {
+  templateName: string,
+  bodyParams: string[],
+  logLabel: string,
+  buttonCopyCode?: string
+): Promise<SendResult> {
   const to = toE164Digits(toRaw);
   if (!to) return { sent: false, skipped: true };
 
   if (!whatsappConfigured()) {
-    console.info(
-      `[whatsapp] would notify ${to}: ${params.shopName} ${params.amountLabel} (${params.reference})`
-    );
+    console.info(`[whatsapp] would send ${logLabel} to ${to}: ${bodyParams.join(" | ")}`);
     return { sent: false, skipped: true };
+  }
+
+  const components: Record<string, unknown>[] = [
+    {
+      type: "body",
+      parameters: bodyParams.map((text) => ({
+        type: "text",
+        text: text.slice(0, 120) || "—",
+      })),
+    },
+  ];
+  // Authentication templates with a copy-code / OTP button need the code on the button too.
+  if (buttonCopyCode) {
+    components.push({
+      type: "button",
+      sub_type: "otp",
+      index: "0",
+      parameters: [{ type: "text", text: buttonCopyCode.slice(0, 15) }],
+    });
   }
 
   const body = {
@@ -55,19 +91,9 @@ export async function sendNewOrderTemplate(
     to,
     type: "template",
     template: {
-      name: env.whatsappTemplateNewOrder,
+      name: templateName,
       language: { code: env.whatsappTemplateLang },
-      components: [
-        {
-          type: "body",
-          parameters: [
-            { type: "text", text: params.shopName.slice(0, 60) },
-            { type: "text", text: params.amountLabel.slice(0, 60) },
-            { type: "text", text: params.itemsSummary.slice(0, 120) || "—" },
-            { type: "text", text: params.reference.slice(0, 60) },
-          ],
-        },
-      ],
+      components,
     },
   };
 
@@ -89,6 +115,69 @@ export async function sendNewOrderTemplate(
 
   const data = (await res.json()) as { messages?: { id?: string }[] };
   return { sent: true, messageId: data.messages?.[0]?.id };
+}
+
+/**
+ * Sends the approved `new_order` utility template to sellers.
+ */
+export async function sendNewOrderTemplate(
+  toRaw: string,
+  params: NewOrderTemplateParams
+): Promise<SendResult> {
+  return sendTemplate(
+    toRaw,
+    env.whatsappTemplateNewOrder,
+    [params.shopName, params.amountLabel, params.itemsSummary || "Order", params.reference],
+    "new_order"
+  );
+}
+
+/** Authentication / OTP template. Body {{1}} = code. */
+export async function sendPhoneOtpTemplate(
+  toRaw: string,
+  code: string
+): Promise<SendResult> {
+  return sendTemplate(
+    toRaw,
+    env.whatsappTemplatePhoneOtp,
+    [code],
+    "phone_otp",
+    code
+  );
+}
+
+/** Buyer order status update (paid / fulfilled / refunded). */
+export async function sendOrderUpdateTemplate(
+  toRaw: string,
+  params: OrderUpdateTemplateParams
+): Promise<SendResult> {
+  return sendTemplate(
+    toRaw,
+    env.whatsappTemplateOrderUpdate,
+    [params.statusLabel, params.shopName, params.detail, params.reference],
+    "order_update"
+  );
+}
+
+/** Generic reminder (plan expiry, incomplete checkout, etc.). */
+export async function sendReminderTemplate(
+  toRaw: string,
+  params: ReminderTemplateParams
+): Promise<SendResult> {
+  return sendTemplate(
+    toRaw,
+    env.whatsappTemplateReminder,
+    [params.title, params.body, params.actionHint],
+    "reminder"
+  );
+}
+
+export function hashOtp(code: string): string {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+
+export function generateOtpCode(): string {
+  return String(crypto.randomInt(100000, 999999));
 }
 
 /** Timing-safe check of Meta's X-Hub-Signature-256 header. */

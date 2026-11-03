@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState, QueryErrorState } from "@/components/empty-state";
+import { OrderFulfillmentBlock } from "@/components/order-fulfillment-block";
 import { SkeletonLines } from "@/components/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Input, Label } from "@/components/ui/input";
 import { formatMoney, productImageUrl } from "@/lib/api";
 import { useSellerOrder, useUpdateOrderStatus } from "@/hooks/use-seller";
 
@@ -20,6 +23,8 @@ export default function SellerOrderDetailPage() {
   const id = typeof params.id === "string" ? params.id : "";
   const { data: order, error, isLoading, refetch } = useSellerOrder(id);
   const updateStatus = useUpdateOrderStatus();
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [trackingCarrier, setTrackingCarrier] = useState("");
 
   if (isLoading) {
     return <SkeletonLines count={4} />;
@@ -79,12 +84,23 @@ export default function SellerOrderDetailPage() {
       status === "cancelled" &&
       order!.status === "paid" &&
       !window.confirm(
-        `Cancel this order and refund ${formatMoney(order!.total, order!.currency)} to the buyer? This can't be undone.`
+        order!.splitSettled
+          ? `Cancel this order and refund ${formatMoney(order!.total, order!.currency)} to the buyer? If Paystack already settled your share, you may need to repay Shopmi from the Paystack dashboard. This can't be undone.`
+          : `Cancel this order and refund ${formatMoney(order!.total, order!.currency)} to the buyer? This can't be undone.`
       )
     ) {
       return;
     }
-    updateStatus.mutate({ id: order!.id, status });
+    updateStatus.mutate({
+      id: order!.id,
+      status,
+      ...(status === "fulfilled"
+        ? {
+            trackingNumber: trackingNumber.trim() || null,
+            trackingCarrier: trackingCarrier.trim() || null,
+          }
+        : {}),
+    });
   }
 
   return (
@@ -155,6 +171,18 @@ export default function SellerOrderDetailPage() {
           <p className="border-t border-border pt-4 text-sm font-medium">
             Total {formatMoney(order.total, order.currency)}
           </p>
+          <div className="border-t border-border pt-4">
+            <OrderFulfillmentBlock order={order} />
+            {order.buyer?.email ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Buyer: {order.buyer.name || order.buyer.email}
+                {order.buyer.phone ? ` · ${order.buyer.phone}` : ""}
+                {!order.buyerPhone && order.buyer.email
+                  ? ` · ${order.buyer.email}`
+                  : null}
+              </p>
+            ) : null}
+          </div>
         </CardBody>
       </Card>
 
@@ -165,18 +193,45 @@ export default function SellerOrderDetailPage() {
               Update status
             </p>
           </CardHeader>
-          <CardBody className="flex flex-wrap gap-2">
-            {nextActions.map((a) => (
-              <Button
-                key={a.status}
-                variant={a.status === "cancelled" ? "danger" : "primary"}
-                size="sm"
-                disabled={updateStatus.isPending}
-                onClick={() => runAction(a.status)}
-              >
-                {a.label}
-              </Button>
-            ))}
+          <CardBody className="space-y-3">
+            {order.status === "paid" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Label>
+                  <span>
+                    Courier <span className="text-muted-foreground">(optional)</span>
+                  </span>
+                  <Input
+                    value={trackingCarrier}
+                    onChange={(e) => setTrackingCarrier(e.target.value)}
+                    placeholder="e.g. GIG, DHL"
+                  />
+                </Label>
+                <Label>
+                  <span>
+                    Tracking number{" "}
+                    <span className="text-muted-foreground">(optional)</span>
+                  </span>
+                  <Input
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    placeholder="Waybill / tracking ID"
+                  />
+                </Label>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {nextActions.map((a) => (
+                <Button
+                  key={a.status}
+                  variant={a.status === "cancelled" ? "danger" : "primary"}
+                  size="sm"
+                  disabled={updateStatus.isPending}
+                  onClick={() => runAction(a.status)}
+                >
+                  {a.label}
+                </Button>
+              ))}
+            </div>
             {updateStatus.isError && (
               <p className="w-full text-sm text-red-700 dark:text-red-400">
                 {updateStatus.error instanceof Error

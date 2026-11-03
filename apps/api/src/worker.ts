@@ -1,4 +1,5 @@
 import "./config/env";
+import { initSentry } from "./lib/sentry";
 import { ensureFontconfig } from "./lib/fonts";
 import { startAiDescriptionWorker, startAiImageWorker } from "./queue/aiWorker";
 import { startContactMailWorker } from "./queue/contactMailWorker";
@@ -9,6 +10,7 @@ import { startDomainWorker } from "./queue/domainWorker";
 import { startOrderEventsWorker } from "./queue/orderEventsWorker";
 import { startWhatsAppWorker } from "./queue/whatsappWorker";
 
+initSentry("worker");
 ensureFontconfig();
 startAiDescriptionWorker();
 startAiImageWorker();

@@ -186,7 +186,11 @@ export default function SellerOverviewPage() {
               external: !!plan.data?.tenant?.slug,
             },
             { href: "/seller/orders", label: "Orders", icon: ShoppingBag },
-            { href: "/seller/branding", label: "Branding", icon: Palette },
+            {
+              href: "/seller/website?tab=branding",
+              label: "Branding",
+              icon: Palette,
+            },
             { href: "/seller/settings", label: "Settings", icon: Settings },
           ]}
         />

@@ -11,6 +11,7 @@ import {
   type DashboardMode,
   type NavItem,
 } from "@/lib/dashboard-nav-config";
+import { useSellerShop } from "@/hooks/use-seller";
 
 type Props = {
   mode: DashboardMode;
@@ -51,7 +52,13 @@ export function CommandPalette({ mode, open, onOpenChange }: Props) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [recents, setRecents] = useState<RecentEntry[]>([]);
-  const groups = useMemo(() => navGroupsForMode(mode), [mode]);
+  const shopQ = useSellerShop(mode === "seller");
+  const viewerRole =
+    mode === "seller" ? shopQ.data?.viewerRole ?? null : null;
+  const groups = useMemo(
+    () => navGroupsForMode(mode, { viewerRole }),
+    [mode, viewerRole]
+  );
   const flat = useMemo(() => flattenNavItems(groups.flatMap((g) => g.items)), [groups]);
 
   useEffect(() => {

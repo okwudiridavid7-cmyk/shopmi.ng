@@ -2,12 +2,21 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/prisma";
 import { requireAuth } from "../auth/middleware";
-import { toOrderPublic, toProductPublic, toUserPublic } from "../lib/serialize";
+import {
+  toOrderPublic,
+  toProductPublic,
+  toTenantPublic,
+  toUserPublic,
+} from "../lib/serialize";
 import { renderInvoicePdf } from "../services/orders";
 import { hashPassword, verifyPassword } from "../auth/password";
 import { issueRefreshToken, revokeAllSessions, signAccessToken } from "../auth/tokens";
 import { setAuthCookies } from "../auth/cookies";
 import { isShopAvailable } from "../tenant/tenantContext";
+import { alertAdmins } from "../services/adminAlerts";
+import { computeContactExpiresAt } from "../services/contactRetention";
+import { env } from "../config/env";
+import { getPlatformSetting } from "../lib/platformSettings";
 
 export const buyerRouter = Router();
 export const ordersRouter = Router();
@@ -55,6 +64,20 @@ buyerRouter.patch("/me", async (req, res, next) => {
         whatsappOrders?: boolean;
       } | null) ?? {};
 
+    const phoneChanging =
+      body.phone !== undefined && body.phone !== req.user!.phone;
+    const waChanging =
+      body.whatsappNumber !== undefined &&
+      body.whatsappNumber !== req.user!.whatsappNumber;
+
+    if (
+      body.notificationPrefs?.whatsappOrders === true &&
+      !req.user!.phoneVerifiedAt &&
+      !phoneChanging
+    ) {
+      // Allow saving the preference, but sends only go out once verified.
+    }
+
     const user = await prisma.user.update({
       where: { id: req.user!.id },
       data: {
@@ -63,14 +86,18 @@ buyerRouter.patch("/me", async (req, res, next) => {
         ...(body.whatsappNumber !== undefined
           ? { whatsappNumber: body.whatsappNumber }
           : {}),
+        ...((phoneChanging || waChanging)
+          ? { phoneVerifiedAt: null, phoneOtpHash: null, phoneOtpExpires: null }
+          : {}),
         ...(body.notificationPrefs
           ? {
               notificationPrefs: {
                 orderEmails:
                   body.notificationPrefs.orderEmails ??
                   currentPrefs.orderEmails !== false,
-                // WhatsApp notifications stubbed until integration ships
-                whatsappOrders: false,
+                whatsappOrders:
+                  body.notificationPrefs.whatsappOrders ??
+                  !!currentPrefs.whatsappOrders,
               },
             }
           : {}),
@@ -249,6 +276,169 @@ buyerRouter.delete("/favorites/:productId", async (req, res, next) => {
     });
     return res.json({ ok: true });
   } catch (err) {
+    return next(err);
+  }
+});
+
+/** NDPR: download a JSON export of the caller's profile, orders, and shops. */
+buyerRouter.get("/me/export", async (req, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const [user, orders, memberships, favorites] = await Promise.all([
+      prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+      prisma.order.findMany({
+        where: { buyerId: userId },
+        include: orderInclude,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.tenantAdmin.findMany({
+        where: { userId },
+        include: { tenant: true },
+      }),
+      prisma.favorite.findMany({
+        where: { userId },
+        include: {
+          product: {
+            include: {
+              category: true,
+              brand: true,
+              tenant: { select: { id: true, name: true, slug: true } },
+            },
+          },
+        },
+      }),
+    ]);
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      profile: toUserPublic(user),
+      location: {
+        location: user.location,
+        countryCode: user.countryCode,
+        stateCode: user.stateCode,
+      },
+      orders: orders.map(toOrderPublic),
+      shops: memberships.map((m) => ({
+        role: m.role,
+        shop: toTenantPublic(m.tenant, { private: m.role === "owner" }),
+      })),
+      favorites: favorites.map((f) => ({
+        id: f.id,
+        product: toProductPublic(f.product),
+      })),
+    };
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="shopmi-data-${userId.slice(0, 8)}.json"`
+    );
+    return res.send(JSON.stringify(payload, null, 2));
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** NDPR: queue soft-delete / anonymization and alert admins. */
+buyerRouter.post("/me/deletion-request", async (req, res, next) => {
+  try {
+    const user = req.user!;
+    if (user.deletionRequestAt) {
+      return res.json({
+        ok: true,
+        alreadyRequested: true,
+        deletionRequestAt: user.deletionRequestAt.toISOString(),
+      });
+    }
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { deletionRequestAt: new Date() },
+    });
+    await alertAdmins({
+      title: "Account deletion requested",
+      lines: [
+        `User ${updated.email} (${updated.id}) requested account deletion.`,
+        `Role: ${updated.role}. Process anonymization per NDPR retention policy.`,
+      ],
+      path: `/admin/users`,
+      idempotencyKey: `deletion-request:${updated.id}`,
+    });
+    return res.json({
+      ok: true,
+      deletionRequestAt: updated.deletionRequestAt!.toISOString(),
+      user: toUserPublic(updated),
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Buyer reports a problem on an order → ContactInquiry with orderId. */
+buyerRouter.post("/orders/:id/report", async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        message: z.string().min(10).max(5000),
+        subject: z.string().min(3).max(160).optional(),
+      })
+      .parse(req.body);
+
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, buyerId: req.user!.id },
+      include: {
+        tenant: { select: { id: true, name: true, slug: true } },
+      },
+    });
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const to = await getPlatformSetting(
+      "support_email",
+      "support@shopmi.ng"
+    );
+    const subject =
+      body.subject?.trim() ||
+      `Order problem · ${order.tenant?.name ?? "shop"} · ${order.id.slice(0, 8)}`;
+
+    const inquiry = await prisma.contactInquiry.create({
+      data: {
+        scope: "platform",
+        tenantId: order.tenantId,
+        slug: order.tenant?.slug ?? null,
+        orderId: order.id,
+        name: req.user!.name || req.user!.email,
+        email: req.user!.email,
+        phone: req.user!.phone,
+        subject,
+        message: body.message,
+        status: "received",
+        recipientEmail: to,
+        expiresAt: computeContactExpiresAt(),
+      },
+    });
+
+    await alertAdmins({
+      title: "Buyer reported an order problem",
+      lines: [
+        `From ${req.user!.email} on order ${order.id}`,
+        `Shop: ${order.tenant?.name ?? order.tenantId}`,
+        subject,
+        body.message.slice(0, 400),
+      ],
+      path: `/admin/contact-inquiries`,
+      idempotencyKey: `order-report:${inquiry.id}`,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      inquiryId: inquiry.id,
+      supportUrl: `${env.webUrl}/support`,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: "Validation failed", details: err.flatten() });
+    }
     return next(err);
   }
 });

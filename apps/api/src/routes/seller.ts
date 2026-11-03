@@ -332,7 +332,7 @@ sellerRouter.get("/orders", async (req, res, next) => {
         tenant: {
           select: { id: true, name: true, slug: true, verifiedBadge: true },
         },
-        buyer: { select: { id: true, email: true, name: true } },
+        buyer: { select: { id: true, email: true, name: true, phone: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -353,7 +353,7 @@ sellerRouter.get("/orders/:id", async (req, res, next) => {
         tenant: {
           select: { id: true, name: true, slug: true, verifiedBadge: true },
         },
-        buyer: { select: { id: true, email: true, name: true } },
+        buyer: { select: { id: true, email: true, name: true, phone: true } },
       },
     });
     if (!order) {
@@ -375,6 +375,8 @@ sellerRouter.patch("/orders/:id", async (req, res, next) => {
     const body = z
       .object({
         status: z.enum(["fulfilled", "cancelled"]),
+        trackingNumber: z.string().trim().max(120).optional().nullable(),
+        trackingCarrier: z.string().trim().max(120).optional().nullable(),
       })
       .parse(req.body);
 
@@ -412,9 +414,27 @@ sellerRouter.patch("/orders/:id", async (req, res, next) => {
     } else {
       const moved = await prisma.order.updateMany({
         where: { id: existing.id, status: existing.status },
-        data: { status: body.status },
+        data: {
+          status: body.status,
+          ...(body.status === "fulfilled"
+            ? {
+                trackingNumber: body.trackingNumber?.trim() || null,
+                trackingCarrier: body.trackingCarrier?.trim() || null,
+                shippedAt: new Date(),
+              }
+            : {}),
+        },
       });
       if (!moved.count) return res.status(409).json({ error: "Order changed, refresh and try again" });
+      if (body.status === "fulfilled") {
+        const { notifyOrderFulfilled } = await import("../services/orders");
+        await notifyOrderFulfilled(existing.id).catch((err) =>
+          console.error(
+            "[seller] fulfill notify failed:",
+            err instanceof Error ? err.message : err
+          )
+        );
+      }
     }
 
     const order = await prisma.order.findUniqueOrThrow({
@@ -426,7 +446,7 @@ sellerRouter.patch("/orders/:id", async (req, res, next) => {
         tenant: {
           select: { id: true, name: true, slug: true, verifiedBadge: true },
         },
-        buyer: { select: { id: true, email: true, name: true } },
+        buyer: { select: { id: true, email: true, name: true, phone: true } },
       },
     });
     return res.json({ order: toOrderPublic(order) });

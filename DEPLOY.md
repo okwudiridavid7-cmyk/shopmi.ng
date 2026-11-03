@@ -183,7 +183,10 @@ Rebuild web after changing any `NEXT_PUBLIC_*` value.
 | `PHOTOROOM_API_KEY` | Photoroom background removal. Without it the Enhance button is hidden |
 | `WHATSAPP_TOKEN` | Meta system user token with `whatsapp_business_messaging` |
 | `WHATSAPP_PHONE_NUMBER_ID` | From WhatsApp Manager → API setup |
-| `WHATSAPP_TEMPLATE_NEW_ORDER` | approved template name, default `new_order` |
+| `WHATSAPP_TEMPLATE_NEW_ORDER` | approved seller new-order template, default `new_order` |
+| `WHATSAPP_TEMPLATE_PHONE_OTP` | Authentication template for phone OTP, default `phone_otp` (body `{{1}}` = code) |
+| `WHATSAPP_TEMPLATE_ORDER_UPDATE` | Utility template for buyer updates, default `order_update` (status, shop, detail, reference) |
+| `WHATSAPP_TEMPLATE_REMINDER` | Utility template for reminders, default `reminder` (title, body, action) |
 | `WHATSAPP_TEMPLATE_LANG` | template language code, default `en` |
 | `WHATSAPP_GRAPH_VERSION` | optional, defaults to `v21.0` |
 | `WHATSAPP_APP_SECRET` | API only. Meta app secret, used to check `X-Hub-Signature-256` on the webhook |
@@ -212,20 +215,26 @@ Worker must share `DATABASE_URL`, `REDIS_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `
 
 Paystack sends webhooks to one URL per mode. Set it under Settings → API Keys & Webhooks for both test and live, and make sure the secret key in Render matches the mode you are in. Order, plan and domain payments are all fulfilled from the webhook (the callback page only re-checks), and the amount and currency are compared against what we asked for before anything is marked paid.
 
-### WhatsApp order alerts
+### WhatsApp templates (order alerts, OTP, updates)
 
-Sellers on a plan with WhatsApp alerts get a template message for each paid order. Business-initiated messages must use an approved template, so create one in WhatsApp Manager before turning this on:
+Business-initiated WhatsApp must use **approved templates**. Create these in WhatsApp Manager (language `en` unless you change `WHATSAPP_TEMPLATE_LANG`):
 
-- Name: `new_order` (or set `WHATSAPP_TEMPLATE_NEW_ORDER`), category Utility, language `en`
-- Body with exactly four variables, in this order: shop name, order amount, items, order reference. For example:
+1. **`new_order`** (Utility) — seller paid-order alert. Four body variables: shop name, amount, items, reference.  
+   Example: `New order for {{1}}: {{2}} for {{3}}. Reference {{4}}. Open your Shopmi.ng dashboard to fulfil it.`
 
-  `New order for {{1}}: {{2}} for {{3}}. Reference {{4}}. Open your Shopmi.ng dashboard to fulfil it.`
+2. **`phone_otp`** (Authentication) — phone verification OTP. Body `{{1}}` = 6-digit code. Prefer a copy-code OTP button if Meta offers it for your region.
 
-Until the template is approved, sends fail and the worker retries five times before giving up. Order emails are unaffected.
+3. **`order_update`** (Utility) — buyer order notices (paid / fulfilled / refunded). Four variables: status label, shop name, detail (amount or tracking), reference.
+
+4. **`reminder`** (Utility) — generic reminders. Three variables: title, body, action hint.
+
+Until a template is approved, that send type fails and the worker retries five times before giving up. Emails are unaffected.
+
+**Phone verification:** Buyers/sellers verify mobile in Account (or Seller → Notifications number) via WhatsApp OTP. Buyer WhatsApp order updates only send when the number is verified **and** “WhatsApp order updates” is enabled.
 
 ---
 
-## 6. Smoke test
+## 6. Smoke test and free monitoring
 
 After each deploy, from your machine:
 
@@ -234,6 +243,24 @@ pnpm smoke
 ```
 
 It is read-only. It checks TLS on `shopmi.ng`, `www`, `api` and `media`, the API health, catalog and plans endpoints, that admin settings refuse anonymous requests, the home and pricing pages, that the web sends a Content-Security-Policy, and that the media origin answers. Override targets with `SMOKE_BASE`, `SMOKE_API` and `SMOKE_MEDIA` (for example to point at the `onrender.com` hosts before DNS is switched).
+
+**Nightly GitHub Action:** [`.github/workflows/smoke-production.yml`](./.github/workflows/smoke-production.yml) runs `pnpm smoke` on a schedule (and via workflow_dispatch). Optional repo Variables: `SMOKE_BASE`, `SMOKE_API`, `SMOKE_MEDIA`.
+
+**Uptime (free):** Create UptimeRobot or Better Stack HTTP(s) monitors for:
+
+| Target | Expect |
+|---|---|
+| `https://shopmi.ng` | 200 |
+| `https://api.shopmi.ng/health` | 200 JSON |
+| `https://media.shopmi.ng` | HEAD/GET (200 or CDN response once R2 custom domain is live) |
+
+**Sentry (free tier):** Set `SENTRY_DSN` on `shopmi-api` and `shopmi-worker` (see `render.yaml`). Install `@sentry/node` in the API package when enabling; the process no-ops when the DSN is unset. Optional: add `@sentry/nextjs` + `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_DSN` on web later.
+
+**Worker JWT:** `shopmi-worker` uses `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` with `sync: false` — copy the same values from `shopmi-api` or token refresh / signed jobs will fail.
+
+**Auth Turnstile:** Production auth captcha is fail-closed. Set `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` (and add hostnames in Cloudflare Turnstile) before login/signup can succeed in prod.
+
+**Seed bootstrap:** `pnpm db:seed` does **not** overwrite the super-admin password unless `SUPER_ADMIN_RESET_PASSWORD=true`. Use that once for recovery only.
 
 Then by hand:
 
@@ -293,10 +320,13 @@ The E2E suite creates its own test accounts (`e2e.seller@example.com`, `e2e.buye
 - [ ] Cloudflare DNS + Full (strict) SSL, `media.shopmi.ng` connected to the public R2 bucket
 - [ ] R2 variables on API and worker, `NEXT_PUBLIC_MEDIA_URL` on web; no `[storage] R2 is not configured` in the API logs
 - [ ] `media:migrate` run once
-- [ ] Turnstile keys set, Resend domain verified
+- [ ] Turnstile keys set (auth is fail-closed in production), Resend domain verified
 - [ ] Paystack webhook URL and the four events set for the mode you are in
 - [ ] `ADMIN_ALERT_EMAIL` set to an inbox someone reads
 - [ ] `ANTHROPIC_API_KEY` and `PHOTOROOM_API_KEY` on API and worker
 - [ ] WhatsApp: template approved, webhook verified, token and phone number id set
+- [ ] Worker JWT secrets match API (`JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`)
+- [ ] Optional: `SENTRY_DSN` on API + worker; UptimeRobot probes for web/API/media
 - [ ] Cookies work cross-subdomain (`COOKIE_DOMAIN=.shopmi.ng`)
-- [ ] `pnpm smoke` passes
+- [ ] `pnpm smoke` passes (and nightly GitHub Action is enabled)
+- [ ] Seed: do not set `SUPER_ADMIN_RESET_PASSWORD` unless intentionally resetting admin

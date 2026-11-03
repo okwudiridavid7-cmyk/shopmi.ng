@@ -38,6 +38,8 @@ const onboardingSchema = z.object({
     .min(2)
     .max(63)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  /** Optional plan slug from /onboarding?plan=…; falls back to default trial. */
+  planSlug: z.string().min(1).max(64).optional(),
   location: z.string().min(2).max(120).optional(),
   countryCode: z.string().length(2).optional(),
   stateCode: z.string().max(10).optional(),
@@ -178,7 +180,12 @@ onboardingRouter.post(
         }
 
         const { getDefaultTrialPlan } = await import("../lib/plans");
-        const trialPlan = await getDefaultTrialPlan();
+        let trialPlan = body.planSlug
+          ? await tx.plan.findFirst({
+              where: { slug: body.planSlug, active: true },
+            })
+          : null;
+        if (!trialPlan) trialPlan = await getDefaultTrialPlan();
         const { getPlatformTrialDays } = await import("../lib/platformSettings");
         const trialDays = await getPlatformTrialDays(trialPlan?.trialDays ?? 3);
         const trialEndsAt = new Date(

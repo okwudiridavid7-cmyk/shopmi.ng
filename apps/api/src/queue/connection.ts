@@ -159,6 +159,7 @@ export function getDomainsQueue(): Queue<DomainJobPayload> {
 
 export type OrderEventPayload =
   | { kind: "paid"; orderId: string }
+  | { kind: "fulfilled"; orderId: string }
   | { kind: "refunded"; orderId: string };
 
 let orderEventsQueue: Queue<OrderEventPayload> | null = null;

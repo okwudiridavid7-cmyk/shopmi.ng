@@ -18,7 +18,7 @@ import {
   type NavItem,
 } from "@/lib/dashboard-nav-config";
 import { useSidebarPreference } from "@/hooks/use-sidebar-preference";
-import { useSellerBranding } from "@/hooks/use-seller";
+import { useSellerBranding, useSellerShop } from "@/hooks/use-seller";
 import { usePlatformBranding } from "@/hooks/use-branding";
 import { SellerViewStoreButton } from "@/components/seller-view-store";
 import { BrandMark } from "@/components/brand-mark";
@@ -41,7 +41,10 @@ export function DashboardSidebar({
   const search = searchParams.toString();
   const billingEnabled =
     usePlatformBranding().data?.billingEnabled !== false;
-  const groups = navGroupsForMode(mode).map((g) => ({
+  const shopQ = useSellerShop(mode === "seller");
+  const viewerRole =
+    mode === "seller" ? shopQ.data?.viewerRole ?? null : null;
+  const groups = navGroupsForMode(mode, { viewerRole }).map((g) => ({
     ...g,
     items: g.items.filter(
       (item) =>

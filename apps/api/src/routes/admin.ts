@@ -3,7 +3,8 @@ import { z } from "zod";
 import type { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { requireAuth, requireRoles } from "../auth/middleware";
-import { decimalToNumber, toTenantPublic, toUserPublic } from "../lib/serialize";
+import { decimalToNumber, toOrderPublic, toTenantPublic, toUserPublic } from "../lib/serialize";
+import { adminOrdersWhere } from "../lib/adminOrderFilters";
 import {
   deleteContactInquiryById,
   deleteContactInquiriesByEmail,
@@ -713,6 +714,35 @@ adminRouter.delete("/contact-inquiries", async (req, res, next) => {
       deletedCount: result.deletedCount,
       logId: result.logId,
     });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Flagged / refund-failed / searchable orders for ops triage. */
+adminRouter.get("/orders", async (req, res, next) => {
+  try {
+    const where = adminOrdersWhere({
+      flag: String(req.query.flag ?? ""),
+      refundStatus: String(req.query.refundStatus ?? ""),
+      status: String(req.query.status ?? ""),
+      q: String(req.query.q ?? ""),
+      needsAttention: String(req.query.needsAttention ?? "") === "1",
+    });
+
+    const rows = await prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: {
+        items: {
+          include: { product: { select: { id: true, title: true, images: true } } },
+        },
+        tenant: { select: { id: true, name: true, slug: true, verifiedBadge: true } },
+        buyer: { select: { id: true, email: true, name: true, phone: true } },
+      },
+    });
+    return res.json({ orders: rows.map(toOrderPublic) });
   } catch (err) {
     return next(err);
   }

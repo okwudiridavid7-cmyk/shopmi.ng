@@ -239,6 +239,7 @@ export type AdminContactInquiryRow = {
   scope: "platform" | "shop";
   tenantId: string | null;
   slug: string | null;
+  orderId: string | null;
   name: string;
   email: string;
   phone: string | null;

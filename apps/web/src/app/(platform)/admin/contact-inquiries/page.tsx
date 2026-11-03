@@ -118,6 +118,16 @@ export default function AdminContactInquiriesPage() {
                         · {row.slug}
                       </span>
                     ) : null}
+                    {row.orderId ? (
+                      <div className="mt-1">
+                        <a
+                          href={`/admin/orders?q=${encodeURIComponent(row.orderId)}`}
+                          className="text-xs font-medium text-accent-strong hover:underline dark:text-accent-on-dark"
+                        >
+                          Order {row.orderId.slice(0, 8)}…
+                        </a>
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">{row.status}</td>
                   <td className="px-4 py-3 text-right">

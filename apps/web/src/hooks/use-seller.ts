@@ -172,13 +172,14 @@ export function useSellerPlan() {
   });
 }
 
-export function useSellerShop() {
+export function useSellerShop(enabled = true) {
   return useQuery({
     queryKey: ["seller", "shop"] as const,
     queryFn: async () => {
       const res = await apiFetch<{ shop: SellerShop }>("/api/seller/shop");
       return res.shop;
     },
+    enabled,
   });
 }
 
@@ -388,13 +389,17 @@ export function useUpdateOrderStatus() {
     mutationFn: ({
       id,
       status,
+      trackingNumber,
+      trackingCarrier,
     }: {
       id: string;
       status: "paid" | "fulfilled" | "cancelled";
+      trackingNumber?: string | null;
+      trackingCarrier?: string | null;
     }) =>
       apiFetch<{ order: OrderPublic }>(`/api/seller/orders/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, trackingNumber, trackingCarrier }),
       }),
     onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: queryKeys.seller.orders });

@@ -5,7 +5,7 @@ import { optionalAuth } from "../auth/middleware";
 import { requireTenantFromSlugParam } from "../tenant/middleware";
 import type { TenantStatus } from "@prisma/client";
 import { isShopAvailable, tenantWhere } from "../tenant/tenantContext";
-import { toProductPublic } from "../lib/serialize";
+import { tenantOffersPickup, toProductPublic } from "../lib/serialize";
 import { getOrSetCartSessionId } from "../lib/cartSession";
 import { mergeGuestCarts } from "../services/cartMerge";
 
@@ -73,7 +73,12 @@ async function serializeCart(
       qty: number;
       product: Parameters<typeof toProductPublic>[0];
     }[];
-    tenant?: { name: string; slug: string; status?: TenantStatus } | null;
+    tenant?: {
+      name: string;
+      slug: string;
+      status?: TenantStatus;
+      onboardingAnswers?: unknown;
+    } | null;
   } | null,
   tenantId: string,
   meta?: { shopSlug?: string; shopName?: string }
@@ -88,6 +93,7 @@ async function serializeCart(
       subtotal: 0,
       currency: "NGN",
       available: true,
+      offersPickup: false,
     };
   }
   const items = cart.items.map((item) => ({
@@ -110,6 +116,7 @@ async function serializeCart(
     currency: items[0]?.product.currency ?? "NGN",
     /** False when the shop is hidden; its items can be removed but not bought. */
     available: cart.tenant?.status ? isShopAvailable(cart.tenant.status) : true,
+    offersPickup: tenantOffersPickup(cart.tenant?.onboardingAnswers),
   };
 }
 
@@ -125,7 +132,7 @@ const cartInclude = {
       },
     },
   },
-  tenant: { select: { name: true, slug: true, status: true } },
+  tenant: { select: { name: true, slug: true, status: true, onboardingAnswers: true } },
 } as const;
 
 async function loadCart(owner: CartOwner, tenantId: string) {

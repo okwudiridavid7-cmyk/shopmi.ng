@@ -95,6 +95,7 @@ export async function buildTransactionalEmail(
         <p style="margin:0 0 12px;"><strong>${total}</strong> has been paid for your order from <strong>${shop}</strong>.</p>
         <p style="margin:0 0 12px;">Reference: <code style="font-size:13px;">${ref}</code></p>
         ${data.itemsHtml ? `<div style="margin:16px 0;">${data.itemsHtml}</div>` : ""}
+        ${data.deliveryHtml ? `<div style="margin:12px 0;">${data.deliveryHtml}</div>` : ""}
         ${data.orderUrl ? ctaButton(String(data.orderUrl), "View order & invoice") : ""}
         <p style="margin:16px 0 0;">Thank you for shopping with us.</p>
       `;
@@ -103,11 +104,13 @@ export async function buildTransactionalEmail(
     case "order_seller": {
       const total = escapeHtml(String(data.totalLabel ?? ""));
       const buyer = escapeHtml(String(data.buyerEmail ?? "a buyer"));
+      const phone = data.buyerPhone ? escapeHtml(String(data.buyerPhone)) : "";
       subject = `New order: ${String(data.totalLabel ?? "payment received")}`;
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
-        <p style="margin:0 0 12px;">Great news! <strong>${total}</strong> just came in from ${buyer}.</p>
+        <p style="margin:0 0 12px;">Great news! <strong>${total}</strong> just came in from ${buyer}${phone ? ` (${phone})` : ""}.</p>
         ${data.itemsHtml ? `<div style="margin:16px 0;">${data.itemsHtml}</div>` : ""}
+        ${data.deliveryHtml ? `<div style="margin:12px 0;">${data.deliveryHtml}</div>` : ""}
         ${data.ordersUrl ? ctaButton(String(data.ordersUrl), "Open orders") : ""}
         <p style="margin:16px 0 0;">Pack carefully and keep buyers updated.</p>
       `;

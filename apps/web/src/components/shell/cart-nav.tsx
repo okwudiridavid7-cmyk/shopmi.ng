@@ -16,7 +16,8 @@ import {
 } from "@/hooks/use-cart";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUiStore } from "@/stores/ui";
-import { useComingSoon } from "@/components/coming-soon";
+import { useToast } from "@/components/ui/toast";
+import { useToggleFavorite } from "@/hooks/use-catalog";
 import {
   goToLocalCheckout,
   useLocalCart,
@@ -196,11 +197,13 @@ function CartShopSection({
   onClose: () => void;
 }) {
   const { isAuthenticated } = useAuth();
-  const comingSoon = useComingSoon();
   const removeItem = useRemoveCartItem();
+  const toggleFavorite = useToggleFavorite();
+  const { toast } = useToast();
   const qc = useQueryClient();
   const slug = cart.shopSlug ?? "";
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   async function updateQty(itemId: string, qty: number) {
     if (!slug) return;
@@ -221,6 +224,34 @@ function CartShopSection({
       }
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function saveForLater(itemId: string, productId: string) {
+    if (!isAuthenticated) {
+      toast({
+        title: "Sign in to save favourites",
+        tone: "danger",
+      });
+      return;
+    }
+    setSavingId(itemId);
+    try {
+      await toggleFavorite.mutateAsync({ productId, favorited: false });
+      if (local) {
+        useLocalCart.getState().setQty(slug, productId, 0);
+      } else {
+        await removeItem.mutateAsync({ shopSlug: slug, itemId });
+      }
+      toast({ title: "Saved to favourites", tone: "success" });
+    } catch (err) {
+      toast({
+        title: "Couldn’t save for later",
+        description: err instanceof Error ? err.message : undefined,
+        tone: "danger",
+      });
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -281,11 +312,12 @@ function CartShopSection({
               </div>
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-                onClick={() => comingSoon("Save for later")}
+                disabled={savingId === item.id || !item.productId}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+                onClick={() => void saveForLater(item.id, item.productId)}
               >
                 <Heart className="h-3.5 w-3.5" />
-                Save for Later
+                {savingId === item.id ? "Saving…" : "Save for Later"}
               </button>
               <button
                 type="button"

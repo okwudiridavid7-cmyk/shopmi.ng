@@ -6,7 +6,7 @@ import {
 } from "./connection";
 import { expirePlans, sendPlanReminders } from "../lib/plans";
 import { checkPendingDomains, recheckVerifiedDomains } from "../lib/customDomains";
-import { sweepDomains } from "../services/domains";
+import { expireStaleDomainPayments, sweepDomains } from "../services/domains";
 import { expireStaleOrders } from "../services/orders";
 import { expireStalePlanPayments } from "../services/planBilling";
 
@@ -21,8 +21,17 @@ export function startPlanLifecycleWorker(): Worker {
       await expireStalePlanPayments().catch((err) => {
         console.error("[worker] plan payment sweep failed:", err instanceof Error ? err.message : err);
       });
+      const domainPays = await expireStaleDomainPayments().catch((err) => {
+        console.error("[worker] domain payment sweep failed:", err instanceof Error ? err.message : err);
+        return { expired: 0, recovered: 0 };
+      });
       if (orders.expired || orders.recovered) {
         console.log(`[worker] orders expired ${orders.expired}, recovered ${orders.recovered}`);
+      }
+      if (domainPays.expired || domainPays.recovered) {
+        console.log(
+          `[worker] domain payments expired ${domainPays.expired}, recovered ${domainPays.recovered}`
+        );
       }
       const reminded = await sendPlanReminders();
       const expired = await expirePlans();

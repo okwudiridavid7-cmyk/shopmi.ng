@@ -59,15 +59,39 @@ const AUTH_SKIP_401 = [
 ];
 
 let onUnauthorized: ((path: string) => void) | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 
 /** Register once from the app shell - handles session expiry UX. */
 export function setUnauthorizedHandler(handler: ((path: string) => void) | null) {
   onUnauthorized = handler;
 }
 
+async function tryRefreshSession(): Promise<boolean> {
+  if (typeof window !== "undefined" && isCustomDomainHost(window.location.host)) {
+    return false;
+  }
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+        return res.ok;
+      } catch {
+        return false;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+  }
+  return refreshInFlight;
+}
+
 export async function apiFetch<T>(
   path: string,
-  init?: RequestInit
+  init?: RequestInit,
+  _retried = false
 ): Promise<T> {
   const headers: HeadersInit = {
     ...(init?.headers ?? {}),
@@ -99,6 +123,16 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
+    if (
+      res.status === 401 &&
+      !_retried &&
+      !AUTH_SKIP_401.some((p) => path.startsWith(p))
+    ) {
+      const refreshed = await tryRefreshSession();
+      if (refreshed) {
+        return apiFetch<T>(path, init, true);
+      }
+    }
     if (
       res.status === 401 &&
       onUnauthorized &&

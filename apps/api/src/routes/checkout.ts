@@ -4,6 +4,10 @@ import { env } from "../config/env";
 import { requireAuth } from "../auth/middleware";
 import { requireTenantFromSlugParam } from "../tenant/middleware";
 import { decimalToNumber, toOrderPublic } from "../lib/serialize";
+import {
+  orderDeliveryFields,
+  resolveCheckoutDelivery,
+} from "../lib/checkoutDelivery";
 import { applyOrderCharge } from "../services/orders";
 import { getCommissionPercent, getPlatformSetting } from "../lib/platformSettings";
 import { ensurePaystackSubaccount } from "../services/paystackSubaccount";
@@ -133,6 +137,12 @@ checkoutRouter.post(
         return res.status(400).json({ error: "Cart total must be above zero" });
       }
 
+      const resolved = resolveCheckoutDelivery(req.body, tenant.onboardingAnswers);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
+      const { delivery } = resolved;
+
       const commissionPercent = await getCommissionPercent(5);
       const amountKobo = toMinorUnits(subtotal);
       const serviceFeeKobo = Math.max(0, Math.round(amountKobo * (commissionPercent / 100)));
@@ -158,6 +168,7 @@ checkoutRouter.post(
           paystackReference: reference,
           splitSubaccount: splits ? subaccountCode : null,
           serviceFee: serviceFeeKobo / 100,
+          ...orderDeliveryFields(delivery),
           items: {
             create: cart.items.map((item) => ({
               productId: item.productId,

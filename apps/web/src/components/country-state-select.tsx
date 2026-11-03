@@ -4,8 +4,16 @@ import { useEffect, useState } from "react";
 import type { CountryPublic, StatePublic } from "@vendors/shared-types";
 import { MapPin } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { NIGERIA_STATES } from "@/lib/nigeria-states";
 import { Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+
+const NG_FALLBACK: StatePublic[] = NIGERIA_STATES.map((s) => ({
+  id: s.id,
+  name: s.name,
+  iso2: s.iso2,
+  countryIso2: "NG",
+}));
 
 export type LocationValue = {
   countryCode: string;
@@ -41,6 +49,7 @@ export function CountryStateSelect({
   const lockedCountry = nigeriaOnly ? "NG" : countryCode;
   const [countries, setCountries] = useState<CountryPublic[]>([]);
   const [states, setStates] = useState<StatePublic[]>([]);
+  const [statesLoading, setStatesLoading] = useState(false);
   const [country, setCountry] = useState(lockedCountry || countryCode);
   const [state, setState] = useState(stateCode);
 
@@ -67,15 +76,39 @@ export function CountryStateSelect({
     const code = nigeriaOnly ? "NG" : country;
     if (!code) {
       setStates([]);
+      setStatesLoading(false);
       return;
     }
+    // Seed Nigeria immediately so signup isn't blocked when geo/DB is down.
+    if (code === "NG") {
+      setStates(NG_FALLBACK);
+      setStatesLoading(false);
+    } else {
+      setStatesLoading(true);
+    }
+    let cancelled = false;
     apiFetch<{ states: StatePublic[] }>(
       `/api/geo/countries/${encodeURIComponent(code)}/states`
     )
-      .then((r) => setStates(r.states))
-      .catch(() => setStates([]));
+      .then((r) => {
+        if (cancelled) return;
+        if (r.states?.length) {
+          setStates(r.states);
+        } else if (code !== "NG") {
+          setStates([]);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        if (code !== "NG") setStates([]);
+      })
+      .finally(() => {
+        if (!cancelled) setStatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [country, nigeriaOnly]);
-
   useEffect(() => {
     if (!nigeriaOnly) return;
     setCountry("NG");
@@ -102,7 +135,7 @@ export function CountryStateSelect({
           <Select
             id={`${idPrefix}-state`}
             required={required}
-            disabled={states.length === 0}
+            disabled={statesLoading || states.length === 0}
             icon={<MapPin />}
             value={state}
             onChange={(e) => {
@@ -112,7 +145,11 @@ export function CountryStateSelect({
             }}
           >
             <option value="">
-              {states.length === 0 ? "Loading states…" : "Select state"}
+              {statesLoading
+                ? "Loading states…"
+                : states.length === 0
+                  ? "States unavailable"
+                  : "Select state"}
             </option>
             {states.map((s) => (
               <option key={s.id} value={s.iso2 || s.name}>
@@ -166,9 +203,11 @@ export function CountryStateSelect({
           <option value="">
             {!country
               ? "Select country first"
-              : states.length === 0
-                ? "No states listed"
-                : "Select state"}
+              : statesLoading
+                ? "Loading states…"
+                : states.length === 0
+                  ? "No states listed"
+                  : "Select state"}
           </option>
           {states.map((s) => (
             <option key={s.id} value={s.iso2 || s.name}>

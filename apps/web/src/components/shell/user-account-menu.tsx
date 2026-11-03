@@ -6,21 +6,18 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import {
   Check,
-  Gift,
   HelpCircle,
   LayoutDashboard,
   LogOut,
   Monitor,
   Moon,
   PenLine,
-  Rocket,
   Settings,
   Store,
   Sun,
   User,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useComingSoon } from "@/components/coming-soon";
 import { firstNameFromUser } from "@/lib/auth-redirect";
 import { useAuthTransition } from "@/stores/auth-transition";
 import { cn, isUnderPath } from "@/lib/utils";
@@ -64,8 +61,6 @@ export function UserAccountMenu({
   const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const comingSoon = useComingSoon();
-
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -277,30 +272,6 @@ export function UserAccountMenu({
                 onClick={() => setOpen(false)}
               />
             )}
-          </div>
-
-          <div className="border-b border-border px-2 py-1.5">
-            <MenuRow
-              href="#"
-              icon={Rocket}
-              label="What's new"
-              onClick={(e) => {
-                e.preventDefault();
-                setOpen(false);
-                comingSoon("What's new");
-              }}
-              badge={1}
-            />
-            <MenuRow
-              href="/contact"
-              icon={Gift}
-              label="Refer a shop"
-              onClick={(e) => {
-                e.preventDefault();
-                setOpen(false);
-                comingSoon("Refer a shop");
-              }}
-            />
           </div>
 
           {/* Theme segmented */}

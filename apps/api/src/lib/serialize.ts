@@ -49,10 +49,16 @@ export function toUserPublic(user: User): UserPublic {
     emailVerifiedAt: user.emailVerifiedAt
       ? user.emailVerifiedAt.toISOString()
       : null,
+    phoneVerifiedAt: user.phoneVerifiedAt
+      ? user.phoneVerifiedAt.toISOString()
+      : null,
     notificationPrefs: {
       orderEmails: prefs.orderEmails !== false,
       whatsappOrders: !!prefs.whatsappOrders,
     },
+    deletionRequestAt: user.deletionRequestAt
+      ? user.deletionRequestAt.toISOString()
+      : null,
     createdAt: user.createdAt.toISOString(),
   };
 }
@@ -187,10 +193,11 @@ type OrderWithRelations = Order & {
   tenant?: (Pick<Tenant, "id" | "name" | "slug"> & {
     verifiedBadge?: boolean;
   }) | null;
-  buyer?: Pick<User, "id" | "email" | "name"> | null;
+  buyer?: Pick<User, "id" | "email" | "name" | "phone"> | null;
 };
 
 export function toOrderPublic(order: OrderWithRelations): OrderPublic {
+  const method = order.fulfillmentMethod;
   return {
     id: order.id,
     tenantId: order.tenantId,
@@ -204,6 +211,19 @@ export function toOrderPublic(order: OrderWithRelations): OrderPublic {
     refundStatus: order.refundStatus ?? null,
     flag: order.flag ?? null,
     failureReason: order.failureReason ?? null,
+    fulfillmentMethod:
+      method === "delivery" || method === "pickup" ? method : null,
+    buyerPhone: order.buyerPhone ?? null,
+    deliveryName: order.deliveryName ?? null,
+    deliveryAddress: order.deliveryAddress ?? null,
+    deliveryCity: order.deliveryCity ?? null,
+    deliveryState: order.deliveryState ?? null,
+    deliveryCountry: order.deliveryCountry ?? null,
+    deliveryNote: order.deliveryNote ?? null,
+    trackingNumber: order.trackingNumber ?? null,
+    trackingCarrier: order.trackingCarrier ?? null,
+    shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+    splitSettled: Boolean(order.splitSubaccount),
     createdAt: order.createdAt.toISOString(),
     items: order.items.map(
       (item): OrderItemPublic => ({
@@ -233,7 +253,14 @@ export function toOrderPublic(order: OrderWithRelations): OrderPublic {
           id: order.buyer.id,
           email: order.buyer.email,
           name: order.buyer.name ?? null,
+          phone: order.buyer.phone ?? null,
         }
       : null,
   };
+}
+
+/** True when the shop's onboarding said buyers can pick up. */
+export function tenantOffersPickup(onboardingAnswers: unknown): boolean {
+  const a = onboardingAnswers as { fulfillmentMethod?: string } | null;
+  return a?.fulfillmentMethod === "pickup";
 }

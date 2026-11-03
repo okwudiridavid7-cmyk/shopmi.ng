@@ -162,6 +162,7 @@ export function toContactInquiryAdmin(row: ContactInquiry) {
     scope: row.scope,
     tenantId: row.tenantId,
     slug: row.slug,
+    orderId: row.orderId ?? null,
     name: row.name,
     email: row.email,
     phone: row.phone,

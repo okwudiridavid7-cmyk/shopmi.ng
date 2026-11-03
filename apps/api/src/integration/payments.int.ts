@@ -9,7 +9,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { applyOrderCharge, cancelPaidOrder, RefundError } from "../services/orders";
 import { applyPlanCharge } from "../services/planBilling";
-import { fulfillDomainPayment } from "../services/domains";
+import { expireStaleDomainPayments, fulfillDomainPayment } from "../services/domains";
 import { newReference } from "../services/paystack";
 
 const run = crypto.randomBytes(4).toString("hex");
@@ -262,5 +262,39 @@ describe("domain purchase", () => {
     assert.equal(await fulfillDomainPayment(reference, 100, "NGN"), false);
     const after = await prisma.registeredDomain.findUniqueOrThrow({ where: { id: row.id } });
     assert.equal(after.status, "pending_payment");
+  });
+
+  it("expireStaleDomainPayments marks old pending rows expired", async () => {
+    const row = await prisma.registeredDomain.create({
+      data: {
+        tenantId: ids.tenant,
+        domain: `stale-${run}.com.ng`,
+        tld: "com.ng",
+        status: "pending_payment",
+        contact: {},
+      },
+    });
+    const reference = newReference("dom_");
+    const payment = await prisma.domainPayment.create({
+      data: {
+        registeredDomainId: row.id,
+        tenantId: ids.tenant,
+        kind: "register",
+        years: 1,
+        amount: new Prisma.Decimal(5000),
+        paystackReference: reference,
+        status: "pending",
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      },
+    });
+    // Backdate explicitly (Prisma @default(now) may ignore create input depending on version)
+    await prisma.domainPayment.update({
+      where: { id: payment.id },
+      data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+    });
+    const result = await expireStaleDomainPayments();
+    assert.ok(result.expired >= 1);
+    const after = await prisma.domainPayment.findUniqueOrThrow({ where: { id: payment.id } });
+    assert.equal(after.status, "expired");
   });
 });

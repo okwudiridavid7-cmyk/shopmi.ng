@@ -2,14 +2,18 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ShoppingBag } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { Flag, ShoppingBag } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState, QueryErrorState } from "@/components/empty-state";
+import { OrderFulfillmentBlock } from "@/components/order-fulfillment-block";
 import { SkeletonLines } from "@/components/skeleton";
 import { TrustBadge } from "@/components/shell/trust-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { apiUrl, formatMoney, productImageUrl } from "@/lib/api";
+import { Label, Textarea } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
+import { apiFetch, apiUrl, formatMoney, productImageUrl } from "@/lib/api";
 import { useBuyerOrder, type OrderShopContact } from "@/hooks/use-buyer";
 
 function statusLabel(status: string) {
@@ -20,6 +24,32 @@ export default function BuyerOrderDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
   const { data: order, error, isLoading, refetch } = useBuyerOrder(id);
+  const { toast } = useToast();
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportMsg, setReportMsg] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportErr, setReportErr] = useState<string | null>(null);
+  const [reportSent, setReportSent] = useState(false);
+
+  async function submitReport(e: FormEvent) {
+    e.preventDefault();
+    setReportErr(null);
+    setReportBusy(true);
+    try {
+      await apiFetch(`/api/buyer/orders/${id}/report`, {
+        method: "POST",
+        body: JSON.stringify({ message: reportMsg.trim() }),
+      });
+      setReportSent(true);
+      setReportOpen(false);
+      setReportMsg("");
+      toast({ title: "Report sent", description: "Support will follow up.", tone: "success" });
+    } catch (err) {
+      setReportErr(err instanceof Error ? err.message : "Could not send report");
+    } finally {
+      setReportBusy(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -155,8 +185,6 @@ export default function BuyerOrderDetailPage() {
               </p>
             </div>
             {canInvoice && (
-              // TODO(Phase 1): invoice PDF is generated on payment verify.
-              // Link hits the existing endpoint; UI shows toast/error if stub missing.
               <a href={apiUrl(`/api/orders/${order.id}/invoice`)}>
                 <Button variant="outline" size="sm">
                   Download invoice
@@ -164,10 +192,75 @@ export default function BuyerOrderDetailPage() {
               </a>
             )}
           </div>
+          <div className="border-t border-border pt-4">
+            <OrderFulfillmentBlock order={order} />
+          </div>
         </CardBody>
       </Card>
 
       {order.shopContact ? <ShopContactCard contact={order.shopContact} /> : null}
+
+      <Card className="overflow-hidden rounded-2xl">
+        <CardHeader className="bg-muted/30">
+          <p className="text-sm font-semibold text-foreground">Need help?</p>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          {reportSent ? (
+            <p className="text-sm text-muted-foreground">
+              Thanks — your report was sent. Support will follow up by email.
+            </p>
+          ) : !reportOpen ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setReportOpen(true)}
+            >
+              <Flag className="mr-1.5 h-3.5 w-3.5" />
+              Report a problem
+            </Button>
+          ) : (
+            <form onSubmit={submitReport} className="max-w-lg space-y-3">
+              <Label>
+                <span>What went wrong?</span>
+                <Textarea
+                  required
+                  minLength={10}
+                  rows={4}
+                  value={reportMsg}
+                  onChange={(e) => setReportMsg(e.target.value)}
+                  placeholder="Describe the issue with this order…"
+                />
+              </Label>
+              {reportErr ? (
+                <p className="text-sm text-red-700 dark:text-red-400">{reportErr}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={reportBusy || reportMsg.trim().length < 10}
+                >
+                  {reportBusy ? "Sending…" : "Submit report"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setReportOpen(false);
+                    setReportMsg("");
+                    setReportErr(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 }

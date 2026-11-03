@@ -23,6 +23,7 @@ import {
   SellerProductFilterPanel,
   type SellerProductFilters,
 } from "@/components/seller-filters";
+import { ShopCategoriesManager } from "@/components/shop-categories-manager";
 import {
   apiFetch,
   formatMoney,
@@ -366,16 +367,21 @@ export default function SellerProductsPage() {
       </FilterDrawer>
 
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-        <aside className="hidden rounded-2xl border border-border bg-card p-4 lg:block">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Filters
-          </h2>
-          <SellerProductFilterPanel
-            filters={filters}
-            setFilter={setFilter}
-            clearFilters={() => setFilters(emptyProductFilters)}
-            categories={categories}
-          />
+        <aside className="hidden space-y-6 rounded-2xl border border-border bg-card p-4 lg:block">
+          <div>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Filters
+            </h2>
+            <SellerProductFilterPanel
+              filters={filters}
+              setFilter={setFilter}
+              clearFilters={() => setFilters(emptyProductFilters)}
+              categories={categories}
+            />
+          </div>
+          <div className="border-t border-border pt-4">
+            <ShopCategoriesManager />
+          </div>
         </aside>
 
         <div className="min-w-0 space-y-6">

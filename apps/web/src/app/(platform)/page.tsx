@@ -9,7 +9,6 @@ import {
   SectionIntro,
   type FaqItem,
 } from "@/components/marketing/blocks";
-import { CircularGallery, type GalleryItem } from "@/components/ui/circular-gallery";
 import { HowItWorksTabs } from "@/components/marketing/how-it-works-tabs";
 import {
   AboutSection,
@@ -17,8 +16,8 @@ import {
   PricingTeaser,
   TrustStrip,
 } from "@/components/marketing/home-sections";
+import { ThingsSoldSection } from "@/components/marketing/things-sold-section";
 import { ReplacesSection, ThemesShowcase } from "@/components/marketing/sections";
-import { categoryPhoto } from "@/lib/category-images";
 import {
   cheapestPaidPlan,
   getPlans,
@@ -101,22 +100,6 @@ function ctaFootnote(billingEnabled: boolean, free: boolean, fromPrice: string |
   return "Free to start.";
 }
 
-function categoryGallery(categories: Awaited<ReturnType<typeof getTopCategories>>): GalleryItem[] {
-  return categories.flatMap((c) => {
-    const photo = categoryPhoto(c.slug);
-    if (!photo) return [];
-    const examples = (c.children ?? []).slice(0, 3).map((child) => child.name);
-    return [
-      {
-        common: c.name,
-        binomial: examples.length ? examples.join(", ") : undefined,
-        href: `/explore?category=${encodeURIComponent(c.slug)}`,
-        photo: { url: photo.url, text: photo.alt, pos: photo.pos },
-      },
-    ];
-  });
-}
-
 function startOffer(billingEnabled: boolean, plans: PlanPublic[]): { value: string; label: string } {
   if (!billingEnabled || hasFreePlan(plans)) return { value: "₦0", label: "to open your shop" };
   const trialDays = plans.find((p) => p.trialDays > 0)?.trialDays ?? 0;
@@ -134,7 +117,6 @@ export default async function HomePage() {
   const [{ plans, billingEnabled }, categories] = await Promise.all([getPlans(), getTopCategories(40)]);
   const cheapest = cheapestPaidPlan(plans);
   const faq = homeFaq(billingEnabled, hasFreePlan(plans), cheapest ? nairaWhole(Number(cheapest.price)) : null);
-  const gallery = categoryGallery(categories);
 
   const structuredData = [
     {
@@ -167,19 +149,7 @@ export default async function HomePage() {
 
       <AboutSection sellerBadge={sellerBadge(billingEnabled, plans)} />
 
-      {gallery.length >= 6 ? (
-        <section className="overflow-hidden bg-[#0b0b0b] px-5 py-16 sm:px-8 sm:py-24">
-          <SectionIntro
-            inverted
-            eyebrow="On Shopmi.ng"
-            title="What people are selling"
-            body="Fashion, beauty, gadgets, food and home goods from shops across Nigeria. Tap a category to start browsing."
-          />
-          <div className="mt-6 h-[clamp(15rem,40vw,19rem)] sm:mt-10">
-            <CircularGallery items={gallery} autoRotateSpeed={0.08} maxScale={0.5} />
-          </div>
-        </section>
-      ) : null}
+      <ThingsSoldSection />
 
       <Section id="how-it-works">
         <SectionIntro eyebrow="How it works" title="Simple on both sides" />

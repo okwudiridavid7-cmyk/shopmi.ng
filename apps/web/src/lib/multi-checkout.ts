@@ -6,6 +6,18 @@
  * On success callback we remove that slug and initialize the next.
  */
 const STORAGE_KEY = "shopmi-checkout-queue";
+const DELIVERY_KEY = "shopmi-checkout-delivery";
+
+export type CheckoutDelivery = {
+  fulfillmentMethod: "delivery" | "pickup";
+  buyerPhone: string;
+  deliveryName: string;
+  deliveryAddress?: string | null;
+  deliveryCity?: string | null;
+  deliveryState?: string | null;
+  deliveryCountry?: string | null;
+  deliveryNote?: string | null;
+};
 
 export type CheckoutQueueState = {
   /** Shop slugs still awaiting payment (current in-flight is first). */
@@ -13,6 +25,27 @@ export type CheckoutQueueState = {
   paid: { slug: string; reference: string }[];
   startedAt: number;
 };
+
+export function writeCheckoutDelivery(delivery: CheckoutDelivery) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(DELIVERY_KEY, JSON.stringify(delivery));
+}
+
+export function readCheckoutDelivery(): CheckoutDelivery | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(DELIVERY_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as CheckoutDelivery;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCheckoutDelivery() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(DELIVERY_KEY);
+}
 
 export function readCheckoutQueue(): CheckoutQueueState | null {
   if (typeof window === "undefined") return null;
@@ -37,6 +70,7 @@ export function writeCheckoutQueue(state: CheckoutQueueState) {
 export function clearCheckoutQueue() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(STORAGE_KEY);
+  clearCheckoutDelivery();
 }
 
 /** Begin multi-shop checkout - pending[0] is the shop about to pay. */

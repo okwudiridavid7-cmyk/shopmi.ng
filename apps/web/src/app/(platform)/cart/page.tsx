@@ -15,7 +15,9 @@ import {
 import { PageHeader } from "@/components/dashboard/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { SkeletonLines } from "@/components/skeleton";
+import { CountryStateSelect } from "@/components/country-state-select";
 import { Button } from "@/components/ui/button";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { TextLink } from "@/components/ui/text-link";
 import {
   apiFetch,
@@ -30,7 +32,12 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { usePlatformBranding } from "@/hooks/use-branding";
 import { loginUrl } from "@/lib/auth-redirect";
-import { beginCheckoutQueue, clearCheckoutQueue } from "@/lib/multi-checkout";
+import {
+  beginCheckoutQueue,
+  clearCheckoutQueue,
+  writeCheckoutDelivery,
+  type CheckoutDelivery,
+} from "@/lib/multi-checkout";
 import { CART_IMPORT_NOTES_KEY, shopReturnKey } from "@/lib/cart-handoff";
 import { useAuthTransition } from "@/stores/auth-transition";
 import { cn } from "@/lib/utils";
@@ -56,6 +63,23 @@ function CartInner() {
   const [importNotes, setImportNotes] = useState<
     { productId: string; title?: string; reason: string }[]
   >([]);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<"delivery" | "pickup">(
+    "delivery"
+  );
+  const [deliveryName, setDeliveryName] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryCity, setDeliveryCity] = useState("");
+  const [deliveryNote, setDeliveryNote] = useState("");
+  const [countryCode, setCountryCode] = useState("NG");
+  const [stateCode, setStateCode] = useState("");
+  const [stateLabel, setStateLabel] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    if (!deliveryName && user.name) setDeliveryName(user.name);
+    if (!buyerPhone && user.phone) setBuyerPhone(user.phone);
+  }, [user, deliveryName, buyerPhone]);
 
   useEffect(() => {
     setShopReturn(shopFilter ? sessionStorage.getItem(shopReturnKey(shopFilter)) : null);
@@ -155,6 +179,46 @@ function CartInner() {
     }
   }
 
+  const selectedCarts = useMemo(() => buyable, [buyable]);
+  const allOfferPickup = useMemo(
+    () => selectedCarts.length > 0 && selectedCarts.every((c) => c.offersPickup),
+    [selectedCarts]
+  );
+
+  useEffect(() => {
+    if (!allOfferPickup && fulfillmentMethod === "pickup") {
+      setFulfillmentMethod("delivery");
+    }
+  }, [allOfferPickup, fulfillmentMethod]);
+
+  function buildDelivery(forSlugs: string[]): CheckoutDelivery | null {
+    const cartsFor = buyable.filter((c) => c.shopSlug && forSlugs.includes(c.shopSlug));
+    const pickupOk =
+      cartsFor.length > 0 && cartsFor.every((c) => c.offersPickup);
+    const method =
+      fulfillmentMethod === "pickup" && pickupOk ? "pickup" : "delivery";
+    if (!deliveryName.trim() || !buyerPhone.trim()) {
+      setError("Name and phone are required before checkout.");
+      return null;
+    }
+    if (method === "delivery") {
+      if (!deliveryAddress.trim() || !deliveryCity.trim()) {
+        setError("Street address and city are required for delivery.");
+        return null;
+      }
+    }
+    return {
+      fulfillmentMethod: method,
+      buyerPhone: buyerPhone.trim(),
+      deliveryName: deliveryName.trim(),
+      deliveryAddress: method === "delivery" ? deliveryAddress.trim() : null,
+      deliveryCity: method === "delivery" ? deliveryCity.trim() : null,
+      deliveryState: method === "delivery" ? stateLabel || stateCode || null : null,
+      deliveryCountry: method === "delivery" ? countryCode || "NG" : null,
+      deliveryNote: deliveryNote.trim() || null,
+    };
+  }
+
   async function startCheckout(shopSlugs: string[]) {
     const returnPath =
       typeof window !== "undefined"
@@ -178,6 +242,9 @@ function CartInner() {
       return;
     }
 
+    const delivery = buildDelivery(slugs);
+    if (!delivery) return;
+
     setBusy(true);
     setError(null);
     try {
@@ -186,9 +253,10 @@ function CartInner() {
         setBusy(false);
         return;
       }
+      writeCheckoutDelivery(delivery);
       const res = await apiFetch<{ authorizationUrl: string }>(
         `/api/checkout/${first}/initialize`,
-        { method: "POST" }
+        { method: "POST", body: JSON.stringify(delivery) }
       );
       window.location.href = res.authorizationUrl;
     } catch (err) {
@@ -303,6 +371,101 @@ function CartInner() {
               <p className="mb-3 text-sm text-amber-700 dark:text-amber-400">
                 Mixed currencies. Check out each shop separately.
               </p>
+            ) : null}
+
+            {buyable.length > 0 ? (
+              <div className="mb-4 space-y-3 border-b border-border pb-4">
+                <p className="text-sm font-semibold text-foreground">Delivery</p>
+                {allOfferPickup ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={fulfillmentMethod === "delivery" ? "primary" : "outline"}
+                      onClick={() => setFulfillmentMethod("delivery")}
+                    >
+                      Deliver to me
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={fulfillmentMethod === "pickup" ? "primary" : "outline"}
+                      onClick={() => setFulfillmentMethod("pickup")}
+                    >
+                      I&apos;ll pick up
+                    </Button>
+                  </div>
+                ) : null}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Label>
+                    <span>Full name</span>
+                    <Input
+                      required
+                      value={deliveryName}
+                      onChange={(e) => setDeliveryName(e.target.value)}
+                      autoComplete="name"
+                    />
+                  </Label>
+                  <Label>
+                    <span>Phone</span>
+                    <Input
+                      required
+                      type="tel"
+                      value={buyerPhone}
+                      onChange={(e) => setBuyerPhone(e.target.value)}
+                      placeholder="+234…"
+                      autoComplete="tel"
+                    />
+                  </Label>
+                </div>
+                {fulfillmentMethod === "delivery" ? (
+                  <>
+                    <Label>
+                      <span>Street address</span>
+                      <Input
+                        required
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        autoComplete="street-address"
+                      />
+                    </Label>
+                    <Label>
+                      <span>City</span>
+                      <Input
+                        required
+                        value={deliveryCity}
+                        onChange={(e) => setDeliveryCity(e.target.value)}
+                        autoComplete="address-level2"
+                      />
+                    </Label>
+                    <CountryStateSelect
+                      idPrefix="cart-delivery"
+                      countryCode={countryCode}
+                      stateCode={stateCode}
+                      onChange={(v) => {
+                        setCountryCode(v.countryCode);
+                        setStateCode(v.stateCode);
+                        setStateLabel(v.label || v.stateCode);
+                      }}
+                    />
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    The seller will confirm the pickup location after payment.
+                  </p>
+                )}
+                <Label>
+                  <span>
+                    Note <span className="text-muted-foreground">(optional)</span>
+                  </span>
+                  <Textarea
+                    value={deliveryNote}
+                    onChange={(e) => setDeliveryNote(e.target.value)}
+                    rows={2}
+                    placeholder="Landmark, preferred time…"
+                  />
+                </Label>
+              </div>
             ) : null}
 
             {grandSubtotal ? (

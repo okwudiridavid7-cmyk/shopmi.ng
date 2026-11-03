@@ -41,7 +41,12 @@ function LoginForm() {
   const returnTo =
     safeReturnTo(searchParams.get("returnTo")) ??
     safeReturnTo(searchParams.get("next"));
+  const prefillEmail = (searchParams.get("email") ?? "").trim();
   const googleError = GOOGLE_ERRORS[searchParams.get("error") ?? ""] ?? null;
+
+  useEffect(() => {
+    if (prefillEmail) setEmailMode(true);
+  }, [prefillEmail]);
 
   // Already signed in → leave /login for the dashboard (or returnTo).
   useEffect(() => {
@@ -116,6 +121,7 @@ function LoginForm() {
                 autoComplete="email"
                 className="h-12"
                 placeholder="you@example.com"
+                defaultValue={prefillEmail}
               />
             </Label>
             <Label>

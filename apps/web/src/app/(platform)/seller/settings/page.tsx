@@ -148,6 +148,25 @@ export default function SellerSettingsPage() {
 
   const members: TeamMemberPublic[] = teamQ.data?.members ?? [];
   const invites = teamQ.data?.invites ?? [];
+  const isOwner = shopQ.data?.viewerRole === "owner";
+
+  async function changeRole(id: string, role: "manager" | "staff") {
+    try {
+      await apiFetch(`/api/seller/team/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      });
+      await qc.invalidateQueries({ queryKey: ["seller", "team"] });
+      toast({ title: "Role updated", tone: "success" });
+    } catch (err) {
+      toast({
+        title: "Couldn't update role",
+        description: err instanceof Error ? err.message : undefined,
+        tone: "danger",
+      });
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -263,7 +282,7 @@ export default function SellerSettingsPage() {
                   key={m.id}
                   className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <p className="font-medium text-foreground">
                       {m.user.name || m.user.email}
                     </p>
@@ -272,15 +291,31 @@ export default function SellerSettingsPage() {
                       {m.user.email !== m.user.name ? ` · ${m.user.email}` : ""}
                     </p>
                   </div>
-                  {m.role !== "owner" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void removeMember(m.id)}
-                    >
-                      Remove
-                    </Button>
-                  )}
+                  {isOwner && m.role !== "owner" ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select
+                        icon={<Users />}
+                        value={m.role}
+                        className="w-[8.5rem]"
+                        onChange={(e) =>
+                          void changeRole(
+                            m.id,
+                            e.target.value as "manager" | "staff"
+                          )
+                        }
+                      >
+                        <option value="staff">Staff</option>
+                        <option value="manager">Manager</option>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void removeMember(m.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -302,50 +337,62 @@ export default function SellerSettingsPage() {
                         {new Date(i.expiresAt).toLocaleDateString()}
                       </p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => void cancelInvite(i.id)}>
-                      Cancel
-                    </Button>
+                    {isOwner ? (
+                      <Button variant="ghost" size="sm" onClick={() => void cancelInvite(i.id)}>
+                        Cancel
+                      </Button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          <form onSubmit={invite} className="max-w-md space-y-4">
-            <p className="text-sm font-semibold text-foreground">Invite admin</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Label>
-                <span>Email</span>
-                <InputWithIcon
-                  icon={<Mail />}
-                  type="email"
-                  required
-                  placeholder="teammate@example.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                />
-              </Label>
-              <Label>
-                <span>Role</span>
-                <Select
-                  icon={<Users />}
-                  value={inviteRole}
-                  onChange={(e) =>
-                    setInviteRole(e.target.value as "manager" | "staff")
-                  }
-                >
-                  <option value="staff">Staff</option>
-                  <option value="manager">Manager</option>
-                </Select>
-              </Label>
-            </div>
-            {teamErr && (
-              <p className="text-sm text-red-700 dark:text-red-400">{teamErr}</p>
-            )}
-            <Button type="submit" variant="outline">
-              Send invite
-            </Button>
-          </form>
+          {isOwner ? (
+            <form onSubmit={invite} className="max-w-md space-y-4">
+              <p className="text-sm font-semibold text-foreground">Invite admin</p>
+              <p className="text-xs text-muted-foreground">
+                They must sign up (or already have an account) with this exact
+                email address to accept the invite.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Label>
+                  <span>Email</span>
+                  <InputWithIcon
+                    icon={<Mail />}
+                    type="email"
+                    required
+                    placeholder="teammate@example.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                </Label>
+                <Label>
+                  <span>Role</span>
+                  <Select
+                    icon={<Users />}
+                    value={inviteRole}
+                    onChange={(e) =>
+                      setInviteRole(e.target.value as "manager" | "staff")
+                    }
+                  >
+                    <option value="staff">Staff</option>
+                    <option value="manager">Manager</option>
+                  </Select>
+                </Label>
+              </div>
+              {teamErr && (
+                <p className="text-sm text-red-700 dark:text-red-400">{teamErr}</p>
+              )}
+              <Button type="submit" variant="outline">
+                Send invite
+              </Button>
+            </form>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Only the shop owner can invite teammates or change roles.
+            </p>
+          )}
         </CardBody>
       </Card>
 

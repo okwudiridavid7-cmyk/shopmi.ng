@@ -836,3 +836,49 @@ export function toOwnedDomain(
     problem: row.status === "failed" ? "We couldn't complete this registration. Contact support and we'll sort it out." : null,
   };
 }
+
+/**
+ * Re-verify or expire domain checkouts older than an hour (same pattern as plans/orders).
+ * Recovers lost webhooks; abandons never-paid pending rows.
+ */
+export async function expireStaleDomainPayments(): Promise<{ expired: number; recovered: number }> {
+  const stale = await prisma.domainPayment.findMany({
+    where: {
+      status: { in: ["pending", "expired"] },
+      createdAt: { lt: new Date(Date.now() - 60 * 60 * 1000) },
+    },
+    select: { id: true, paystackReference: true, status: true },
+    take: 50,
+  });
+  let expired = 0;
+  let recovered = 0;
+  for (const p of stale) {
+    if (paystackConfigured() && p.paystackReference) {
+      try {
+        const charge = await verifyTransaction(p.paystackReference);
+        if (charge?.status === "success") {
+          const ok = await fulfillDomainPayment(
+            p.paystackReference,
+            charge.amount,
+            charge.currency
+          );
+          if (ok) recovered += 1;
+          continue;
+        }
+        if (charge && ["ongoing", "pending", "processing", "queued"].includes(charge.status)) {
+          continue;
+        }
+      } catch (err) {
+        if (!(err instanceof PaystackError) || err.status !== 400) continue;
+      }
+    }
+    if (p.status === "pending") {
+      const res = await prisma.domainPayment.updateMany({
+        where: { id: p.id, status: "pending" },
+        data: { status: "expired" },
+      });
+      expired += res.count;
+    }
+  }
+  return { expired, recovered };
+}

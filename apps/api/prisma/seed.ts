@@ -145,6 +145,8 @@ async function main() {
   }
 
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+  const resetPassword =
+    (process.env.SUPER_ADMIN_RESET_PASSWORD ?? "").toLowerCase() === "true";
 
   const rawAdminName =
     process.env.SUPER_ADMIN_NAME?.trim() ||
@@ -160,10 +162,11 @@ async function main() {
       passwordHash,
       role: "super_admin",
       name: adminDisplayName,
+      emailVerifiedAt: new Date(),
     },
     update: {
-      passwordHash,
       role: "super_admin",
+      ...(resetPassword ? { passwordHash } : {}),
     },
   });
 

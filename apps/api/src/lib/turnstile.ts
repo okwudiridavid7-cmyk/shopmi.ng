@@ -98,12 +98,14 @@ export async function verifyTurnstileToken(
 }
 
 /**
- * Sign-in, signup and password reset use Turnstile once both keys are configured.
- * Unlike the contact form this doesn't fail closed, so a missing key can't lock
- * every user out of their account.
+ * Sign-in, signup and password reset use Turnstile in production (fail-closed,
+ * same as contact forms). Outside production, captcha is opt-in when both keys
+ * are set. Set TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY before go-live.
  */
 export function isAuthCaptchaEnabled(): boolean {
   if (env.contactCaptchaBypass && !env.isProd) return false;
+  // Production: fail closed like contact forms.
+  if (env.isProd) return true;
   return Boolean(env.turnstileSecretKey && env.turnstileSiteKey);
 }
 

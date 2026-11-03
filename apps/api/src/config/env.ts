@@ -64,6 +64,12 @@ export const env = {
   whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
   whatsappGraphVersion: process.env.WHATSAPP_GRAPH_VERSION || "v21.0",
   whatsappTemplateNewOrder: process.env.WHATSAPP_TEMPLATE_NEW_ORDER || "new_order",
+  /** Authentication template for phone OTP (body {{1}} = code). */
+  whatsappTemplatePhoneOtp: process.env.WHATSAPP_TEMPLATE_PHONE_OTP || "phone_otp",
+  /** Utility template for buyer order updates (status, shop, detail, reference). */
+  whatsappTemplateOrderUpdate: process.env.WHATSAPP_TEMPLATE_ORDER_UPDATE || "order_update",
+  /** Utility template for generic reminders (title, body, action hint). */
+  whatsappTemplateReminder: process.env.WHATSAPP_TEMPLATE_REMINDER || "reminder",
   whatsappTemplateLang: process.env.WHATSAPP_TEMPLATE_LANG || "en",
   whatsappAppSecret: process.env.WHATSAPP_APP_SECRET ?? "",
   whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "",

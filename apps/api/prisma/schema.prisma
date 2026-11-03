@@ -147,15 +147,25 @@ model User {
   name                     String?
   phone                    String?
   whatsappNumber           String?   @map("whatsapp_number")
-  /// Buyer prefs e.g. { orderEmails: true, whatsappOrders: false }
+  /// Buyer prefs e.g. { orderEmails: true, whatsappOrders: true }. Seller shop alerts live on Tenant.notificationSettings.
   notificationPrefs        Json?     @map("notification_prefs")
   passwordResetToken       String?   @unique @map("password_reset_token")
   passwordResetExpires     DateTime? @map("password_reset_expires")
   emailVerifiedAt          DateTime? @map("email_verified_at")
+  /// Set when the user confirms their mobile via WhatsApp OTP.
+  phoneVerifiedAt          DateTime? @map("phone_verified_at")
+  phoneOtpHash             String?   @map("phone_otp_hash")
+  phoneOtpExpires          DateTime? @map("phone_otp_expires")
   /// Access tokens issued before this instant are rejected (password change/reset, token reuse).
   sessionsRevokedAt        DateTime? @map("sessions_revoked_at")
   emailVerificationToken   String?   @unique @map("email_verification_token")
   emailVerificationExpires DateTime? @map("email_verification_expires")
+  /// Buyer signup location (ISO country / state + display label).
+  location                 String?
+  countryCode              String?   @map("country_code")
+  stateCode                String?   @map("state_code")
+  /// When set, user has requested account deletion (NDPR). Admins process anonymization.
+  deletionRequestAt        DateTime? @map("deletion_request_at")
   createdAt                DateTime  @default(now()) @map("created_at")
 
   ownedTenants          Tenant[]              @relation("TenantOwner")
@@ -428,18 +438,32 @@ model Order {
   flag              String?
   /// Why a pending order did not complete, e.g. expired | declined.
   failureReason     String?     @map("failure_reason")
+  /// delivery | pickup
+  fulfillmentMethod String?     @map("fulfillment_method")
+  buyerPhone        String?     @map("buyer_phone")
+  deliveryName      String?     @map("delivery_name")
+  deliveryAddress   String?     @map("delivery_address") @db.Text
+  deliveryCity      String?     @map("delivery_city")
+  deliveryState     String?     @map("delivery_state")
+  deliveryCountry   String?     @map("delivery_country")
+  deliveryNote      String?     @map("delivery_note") @db.Text
+  trackingNumber    String?     @map("tracking_number")
+  trackingCarrier   String?     @map("tracking_carrier")
+  shippedAt         DateTime?   @map("shipped_at")
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  buyer         User                @relation("BuyerOrders", fields: [buyerId], references: [id])
-  items         OrderItem[]
-  ledgerEntries SellerLedgerEntry[]
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  buyer            User                @relation("BuyerOrders", fields: [buyerId], references: [id])
+  items            OrderItem[]
+  ledgerEntries    SellerLedgerEntry[]
+  contactInquiries ContactInquiry[]
 
   @@index([tenantId])
   @@index([buyerId])
   @@index([status])
   @@index([status, createdAt])
+  @@index([flag])
   @@map("orders")
 }
 
@@ -651,16 +675,20 @@ model ContactInquiry {
   confirmTokenExpires DateTime?            @map("confirm_token_expires")
   /// Soft retention deadline (REM-16). Null on legacy rows → purge uses createdAt + retention.
   expiresAt           DateTime?            @map("expires_at")
+  /// Optional linked order when buyer reports a problem from order detail.
+  orderId             String?              @map("order_id")
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
 
   tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  order  Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([tenantId, createdAt])
   @@index([status, createdAt])
   @@index([expiresAt])
   @@index([email])
+  @@index([orderId])
   @@map("contact_inquiries")
 }
 

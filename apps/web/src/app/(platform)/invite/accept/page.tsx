@@ -88,16 +88,25 @@ function AcceptInner() {
           </Button>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-3">
-          <a className={buttonClasses("primary")} href={`/login?returnTo=${encodeURIComponent(here)}`}>
-            Sign in to accept
-          </a>
-          <a
-            className={buttonClasses("outline")}
-            href={`/signup/account?returnTo=${encodeURIComponent(here)}`}
-          >
-            Create an account
-          </a>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Sign up or sign in with <span className="font-medium text-foreground">{preview.email}</span>{" "}
+            — the invite only works for that exact address.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <a
+              className={buttonClasses("primary")}
+              href={`/login?email=${encodeURIComponent(preview.email)}&returnTo=${encodeURIComponent(here)}`}
+            >
+              Sign in to accept
+            </a>
+            <a
+              className={buttonClasses("outline")}
+              href={`/signup/account?email=${encodeURIComponent(preview.email)}&returnTo=${encodeURIComponent(here)}`}
+            >
+              Create an account
+            </a>
+          </div>
         </div>
       )}
     </div>
