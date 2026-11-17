@@ -22,6 +22,7 @@ import type {
 } from "topojson-specification";
 import type { GeoPermissibleObjects } from "d3";
 import { CONTACT_PROMISES, CONTACT_INTENTS, CONTACT_TOPICS } from "@/lib/contact-copy";
+import { TurnstileField, resetTurnstile } from "@/components/turnstile-field";
 
 const smoothEase = [0.25, 0.1, 0.25, 1] as const;
 
@@ -689,6 +690,7 @@ interface ContactWithGlobeProps {
   description?: string;
   className?: string;
   supportEmail?: string;
+  turnstileSiteKey?: string | null;
   phone?: string | null;
   promises?: readonly string[];
   topics?: readonly string[];
@@ -700,6 +702,7 @@ interface ContactWithGlobeProps {
     message: string;
     topic: string;
     intent: string;
+    captchaToken: string | null;
   }) => Promise<void>;
   busy?: boolean;
   error?: string | null;
@@ -712,6 +715,7 @@ export default function ContactWithGlobe({
   description,
   className,
   supportEmail = "support@shopmi.ng",
+  turnstileSiteKey = null,
   phone = null,
   promises = CONTACT_PROMISES,
   topics = CONTACT_TOPICS,
@@ -730,6 +734,10 @@ export default function ContactWithGlobe({
   const [intent, setIntent] = useState<string>(
     intents[1] ?? intents[0] ?? "Opening a shop"
   );
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const onCaptchaToken = useCallback((token: string | null) => {
+    setCaptchaToken(token);
+  }, []);
 
   const contactLinks = [
     {
@@ -760,7 +768,15 @@ export default function ContactWithGlobe({
     setEmail("");
     setMessage("");
     formRef.current?.reset();
+    setCaptchaToken(null);
+    resetTurnstile();
   }, [success]);
+
+  useEffect(() => {
+    if (!error) return;
+    setCaptchaToken(null);
+    resetTurnstile();
+  }, [error]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -777,6 +793,7 @@ export default function ContactWithGlobe({
       message: message.trim(),
       topic,
       intent,
+      captchaToken,
     };
 
     if (!onSubmit) return;
@@ -1066,6 +1083,11 @@ export default function ContactWithGlobe({
                 />
               </div>
 
+              <TurnstileField
+                siteKey={turnstileSiteKey}
+                onToken={onCaptchaToken}
+              />
+
               {error ? (
                 <p className="text-sm text-danger" role="alert">
                   {error}
@@ -1081,7 +1103,7 @@ export default function ContactWithGlobe({
                 type="submit"
                 variant="primary"
                 size="lg"
-                disabled={busy}
+                disabled={busy || (Boolean(turnstileSiteKey) && !captchaToken)}
                 className="group h-11 w-fit rounded-xl px-8 font-semibold"
               >
                 {busy ? "Sending…" : "Submit"}

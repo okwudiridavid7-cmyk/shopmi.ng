@@ -38,6 +38,7 @@ export default function ContactPage() {
       message: string;
       topic: string;
       intent: string;
+      captchaToken: string | null;
     }) => {
       setBusy(true);
       setMsg(null);
@@ -59,6 +60,7 @@ export default function ContactPage() {
             message: data.company.trim()
               ? `${data.message}\n\nCompany: ${data.company.trim()}`
               : data.message,
+            captchaToken: data.captchaToken || undefined,
           }),
         });
         setMsg(CONTACT_SUCCESS_MESSAGE);
@@ -80,6 +82,7 @@ export default function ContactPage() {
       title="How can we help?"
       subtitle="Contact"
       supportEmail={supportEmail}
+      turnstileSiteKey={b?.turnstileSiteKey ?? null}
       promises={CONTACT_PROMISES}
       topics={CONTACT_TOPICS}
       intents={CONTACT_INTENTS}
