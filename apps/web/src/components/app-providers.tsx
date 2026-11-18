@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { AuthSessionBridge } from "@/components/auth-session-bridge";
 import { CookieConsentProvider } from "@/components/cookie-consent";
-import { NavigationProgress } from "@/components/navigation-progress";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -32,7 +31,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <NavigationProgress />
       <CookieConsentProvider>
         <AuthSessionBridge>{children}</AuthSessionBridge>
       </CookieConsentProvider>

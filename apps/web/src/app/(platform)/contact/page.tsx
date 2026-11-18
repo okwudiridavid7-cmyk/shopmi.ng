@@ -1,7 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
+import ContactWithGlobe from "@/components/ui/contact-with-globe";
+import { useToast } from "@/components/ui/toast";
 import { apiFetch } from "@/lib/api";
 import { usePlatformBranding } from "@/hooks/use-branding";
 import {
@@ -11,24 +12,11 @@ import {
   CONTACT_TOPICS,
 } from "@/lib/contact-copy";
 
-const ContactWithGlobe = dynamic(
-  () => import("@/components/ui/contact-with-globe"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex min-h-[28rem] items-center justify-center bg-background px-4 py-20 text-sm text-muted-foreground">
-        Loading contact…
-      </div>
-    ),
-  }
-);
-
 export default function ContactPage() {
   const b = usePlatformBranding().data;
   const supportEmail = b?.supportEmail ?? "support@shopmi.ng";
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const onSubmit = useCallback(
     async (data: {
@@ -41,8 +29,6 @@ export default function ContactPage() {
       captchaToken: string | null;
     }) => {
       setBusy(true);
-      setMsg(null);
-      setErr(null);
       try {
         const subject = `${data.topic} · ${data.intent}`;
         await apiFetch("/api/contact", {
@@ -63,18 +49,14 @@ export default function ContactPage() {
             captchaToken: data.captchaToken || undefined,
           }),
         });
-        setMsg(CONTACT_SUCCESS_MESSAGE);
+        toast({ title: "Message sent", description: CONTACT_SUCCESS_MESSAGE, tone: "success" });
       } catch (error) {
-        setErr(
-          error instanceof Error
-            ? error.message
-            : "Couldn’t send that just now. Try again in a moment."
-        );
+        toast({ title: "Message not sent", description: error instanceof Error ? error.message : "Please try again in a moment.", tone: "danger" });
       } finally {
         setBusy(false);
       }
     },
-    []
+    [toast]
   );
 
   return (
@@ -88,8 +70,6 @@ export default function ContactPage() {
       intents={CONTACT_INTENTS}
       onSubmit={onSubmit}
       busy={busy}
-      error={err}
-      success={msg}
     />
   );
 }

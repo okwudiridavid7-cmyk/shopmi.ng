@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { uploadSellerFile } from "@/hooks/use-seller";
-import { useAuthCaptcha } from "@/components/auth-captcha";
+import { useAuthHoneypot } from "@/components/auth-honeypot";
 import { slugifyShopName } from "@/lib/slugify";
 import { markWalkthroughPending } from "@/components/walkthrough";
 import { CategoryPicker } from "@/components/category-picker";
@@ -112,7 +112,7 @@ function OnboardingInner() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const captcha = useAuthCaptcha();
+  const honeypot = useAuthHoneypot();
   const [done, setDone] = useState(false);
   const [congrats, setCongrats] = useState(false);
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
@@ -236,24 +236,18 @@ function OnboardingInner() {
     });
 
     apiFetch<{ user: { email: string; role: string } }>("/api/auth/me")
-      .then(async (res) => {
-        if (res.user.role !== "buyer") {
-          const hasShop = await apiFetch("/api/seller/shop")
-            .then(() => true)
-            .catch(() => false);
-          if (hasShop) {
-            window.location.replace("/seller");
-            return;
-          }
+      .then(async () => {
+        const hasShop = await apiFetch("/api/seller/shop")
+          .then(() => true)
+          .catch(() => false);
+        if (hasShop) {
+          window.location.replace("/seller");
+          return;
         }
-        setAlreadyAuthed(true);
-        setAccount((a) => ({ ...a, email: res.user.email }));
-        setStep(0);
-        setAuthChecked(true);
+        window.location.replace("/seller");
       })
       .catch(() => {
-        setAlreadyAuthed(false);
-        setAuthChecked(true);
+        window.location.replace("/signup/account?role=seller");
       });
   }, []);
 
@@ -319,7 +313,7 @@ function OnboardingInner() {
           ...(alreadyAuthed
             ? {}
             : {
-                captchaToken: captcha.token,
+                faxNumber: honeypot.value,
                 account: {
                   name: account.name.trim() || undefined,
                   email: account.email,
@@ -364,7 +358,6 @@ function OnboardingInner() {
       setDone(true);
       setCongrats(true);
     } catch (err) {
-      captcha.reset();
       setError(err instanceof Error ? err.message : "Onboarding failed");
     } finally {
       setBusy(false);
@@ -433,9 +426,7 @@ function OnboardingInner() {
     }
   }
 
-  const finalStep =
-    currentStepId === "product" || (currentStepId === "shop" && !includeProduct);
-  const needsCaptcha = !alreadyAuthed;
+  const needsHoneypot = !alreadyAuthed;
 
   const titles: Record<string, string> = {
     account: "Create your seller account",
@@ -475,7 +466,7 @@ function OnboardingInner() {
               ? "Create shop & product"
               : undefined
         }
-        continueDisabled={busy || congrats || (finalStep && needsCaptcha && captcha.waiting)}
+        continueDisabled={busy || congrats}
         continueBusy={busy}
         complete={done && !congrats}
         completeTitle="Shop ready"
@@ -487,7 +478,7 @@ function OnboardingInner() {
             {error}
           </p>
         ) : null}
-        {finalStep && needsCaptcha ? captcha.field : null}
+        {needsHoneypot ? honeypot.field : null}
 
         {currentStepId === "account" && !authChecked && (
           <div className="h-64 animate-pulse rounded-2xl bg-muted" aria-hidden />

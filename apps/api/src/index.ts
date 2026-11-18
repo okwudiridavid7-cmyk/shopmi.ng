@@ -42,6 +42,7 @@ import { adminRouter } from "./routes/admin";
 import { adminDomainsRouter, sellerDomainStoreRouter } from "./routes/domainStore";
 import { contactRouter } from "./routes/contact";
 import { plansRouter } from "./routes/plans";
+import { notificationsRouter } from "./routes/notifications";
 import {
   sellerTeamRouter,
   sellerDomainRouter,
@@ -142,6 +143,7 @@ app.use("/api/checkout", checkoutRouter);
 app.use("/api/buyer", buyerRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/og", ogRouter);
+app.use("/api/notifications", notificationsRouter);
 
 app.use(
   (

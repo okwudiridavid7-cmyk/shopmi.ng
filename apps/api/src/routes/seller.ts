@@ -61,6 +61,16 @@ const productSchema = z.object({
 
 const patchSchema = productSchema.partial();
 
+const setupAnswersSchema = z.object({
+  categoryFocus: z.string().max(80).optional(),
+  sellingExperience: z.string().max(40).optional(),
+  fulfillmentMethod: z.string().max(40).optional(),
+  weeklyOrders: z.string().max(40).optional(),
+  currencies: z.array(z.string().length(3)).max(8).optional(),
+  staffCount: z.string().max(40).optional(),
+  physicalStores: z.string().max(40).optional(),
+});
+
 function normalizeProductImages(
   images: z.infer<typeof productSchema>["images"]
 ) {
@@ -176,6 +186,15 @@ sellerRouter.get("/products", async (req, res, next) => {
 
 sellerRouter.post("/products", async (req, res, next) => {
   try {
+    const setup = await prisma.tenant.findUnique({ where: { id: req.tenant!.tenantId } });
+    if (!setup) return res.status(404).json({ error: "Shop not found" });
+    const theme = themeFromJson(setup.themeSettings);
+    const answers = (setup.onboardingAnswers as Record<string, unknown> | null) ?? {};
+    const missing: string[] = [];
+    if (!(setup.location && setup.countryCode && setup.stateCode && setup.email && setup.phone && typeof theme.shopDescription === "string" && theme.shopDescription.trim().length >= 20)) missing.push("Shop details");
+    if (!(answers.sellingExperience && answers.fulfillmentMethod && answers.weeklyOrders && answers.staffCount && answers.physicalStores && Array.isArray(answers.currencies) && answers.currencies.length)) missing.push("Business profile");
+    if (!(theme.logoUrl || theme.logoRectUrl)) missing.push("Shop logo");
+    if (missing.length) return res.status(409).json({ error: `Complete ${missing.join(", ")} before adding your first product.`, code: "SELLER_SETUP_INCOMPLETE", missing });
     const body = productSchema.parse(req.body);
     const refError = await invalidProductRef(req.tenant!.tenantId, body);
     if (refError) return res.status(400).json({ error: refError });
@@ -227,6 +246,41 @@ sellerRouter.post("/products", async (req, res, next) => {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: "Validation failed", details: err.flatten() });
     }
+    return next(err);
+  }
+});
+
+sellerRouter.get("/setup", async (req, res, next) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenant!.tenantId } });
+    if (!tenant) return res.status(404).json({ error: "Shop not found" });
+    const theme = themeFromJson(tenant.themeSettings);
+    const answers = (tenant.onboardingAnswers as Record<string, unknown> | null) ?? {};
+    const products = await prisma.product.count({ where: { tenantId: tenant.id } });
+    const profile = !!(tenant.location && tenant.countryCode && tenant.stateCode && tenant.email && tenant.phone && typeof theme.shopDescription === "string" && theme.shopDescription.trim().length >= 20);
+    const business = !!(answers.sellingExperience && answers.fulfillmentMethod && answers.weeklyOrders && answers.staffCount && answers.physicalStores && Array.isArray(answers.currencies) && answers.currencies.length);
+    const branding = !!(theme.logoUrl || theme.logoRectUrl);
+    const tasks = [
+      { id: "shop", title: "Complete shop details", description: "Add a description, contact details, and your business location.", href: "/seller/settings#shop", complete: profile, requiredBeforeProduct: true },
+      { id: "business", title: "Tell us about your business", description: "Set your selling experience, order volume, fulfillment, and team size.", href: "/seller/setup", complete: business, requiredBeforeProduct: true },
+      { id: "branding", title: "Add your shop logo", description: "Give your storefront a recognizable identity.", href: "/seller/website?tab=branding", complete: branding, requiredBeforeProduct: true },
+      { id: "product", title: "Add your first product", description: "List the first item you want customers to discover.", href: "/seller/products", complete: products > 0, requiredBeforeProduct: false },
+    ];
+    const completed = tasks.filter((task) => task.complete).length;
+    return res.json({ tasks, progress: Math.round((completed / tasks.length) * 100), answers });
+  } catch (err) { return next(err); }
+});
+
+sellerRouter.patch("/setup", requireTenantRoles("owner", "manager"), async (req, res, next) => {
+  try {
+    const answers = setupAnswersSchema.parse(req.body);
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.tenant!.tenantId }, select: { onboardingAnswers: true } });
+    if (!tenant) return res.status(404).json({ error: "Shop not found" });
+    const current = (tenant.onboardingAnswers as Record<string, unknown> | null) ?? {};
+    const updated = await prisma.tenant.update({ where: { id: req.tenant!.tenantId }, data: { onboardingAnswers: { ...current, ...answers } as Prisma.InputJsonValue } });
+    return res.json({ answers: updated.onboardingAnswers });
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: "Check your business profile details.", details: err.flatten() });
     return next(err);
   }
 });
@@ -463,24 +517,28 @@ sellerRouter.patch("/orders/:id", async (req, res, next) => {
 sellerRouter.get("/stats", async (req, res, next) => {
   try {
     const tenantId = req.tenant!.tenantId;
-    const [productCount, orderCount, paid] = await Promise.all([
+    const [productCount, orderCount, paidTotals, paidCurrency] = await Promise.all([
       prisma.product.count({ where: tenantWhere(req.tenant!) }),
       prisma.order.count({ where: tenantWhere(req.tenant!) }),
-      prisma.order.findMany({
+      prisma.order.aggregate({
         where: {
           tenantId,
           status: { in: ["paid", "fulfilled"] },
         },
-        select: { total: true, currency: true },
+        _sum: { total: true },
+      }),
+      prisma.order.findFirst({
+        where: { tenantId, status: { in: ["paid", "fulfilled"] } },
+        select: { currency: true },
       }),
     ]);
-    const salesTotal = paid.reduce((sum, o) => sum + Number(o.total), 0);
+    const salesTotal = Number(paidTotals._sum.total ?? 0);
     return res.json({
       stats: {
         productCount,
         orderCount,
         salesTotal,
-        currency: paid[0]?.currency ?? "NGN",
+        currency: paidCurrency?.currency ?? "NGN",
         tenantId,
       },
     });

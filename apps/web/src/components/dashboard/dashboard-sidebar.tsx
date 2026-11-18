@@ -81,8 +81,8 @@ export function DashboardSidebar({
     <div className="flex h-full min-h-0 flex-col">
       {mode === "seller" ? (
         <div
-          className={`shrink-0 border-b border-ink-border ${
-            isCollapsed ? "px-2 py-3" : "px-4 py-4"
+          className={`flex h-16 shrink-0 items-center border-b border-ink-border ${
+            isCollapsed ? "justify-center px-2" : "px-4"
           }`}
         >
           {isCollapsed ? (
@@ -121,6 +121,15 @@ export function DashboardSidebar({
         </div>
       ) : null}
 
+      {mode !== "seller" ? (
+        <div className={`flex h-16 shrink-0 items-center border-b border-ink-border ${isCollapsed ? "justify-center px-2" : "px-4"}`}>
+          {isCollapsed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/favicon.png" alt="Shopmi.ng" className="h-8 w-8 object-contain" />
+          ) : <BrandMark href="/" inverted className="[&_img]:h-7" />}
+        </div>
+      ) : null}
+
       <div className="shrink-0 border-b border-ink-border p-3">
         <button
           type="button"
@@ -153,6 +162,7 @@ export function DashboardSidebar({
       <nav
         className="min-h-0 flex-1 overflow-y-auto p-2"
         aria-label="Dashboard"
+        data-tour={mode === "buyer" ? "buyer-nav" : mode === "seller" ? "seller-nav" : undefined}
       >
         <div className="space-y-4">
           {groups.map((group) => (

@@ -161,10 +161,22 @@ export function useSellerAnalytics(
   });
 }
 
-export function useSellerPlan() {
+export function useSellerTodaySummary() {
+  return useQuery({
+    queryKey: [...queryKeys.seller.analytics, "today-summary"] as const,
+    queryFn: async () => {
+      const res = await apiFetch<{ summary: { revenue: number; orderCount: number; pendingOrderCount: number; currency: string } }>("/api/seller/analytics/today-summary");
+      return res.summary;
+    },
+    refetchInterval: 4 * 60 * 1000,
+  });
+}
+
+export function useSellerPlan(enabled = true) {
   return useQuery({
     queryKey: ["seller", "plan"] as const,
     queryFn: async () => apiFetch<SellerPlanInfo>("/api/seller/plan"),
+    enabled,
     retry: (count, err) => {
       if (err instanceof ApiClientError && err.status === 403) return false;
       return count < 2;

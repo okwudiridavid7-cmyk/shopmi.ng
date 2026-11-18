@@ -29,12 +29,16 @@ export function AuthGuard({ children, roles, fallback }: Props) {
       router.replace(loginUrl(pathname));
       return;
     }
+    if (user && !user.emailVerifiedAt) {
+      router.replace(`/verify-email?email=${encodeURIComponent(user.email)}&next=${encodeURIComponent(pathname)}`);
+      return;
+    }
     if (roles?.length && user && !roles.includes(user.role)) {
       router.replace("/");
     }
   }, [loading, isAuthenticated, pathname, router, roles, user]);
 
-  if ((loading || !isAuthenticated) && fallback) {
+  if ((loading || !isAuthenticated || (user && !user.emailVerifiedAt)) && fallback) {
     return <>{fallback}</>;
   }
 
@@ -54,6 +58,8 @@ export function AuthGuard({ children, roles, fallback }: Props) {
       </div>
     );
   }
+
+  if (user && !user.emailVerifiedAt) return null;
 
   if (roles?.length && user && !roles.includes(user.role)) {
     return null;

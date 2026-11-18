@@ -11,9 +11,9 @@ import { hashPassword } from "../auth/password";
 import { setAuthCookies } from "../auth/cookies";
 import { issueRefreshToken, signAccessToken } from "../auth/tokens";
 import { isReservedSlug } from "../lib/slugify";
-import { toProductPublic, toTenantPublic, toUserPublic } from "../lib/serialize";
-import { imageRef, ownMediaUrl } from "../lib/uploads";
-import { CaptchaError, verifyAuthCaptcha } from "../lib/turnstile";
+import { toTenantPublic, toUserPublic } from "../lib/serialize";
+import { ownMediaUrl } from "../lib/uploads";
+import { isHoneypotFilled } from "../lib/honeypot";
 
 const onboardingLimiter = redisRateLimit({
   name: "onboarding",
@@ -55,25 +55,6 @@ const onboardingSchema = z.object({
       physicalStores: z.string().optional(),
     })
     .default({}),
-  firstProduct: z
-    .object({
-      title: z.string().min(2).max(200),
-      description: z.string().min(1).max(10_000),
-      price: z.coerce.number().positive(),
-      compareAtPrice: z.coerce.number().positive().optional(),
-      currency: z.string().length(3).default("NGN"),
-      stockQty: z.coerce.number().int().min(0).default(1),
-      categoryId: z.string().optional(),
-      shopCategoryId: z.string().optional(),
-      brandName: z.string().max(120).optional(),
-      brandId: z.string().optional(),
-      location: z.string().max(120).optional(),
-      countryCode: z.string().length(2).optional(),
-      stateCode: z.string().max(10).optional(),
-      images: z.array(imageRef).max(10).default([]),
-      status: z.enum(["draft", "active"]).default("active"),
-    })
-    .optional(),
 });
 
 export const onboardingRouter = Router();
@@ -89,29 +70,17 @@ onboardingRouter.post(
   optionalAuth,
   async (req, res, next) => {
     try {
+      if (isHoneypotFilled(req.body?.faxNumber)) {
+        return res.status(400).json({ error: "Unable to process request." });
+      }
+      if (req.body?.firstProduct) {
+        return res.status(409).json({ error: "Finish your shop setup in the seller dashboard before adding your first product.", code: "SELLER_SETUP_INCOMPLETE" });
+      }
       const body = onboardingSchema.parse(req.body);
       // A signed-in user always onboards as themselves.
       if (req.user) delete body.account;
       if (!req.user) {
-        if (!body.account) {
-          return res.status(400).json({ error: "Create an account to open a shop" });
-        }
-        try {
-          await verifyAuthCaptcha(req.body?.captchaToken, req.ip);
-        } catch (err) {
-          if (err instanceof CaptchaError) {
-            return res.status(400).json({ error: err.message, code: err.code });
-          }
-          throw err;
-        }
-      }
-      if (body.firstProduct?.categoryId) {
-        const cat = await prisma.category.findUnique({ where: { id: body.firstProduct.categoryId } });
-        if (!cat) body.firstProduct.categoryId = undefined;
-      }
-      if (body.firstProduct?.brandId) {
-        const brand = await prisma.brand.findUnique({ where: { id: body.firstProduct.brandId } });
-        if (!brand) body.firstProduct.brandId = undefined;
+        return res.status(401).json({ error: "Create and verify your seller account before setting up a shop." });
       }
       const slug = body.slug.toLowerCase();
 
@@ -218,41 +187,7 @@ onboardingRouter.post(
           },
         });
 
-        let product = null;
-        if (body.firstProduct) {
-          const fp = body.firstProduct;
-          product = await tx.product.create({
-            data: {
-              tenantId: tenant.id,
-              title: fp.title,
-              description: fp.description,
-              price: fp.price,
-              compareAtPrice: fp.compareAtPrice ?? null,
-              currency: fp.currency,
-              stockQty: fp.stockQty,
-              categoryId: fp.categoryId ?? null,
-              shopCategoryId: null,
-              brandName: fp.brandName ?? null,
-              brandId: fp.brandId ?? null,
-              location: fp.location ?? body.location ?? null,
-              countryCode:
-                fp.countryCode?.toUpperCase() ??
-                body.countryCode?.toUpperCase() ??
-                null,
-              stateCode: fp.stateCode ?? body.stateCode ?? null,
-              images: fp.images,
-              status: fp.status,
-            },
-            include: {
-              category: true,
-              shopCategory: true,
-              brand: true,
-              tenant: { select: { id: true, name: true, slug: true } },
-            },
-          });
-        }
-
-        return { user, tenant, product };
+        return { user, tenant };
       });
 
       const accessToken = signAccessToken({
@@ -282,7 +217,7 @@ onboardingRouter.post(
       return res.status(201).json({
         user: toUserPublic(result.user),
         tenant: toTenantPublic(result.tenant, { private: true }),
-        product: result.product ? toProductPublic(result.product, { includeOriginals: true }) : null,
+        product: null,
       });
     } catch (err) {
       if (err instanceof z.ZodError) {

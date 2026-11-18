@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { redisRateLimit } from "../lib/rateLimit";
-import { CaptchaError, verifyAuthCaptcha } from "../lib/turnstile";
+import { isHoneypotFilled } from "../lib/honeypot";
 import { z } from "zod";
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
@@ -20,7 +20,7 @@ import {
   revokeRefreshToken,
   signAccessToken,
 } from "./tokens";
-import { requireAuth } from "./middleware";
+import { requireAuth, requireSession } from "./middleware";
 import { consumeOAuthState, createOAuthState, safeLocalPath } from "./oauthState";
 import { mergeGuestCarts } from "../services/cartMerge";
 import { CART_SESSION_COOKIE } from "../lib/cartSession";
@@ -62,20 +62,13 @@ const loginEmailLimiter = redisRateLimit({
   message: "Too many sign-in attempts for this account. Try again in 15 minutes or reset your password.",
 });
 
-async function captchaOk(
+function rejectHoneypot(
   req: import("express").Request,
   res: import("express").Response
-): Promise<boolean> {
-  try {
-    await verifyAuthCaptcha(req.body?.captchaToken, req.ip);
-    return true;
-  } catch (err) {
-    if (err instanceof CaptchaError) {
-      res.status(400).json({ error: err.message, code: err.code });
-      return false;
-    }
-    throw err;
-  }
+): boolean {
+  if (!isHoneypotFilled(req.body?.faxNumber)) return false;
+  res.status(400).json({ error: "Unable to process request." });
+  return true;
 }
 
 const signupSchema = z.object({
@@ -111,8 +104,8 @@ export const authRouter = Router();
 
 authRouter.post("/signup", authLimiter, async (req, res, next) => {
   try {
+    if (rejectHoneypot(req, res)) return;
     const body = signupSchema.parse(req.body);
-    if (!(await captchaOk(req, res))) return;
     const existing = await prisma.user.findUnique({
       where: { email: body.email.toLowerCase() },
     });
@@ -121,8 +114,8 @@ authRouter.post("/signup", authLimiter, async (req, res, next) => {
     }
 
     // Signup creates a users row only - tenants are created via POST /api/tenants.
-    const verifyRaw = crypto.randomBytes(32).toString("hex");
-    const verifyHash = crypto.createHash("sha256").update(verifyRaw).digest("hex");
+    const emailCode = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+    const verifyHash = crypto.createHash("sha256").update(`${body.email.toLowerCase()}:${emailCode}`).digest("hex");
 
     const user = await prisma.user.create({
       data: {
@@ -139,12 +132,9 @@ authRouter.post("/signup", authLimiter, async (req, res, next) => {
       },
     });
 
-    await issueSession(user, res);
-    await mergeCartAfterAuth(req, user.id);
-
     const dashboardUrl =
-      body.role === "seller" ? `${env.webUrl}/onboarding` : `${env.webUrl}/explore`;
-    const verifyUrl = `${env.webUrl}/verify-email?token=${verifyRaw}`;
+      body.role === "seller" ? `${env.webUrl}/seller` : `${env.webUrl}/buyer`;
+    const verifyUrl = `${env.webUrl}/verify-email?email=${encodeURIComponent(user.email)}`;
 
     void enqueueTransactionalMail({
       kind: "welcome",
@@ -160,7 +150,7 @@ authRouter.post("/signup", authLimiter, async (req, res, next) => {
     void enqueueTransactionalMail({
       kind: "verify_email",
       to: user.email,
-      data: { name: user.name, verifyUrl },
+      data: { name: user.name, verifyUrl, code: emailCode },
       idempotencyKey: `verify:${user.id}:${verifyHash.slice(0, 12)}`,
     }).catch((e) => console.warn("[auth] verify mail enqueue failed", e));
 
@@ -175,8 +165,8 @@ authRouter.post("/signup", authLimiter, async (req, res, next) => {
 
 authRouter.post("/login", authLimiter, loginEmailLimiter, async (req, res, next) => {
   try {
+    if (rejectHoneypot(req, res)) return;
     const body = loginSchema.parse(req.body);
-    if (!(await captchaOk(req, res))) return;
     const user = await prisma.user.findUnique({
       where: { email: body.email.toLowerCase() },
     });
@@ -186,6 +176,9 @@ authRouter.post("/login", authLimiter, loginEmailLimiter, async (req, res, next)
     const ok = await verifyPassword(user.passwordHash, body.password);
     if (!ok) {
       return res.status(401).json({ error: "Invalid email or password" });
+    }
+    if (!user.emailVerifiedAt) {
+      return res.status(403).json({ error: "Verify your email before signing in. Request a fresh code from the verification page.", code: "EMAIL_NOT_VERIFIED" });
     }
 
     await issueSession(user, res);
@@ -199,7 +192,7 @@ authRouter.post("/login", authLimiter, loginEmailLimiter, async (req, res, next)
   }
 });
 
-authRouter.post("/logout", requireAuth, async (req, res, next) => {
+authRouter.post("/logout", requireSession, async (req, res, next) => {
   try {
     const raw = req.cookies?.[REFRESH_COOKIE];
     if (raw) await revokeRefreshToken(raw);
@@ -241,7 +234,7 @@ authRouter.post("/refresh", async (req, res, next) => {
   }
 });
 
-authRouter.get("/me", requireAuth, async (req, res) => {
+authRouter.get("/me", requireSession, async (req, res) => {
   return res.json({ user: toUserPublic(req.user!) });
 });
 
@@ -254,8 +247,8 @@ const forgotLimiter = redisRateLimit({
 
 authRouter.post("/forgot-password", forgotLimiter, async (req, res, next) => {
   try {
+    if (rejectHoneypot(req, res)) return;
     const { email } = z.object({ email: z.string().email() }).parse(req.body);
-    if (!(await captchaOk(req, res))) return;
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -317,7 +310,7 @@ authRouter.post("/reset-password", forgotLimiter, async (req, res, next) => {
         error: "This reset link is invalid or has expired. Request a new one.",
       });
     }
-    await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: user.id },
       data: {
         passwordHash: await hashPassword(password),
@@ -326,8 +319,20 @@ authRouter.post("/reset-password", forgotLimiter, async (req, res, next) => {
       },
     });
     await revokeAllSessions(user.id);
-    await issueSession(user, res);
-    return res.json({ user: toUserPublic(user) });
+    if (updated.emailVerifiedAt) {
+      await issueSession(updated, res);
+    } else {
+      const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+      const verifyHash = crypto.createHash("sha256").update(`${updated.email.toLowerCase()}:${code}`).digest("hex");
+      await prisma.user.update({ where: { id: updated.id }, data: { emailVerificationToken: verifyHash, emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
+      await enqueueTransactionalMail({
+        kind: "verify_email",
+        to: updated.email,
+        data: { name: updated.name, code, verifyUrl: `${env.webUrl}/verify-email?email=${encodeURIComponent(updated.email)}` },
+        idempotencyKey: `verify-reset:${updated.id}:${verifyHash.slice(0, 12)}`,
+      });
+    }
+    return res.json({ user: toUserPublic(updated) });
   } catch (err) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({
@@ -348,14 +353,11 @@ const verifyLimiter = redisRateLimit({
 /** Confirm email via token from the verification message. */
 authRouter.post("/verify-email", verifyLimiter, async (req, res, next) => {
   try {
-    const { token } = z.object({ token: z.string().min(20) }).parse(req.body);
-    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-    const user = await prisma.user.findFirst({
-      where: {
-        emailVerificationToken: tokenHash,
-        emailVerificationExpires: { gt: new Date() },
-      },
-    });
+    const body = z.object({ token: z.string().min(20).optional(), email: z.string().email().optional(), code: z.string().length(6).optional() }).refine((v) => !!v.token || (!!v.email && !!v.code)).parse(req.body);
+    const tokenHash = body.token
+      ? crypto.createHash("sha256").update(body.token).digest("hex")
+      : crypto.createHash("sha256").update(`${body.email!.toLowerCase()}:${body.code}`).digest("hex");
+    const user = await prisma.user.findFirst({ where: { ...(body.email ? { email: body.email.toLowerCase() } : {}), emailVerificationToken: tokenHash, emailVerificationExpires: { gt: new Date() } } });
     if (!user) {
       return res.status(400).json({
         error: "This verification link is invalid or has expired.",
@@ -369,6 +371,8 @@ authRouter.post("/verify-email", verifyLimiter, async (req, res, next) => {
         emailVerificationExpires: null,
       },
     });
+    await issueSession(updated, res);
+    await mergeCartAfterAuth(req, updated.id);
     return res.json({ user: toUserPublic(updated), ok: true });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -438,22 +442,16 @@ authRouter.post(
 /** Resend verification email (auth required). */
 authRouter.post(
   "/resend-verification",
-  requireAuth,
   verifyLimiter,
   async (req, res, next) => {
     try {
+      const body = z.object({ email: z.string().email() }).parse(req.body);
       const user = await prisma.user.findUnique({
-        where: { id: req.user!.id },
+        where: { email: body.email.toLowerCase() },
       });
-      if (!user) return res.status(404).json({ error: "User not found" });
-      if (user.emailVerifiedAt) {
-        return res.json({ ok: true, alreadyVerified: true });
-      }
-      const verifyRaw = crypto.randomBytes(32).toString("hex");
-      const verifyHash = crypto
-        .createHash("sha256")
-        .update(verifyRaw)
-        .digest("hex");
+      if (!user || user.emailVerifiedAt) return res.json({ ok: true });
+      const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+      const verifyHash = crypto.createHash("sha256").update(`${user.email.toLowerCase()}:${code}`).digest("hex");
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -461,15 +459,16 @@ authRouter.post(
           emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       });
-      const verifyUrl = `${env.webUrl}/verify-email?token=${verifyRaw}`;
+      const verifyUrl = `${env.webUrl}/verify-email?email=${encodeURIComponent(user.email)}`;
       await enqueueTransactionalMail({
         kind: "verify_email",
         to: user.email,
-        data: { name: user.name, verifyUrl },
+        data: { name: user.name, verifyUrl, code },
         idempotencyKey: `verify-resend:${user.id}:${Date.now()}`,
       });
       return res.json({ ok: true });
     } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: "Enter the email address you signed up with." });
       return next(err);
     }
   }

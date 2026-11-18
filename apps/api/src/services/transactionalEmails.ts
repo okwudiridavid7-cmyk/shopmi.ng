@@ -16,7 +16,8 @@ export type TransactionalEmailKind =
   | "domain_renewal_due"
   | "order_refunded"
   | "domain_detached"
-  | "admin_alert";
+  | "admin_alert"
+  | "platform_broadcast";
 
 function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -58,8 +59,8 @@ export async function buildTransactionalEmail(
       subject = `Welcome to ${app}`;
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
-        <p style="margin:0 0 12px;">You're in! Your ${escapeHtml(app)} account is ready.</p>
-        <p style="margin:0 0 12px;">Browse shops, save favorites, or open your own storefront when you're ready to sell.</p>
+        <p style="margin:0 0 12px;">We’re glad you’re here. Your ${escapeHtml(app)} account is ready, and there’s a place for you whether you’re discovering something special or growing a business.</p>
+        <p style="margin:0 0 12px;">Take your time exploring. When you’re ready, your dashboard is here to help you get started.</p>
         ${data.dashboardUrl ? ctaButton(String(data.dashboardUrl), "Go to your dashboard") : ""}
         <p style="margin:16px 0 0;">Thank you for choosing ${escapeHtml(app)}.</p>
       `;
@@ -69,9 +70,10 @@ export async function buildTransactionalEmail(
       subject = "Verify your email";
       inner = `
         <p style="margin:0 0 12px;">${greeting(name)}</p>
-        <p style="margin:0 0 12px;">Please confirm this email address so we can keep your account secure and send order updates.</p>
-        ${ctaButton(String(data.verifyUrl ?? "#"), "Verify email")}
-        <p style="margin:12px 0 0;font-size:13px;color:#6b7280;">This link expires in 24 hours. If you didn’t create an account, you can ignore this message.</p>
+        <p style="margin:0 0 12px;">One quick step and you’ll be ready to go. Enter this code to confirm your email and keep your account secure:</p>
+        ${data.code ? `<p style="margin:20px 0;padding:16px 20px;border-radius:12px;background:#f5f5f5;text-align:center;font-size:28px;font-weight:700;letter-spacing:0.3em;color:#171717;">${escapeHtml(String(data.code))}</p>` : ""}
+        ${ctaButton(String(data.verifyUrl ?? "#"), data.code ? "Enter verification code" : "Verify email")}
+        <p style="margin:12px 0 0;font-size:13px;color:#6b7280;">Your code expires in 24 hours. If you didn’t create an account, you can safely ignore this email.</p>
       `;
       break;
     }
@@ -306,6 +308,11 @@ export async function buildTransactionalEmail(
         .join("");
       inner = `${p(`<strong>${escapeHtml(String(data.title ?? "Platform alert"))}</strong>`)}${lines}
         ${data.actionUrl ? ctaButton(String(data.actionUrl), "Open admin") : ""}`;
+      break;
+    }
+    case "platform_broadcast": {
+      subject = String(data.subject ?? "A Shopmi.ng update");
+      inner = `${p(greeting(name))}<div>${String(data.body ?? "")}</div><p style="margin:24px 0 0;color:#718078;font-size:13px;">Shopmi.ng · Platform updates</p>`;
       break;
     }
     default: {

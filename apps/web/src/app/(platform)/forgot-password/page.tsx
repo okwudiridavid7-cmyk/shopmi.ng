@@ -2,19 +2,21 @@
 
 import { FormEvent, useState } from "react";
 import { Mail } from "lucide-react";
-import { useAuthCaptcha } from "@/components/auth-captcha";
+import { useAuthHoneypot } from "@/components/auth-honeypot";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { TextLink } from "@/components/ui/text-link";
 import { AuthSplitLayout } from "@/components/auth-split";
+import { useToast } from "@/components/ui/toast";
 
 export default function ForgotPasswordPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const captcha = useAuthCaptcha();
+  const honeypot = useAuthHoneypot();
+  const { toast } = useToast();
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -27,15 +29,15 @@ export default function ForgotPasswordPage() {
         "/api/auth/forgot-password",
         {
           method: "POST",
-          body: JSON.stringify({ email: form.get("email"), captchaToken: captcha.token }),
+          body: JSON.stringify({ email: form.get("email"), faxNumber: honeypot.value }),
         }
       );
       setMsg(res.message);
+      toast({ title: "Check your inbox", description: res.message, tone: "success" });
     } catch (error) {
-      captcha.reset();
-      setErr(
-        error instanceof Error ? error.message : "Couldn’t send that email."
-      );
+      const message = error instanceof Error ? error.message : "Couldn’t send that email.";
+      setErr(message);
+      toast({ title: "Couldn’t send reset email", description: message, tone: "danger" });
     } finally {
       setLoading(false);
     }
@@ -59,14 +61,14 @@ export default function ForgotPasswordPage() {
             className="h-12"
           />
         </Label>
-        {captcha.field}
+        {honeypot.field}
         {err && <p className="text-sm text-danger">{err}</p>}
         {msg && (
           <p className="text-sm text-emerald-700 dark:text-emerald-400">{msg}</p>
         )}
         <Button
           type="submit"
-          disabled={loading || captcha.waiting}
+          disabled={loading}
           className="h-12 w-full"
           size="lg"
         >

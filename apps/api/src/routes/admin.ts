@@ -12,6 +12,8 @@ import {
 } from "../services/contactRetention";
 import { ImageRejectedError, storePublicImage } from "../services/images";
 import { memoryUpload, receiveSingle, UploadError } from "../lib/uploads";
+import { enqueueTransactionalMail } from "../queue/transactionalMail";
+import { sanitizeEmailSubject } from "../lib/sanitizeHeader";
 
 /**
  * All routes on this router require authenticated super_admin.
@@ -20,6 +22,63 @@ import { memoryUpload, receiveSingle, UploadError } from "../lib/uploads";
 export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireRoles("super_admin"));
+
+function cleanRichText(value: string): string {
+  const source = value.replace(/<(script|style|iframe|object)[^>]*>[\s\S]*?<\/\1>/gi, "");
+  return source.replace(/<([^>]+)>/g, (whole, raw: string) => {
+    const tagMatch = raw.match(/^\s*(\/?)\s*([a-z0-9]+)/i);
+    if (!tagMatch) return "";
+    const closing = !!tagMatch[1];
+    const tag = tagMatch[2].toLowerCase();
+    if (!["p", "br", "strong", "b", "em", "i", "u", "ul", "ol", "li", "h2", "h3", "blockquote", "a"].includes(tag)) return "";
+    if (tag === "br") return "<br>";
+    if (tag === "a" && !closing) {
+      const href = raw.match(/href\s*=\s*(["'])(.*?)\1/i)?.[2] ?? "";
+      return /^(https:\/\/|mailto:)/i.test(href) ? `<a href="${href.replace(/["<>]/g, "")}" rel="noopener noreferrer">` : "<a>";
+    }
+    return `<${closing ? "/" : ""}${tag}>`;
+  });
+}
+
+adminRouter.get("/notifications", async (_req, res, next) => {
+  try {
+    const notifications = await prisma.platformNotification.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+    return res.json({ notifications });
+  } catch (error) { return next(error); }
+});
+
+adminRouter.post("/notifications", async (req, res, next) => {
+  try {
+    const body = z.object({ title: z.string().trim().min(3).max(120), body: z.string().min(1).max(20_000), audience: z.enum(["all", "buyer", "seller", "tenant_admin"]), href: z.string().trim().max(300).refine((value) => value.startsWith("/") && !value.startsWith("//"), "Use a page path on this platform.").optional() }).parse(req.body);
+    const safeBody = cleanRichText(body.body);
+    if (!safeBody.replace(/<[^>]+>/g, "").trim()) return res.status(400).json({ error: "Add some announcement text." });
+    const notification = await prisma.platformNotification.create({ data: { ...body, body: safeBody, href: body.href || null, kind: "announcement" } });
+    return res.status(201).json({ notification });
+  } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ error: "Check the announcement fields.", details: error.flatten() }); return next(error); }
+});
+
+adminRouter.post("/email-broadcast", async (req, res, next) => {
+  try {
+    const body = z.object({ subject: z.string().trim().min(3).max(160).refine((value) => !/[\r\n\0]/.test(value), "Subject must be a single line."), body: z.string().min(1).max(20_000), role: z.enum(["all", "buyer", "seller", "tenant_admin"]).default("all"), planId: z.string().optional(), userIds: z.array(z.string()).max(500).default([]), campaignId: z.string().uuid().optional() }).parse(req.body);
+    const where: Prisma.UserWhereInput = {};
+    if (body.userIds.length) where.id = { in: body.userIds };
+    else {
+      if (body.role !== "all") where.role = body.role;
+      if (body.planId) where.ownedTenants = { some: { planId: body.planId } };
+    }
+    const users = await prisma.user.findMany({ where, select: { id: true, email: true, name: true }, orderBy: { createdAt: "asc" } });
+    if (!users.length) return res.status(400).json({ error: "No recipients match those filters." });
+    const subject = sanitizeEmailSubject(body.subject);
+    const safeBody = cleanRichText(body.body);
+    if (!safeBody.replace(/<[^>]+>/g, "").trim()) return res.status(400).json({ error: "Add some email message text." });
+    let queued = 0;
+    for (const user of users) {
+      await enqueueTransactionalMail({ kind: "platform_broadcast", to: user.email, subject, data: { name: user.name, subject, body: safeBody }, idempotencyKey: `admin-broadcast:${body.campaignId ?? Date.now()}:${user.id}` });
+      queued += 1;
+    }
+    return res.json({ queued, matched: users.length });
+  } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ error: "Check the email fields.", details: error.flatten() }); return next(error); }
+});
 
 const upload = memoryUpload(5 * 1024 * 1024);
 
@@ -79,7 +138,8 @@ adminRouter.get("/overview", async (req, res, next) => {
       tenantCount,
       pendingVerifications,
       orderCountAll,
-      paidInPeriod,
+      paidInPeriodTotals,
+      paidOrderCurrency,
       buyerCount,
       sellerCount,
       productCount,
@@ -89,12 +149,17 @@ adminRouter.get("/overview", async (req, res, next) => {
       prisma.tenant.count(),
       prisma.verificationRequest.count({ where: { status: "pending" } }),
       prisma.order.count(),
-      prisma.order.findMany({
+      prisma.order.aggregate({
         where: {
           status: { in: ["paid", "fulfilled"] },
           createdAt,
         },
-        select: { total: true, currency: true },
+        _sum: { total: true },
+        _count: { _all: true },
+      }),
+      prisma.order.findFirst({
+        where: { status: { in: ["paid", "fulfilled"] }, createdAt },
+        select: { currency: true },
       }),
       prisma.user.count({ where: { role: "buyer" } }),
       prisma.user.count({
@@ -116,8 +181,8 @@ adminRouter.get("/overview", async (req, res, next) => {
       }),
     ]);
 
-    const gmv = paidInPeriod.reduce((s, o) => s + decimalToNumber(o.total), 0);
-    const currency = paidInPeriod[0]?.currency ?? "NGN";
+    const gmv = decimalToNumber(paidInPeriodTotals._sum.total ?? 0);
+    const currency = paidOrderCurrency?.currency ?? "NGN";
 
     const signupMap = new Map<string, number>();
     for (const t of tenantsInPeriod) {
@@ -135,7 +200,7 @@ adminRouter.get("/overview", async (req, res, next) => {
         tenantCount,
         pendingVerifications,
         orderCount: orderCountAll,
-        paidOrderCount: paidInPeriod.length,
+        paidOrderCount: paidInPeriodTotals._count._all,
         salesTotal: gmv,
         gmv,
         currency,
@@ -418,6 +483,7 @@ adminRouter.get("/users", async (req, res, next) => {
   try {
     const role = String(req.query.role ?? "").trim();
     const q = String(req.query.q ?? "").trim().toLowerCase();
+    const planId = String(req.query.planId ?? "").trim();
 
     const where: Prisma.UserWhereInput = {};
     if (
@@ -434,17 +500,20 @@ adminRouter.get("/users", async (req, res, next) => {
         { name: { contains: q } },
       ];
     }
+    if (planId) where.ownedTenants = { some: { planId } };
 
     const users = await prisma.user.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 200,
+      take: 500,
+      include: { ownedTenants: { select: { id: true, planId: true, plan: { select: { name: true } } } } },
     });
 
     return res.json({
       users: users.map((u) => ({
         ...toUserPublic(u),
         signupMethod: u.googleId ? "google" : "email",
+        plans: u.ownedTenants.filter((tenant) => tenant.planId).map((tenant) => ({ id: tenant.planId!, name: tenant.plan?.name ?? "Plan" })),
       })),
     });
   } catch (err) {

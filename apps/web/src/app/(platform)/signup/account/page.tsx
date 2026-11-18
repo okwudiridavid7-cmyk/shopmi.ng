@@ -2,42 +2,32 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
-import { Mail, User } from "lucide-react";
-import type { AuthTokensResponse } from "@vendors/shared-types";
-import { useAuthCaptcha } from "@/components/auth-captcha";
+import { Mail, User, Phone } from "lucide-react";
+import { useAuthHoneypot } from "@/components/auth-honeypot";
 import { apiFetch } from "@/lib/api";
 import { safeReturnTo } from "@/lib/auth-redirect";
-import { useAuth } from "@/hooks/use-auth";
-import { markWalkthroughPending } from "@/components/walkthrough";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/input";
 import { InputWithIcon } from "@/components/ui/input-with-icon";
 import { PasswordStrengthField } from "@/components/ui/password-strength";
 import { TextLink } from "@/components/ui/text-link";
-import { CountryStateSelect } from "@/components/country-state-select";
 import { SettingsCard } from "@/components/ui/settings-card";
 import { AuthSplitLayout } from "@/components/auth-split";
 import { GoogleContinueButton } from "@/components/google-button";
+import { useToast } from "@/components/ui/toast";
 
 function SignupAccountForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { refresh } = useAuth();
+  const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
   const wantsSeller = searchParams.get("role") === "seller";
-  const returnTo = safeReturnTo(searchParams.get("returnTo")) ?? "/explore";
+  const returnTo = safeReturnTo(searchParams.get("returnTo")) ?? (wantsSeller ? "/seller" : "/buyer");
   const prefillEmail = (searchParams.get("email") ?? "").trim();
-  const [countryCode, setCountryCode] = useState("NG");
-  const [stateCode, setStateCode] = useState("");
-  const [locationLabel, setLocationLabel] = useState("");
   const [password, setPassword] = useState("");
-  const captcha = useAuthCaptcha();
-
-  useEffect(() => {
-    if (wantsSeller) router.replace("/onboarding");
-  }, [wantsSeller, router]);
+  const honeypot = useAuthHoneypot();
 
   useEffect(() => {
     if (prefillEmail) setEmailMode(true);
@@ -46,47 +36,39 @@ function SignupAccountForm() {
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    if (!stateCode) {
-      setError("Select your state / region");
-      return;
-    }
     setLoading(true);
     const form = new FormData(e.currentTarget);
     try {
-      await apiFetch<AuthTokensResponse>("/api/auth/signup", {
+      await apiFetch("/api/auth/signup", {
         method: "POST",
         body: JSON.stringify({
           name: form.get("name"),
           email: form.get("email"),
           password: password || form.get("password"),
-          role: "buyer",
-          countryCode: countryCode || "NG",
-          stateCode: stateCode || undefined,
-          location: locationLabel || undefined,
-          captchaToken: captcha.token,
+          role: wantsSeller ? "seller" : "buyer",
+          phone: form.get("phone") || undefined,
+          faxNumber: honeypot.value,
         }),
       });
-      markWalkthroughPending();
-      await refresh();
-      window.location.assign(returnTo);
+      toast({ title: "Check your email", description: "We sent a six-digit verification code to finish creating your account.", tone: "success" });
+      router.push(`/verify-email?email=${encodeURIComponent(String(form.get("email") ?? ""))}&next=${encodeURIComponent(returnTo)}`);
     } catch (err) {
-      captcha.reset();
-      setError(err instanceof Error ? err.message : "Signup failed");
+      const message = err instanceof Error ? err.message : "We couldn’t create your account. Please try again.";
+      setError(message);
+      toast({ title: "Sign-up failed", description: message, tone: "danger" });
     } finally {
       setLoading(false);
     }
   }
 
-  if (wantsSeller) return null;
-
   return (
     <AuthSplitLayout
-      title="Create your buyer account"
-      subtitle="Save favourites, track orders and check out faster."
+      title={wantsSeller ? "Create your seller account" : "Create your buyer account"}
+      subtitle={wantsSeller ? "Set up your account now. You can build your shop from your dashboard." : "Save favourites, track orders and check out faster."}
     >
       {!emailMode ? (
         <div className="space-y-4">
-          <GoogleContinueButton role="buyer" returnTo={returnTo} />
+          <GoogleContinueButton role={wantsSeller ? "seller" : "buyer"} returnTo={returnTo} />
           <Button
             type="button"
             variant="outline"
@@ -98,8 +80,8 @@ function SignupAccountForm() {
             Continue with email
           </Button>
           <p className="text-center text-sm text-muted-foreground lg:text-left">
-            Selling instead?{" "}
-            <TextLink href="/onboarding">Open a shop</TextLink>
+            {wantsSeller ? "Creating a buyer account?" : "Selling instead?"}{" "}
+            <TextLink href={wantsSeller ? "/signup/account?role=buyer" : "/signup/account?role=seller"}>{wantsSeller ? "Sign up as a buyer" : "Open a shop"}</TextLink>
           </p>
         </div>
       ) : (
@@ -137,26 +119,12 @@ function SignupAccountForm() {
               minLength={8}
               label="New password"
             />
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Location</p>
-              <CountryStateSelect
-                idPrefix="signup-geo"
-                nigeriaOnly
-                countryCode={countryCode}
-                stateCode={stateCode}
-                required
-                onChange={(v) => {
-                  setCountryCode(v.countryCode);
-                  setStateCode(v.stateCode);
-                  setLocationLabel(v.label);
-                }}
-              />
-            </div>
-            {captcha.field}
+            <Label><span className="text-sm font-medium">Phone <span className="text-muted-foreground">(optional)</span></span><InputWithIcon icon={<Phone />} name="phone" type="tel" autoComplete="tel" placeholder="+234 800 000 0000" className="h-12" /></Label>
+            {honeypot.field}
             {error && <p className="text-sm text-danger">{error}</p>}
             <Button
               type="submit"
-              disabled={loading || captcha.waiting}
+              disabled={loading}
               className="h-12 w-full"
               size="lg"
             >
@@ -171,8 +139,8 @@ function SignupAccountForm() {
             Other sign-up options
           </button>
           <p className="mt-3 text-center text-sm text-muted-foreground lg:text-left">
-            Selling instead?{" "}
-            <TextLink href="/onboarding">Open a shop</TextLink>
+            {wantsSeller ? "Creating a buyer account?" : "Selling instead?"}{" "}
+            <TextLink href={wantsSeller ? "/signup/account?role=buyer" : "/signup/account?role=seller"}>{wantsSeller ? "Sign up as a buyer" : "Open a shop"}</TextLink>
           </p>
         </SettingsCard>
       )}

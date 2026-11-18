@@ -1008,7 +1008,7 @@ export default function ContactWithGlobe({
                     htmlFor="contact-name"
                     className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                   >
-                    Full Name
+                    Full Name <span className="text-red-400" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="contact-name"
@@ -1028,7 +1028,7 @@ export default function ContactWithGlobe({
                     htmlFor="contact-company"
                     className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                   >
-                    Company
+                    Company <span className="normal-case tracking-normal text-muted-foreground">(optional)</span>
                   </label>
                   <input
                     id="contact-company"
@@ -1048,7 +1048,7 @@ export default function ContactWithGlobe({
                   htmlFor="contact-email"
                   className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                 >
-                  Email Address
+                  Email Address <span className="text-red-400" aria-hidden="true">*</span>
                 </label>
                 <input
                   id="contact-email"
@@ -1068,7 +1068,7 @@ export default function ContactWithGlobe({
                   htmlFor="contact-message"
                   className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                 >
-                  Message
+                  Message <span className="text-red-400" aria-hidden="true">*</span>
                 </label>
                 <textarea
                   id="contact-message"

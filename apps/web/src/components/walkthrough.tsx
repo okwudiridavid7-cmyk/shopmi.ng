@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 const STORAGE_KEY = "vendors-walkthrough-done";
 
@@ -22,10 +23,24 @@ const STEPS = [
   },
 ] as const;
 
+const BUYER_STEPS = [
+  { id: "buyer-nav", title: "Your buyer workspace", body: "Open your orders, saved favorites, and account details from the sidebar." },
+  { id: "buyer-main", title: "Keep track of your purchases", body: "Your dashboard brings order updates and recent activity together." },
+  { id: "marketplace-link", title: "Back to the marketplace", body: "Browse shops and discover products whenever you’re ready." },
+] as const;
+
+const SELLER_STEPS = [
+  { id: "seller-nav", title: "Your seller workspace", body: "Manage products, orders, your storefront, and business settings from the sidebar." },
+  { id: "seller-setup", title: "Complete setup in any order", body: "Choose a setup step, finish it, and return for the remaining tasks later." },
+  { id: "marketplace-link", title: "Visit the marketplace", body: "See your storefront in the same place your customers shop." },
+] as const;
+
 export function Walkthrough() {
+  const pathname = usePathname();
   const [step, setStep] = useState(0);
   const [active, setActive] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const steps = pathname.startsWith("/seller") ? SELLER_STEPS : pathname.startsWith("/buyer") ? BUYER_STEPS : STEPS;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -42,18 +57,18 @@ export function Walkthrough() {
       sessionStorage.setItem("vendors-walkthrough-pending", "1");
     }
     setActive(true);
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     if (!active) return;
-    const targetId = STEPS[step]?.id;
+    const targetId = steps[step]?.id;
     if (!targetId) return;
     const el = document.querySelector(`[data-tour="${targetId}"]`);
     if (el) {
       setRect(el.getBoundingClientRect());
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
-  }, [active, step]);
+  }, [active, step, steps]);
 
   function finish() {
     localStorage.setItem(STORAGE_KEY, "1");
@@ -61,9 +76,9 @@ export function Walkthrough() {
     setActive(false);
   }
 
-  if (!active || !STEPS[step]) return null;
+  if (!active || !steps[step]) return null;
 
-  const current = STEPS[step];
+  const current = steps[step];
   const pad = 8;
 
   return (
@@ -83,7 +98,7 @@ export function Walkthrough() {
       )}
       <div className="absolute bottom-8 left-1/2 w-[min(420px,92vw)] -translate-x-1/2 rounded-lg border border-border bg-card p-token-5 shadow-lg">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">
-          Tip {step + 1} / {STEPS.length}
+          Tip {step + 1} / {steps.length}
         </p>
         <h2 className="mt-1 font-display text-xl">{current.title}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{current.body}</p>
@@ -98,12 +113,12 @@ export function Walkthrough() {
           <button
             type="button"
             onClick={() => {
-              if (step >= STEPS.length - 1) finish();
+              if (step >= steps.length - 1) finish();
               else setStep((s) => s + 1);
             }}
             className="rounded-md bg-accent-strong px-4 py-2 text-sm text-accent-foreground"
           >
-            {step >= STEPS.length - 1 ? "Done" : "Next"}
+            {step >= steps.length - 1 ? "Done" : "Next"}
           </button>
         </div>
       </div>

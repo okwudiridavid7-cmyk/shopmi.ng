@@ -6,6 +6,7 @@ import {
   type TransactionalEmailKind,
 } from "../services/transactionalEmails";
 import { env } from "../config/env";
+import { MailConfigError } from "../services/mailErrors";
 
 export const QUEUE_TRANSACTIONAL_MAIL = "transactional-mail";
 
@@ -43,10 +44,12 @@ export async function enqueueTransactionalMail(
   payload: TransactionalMailJobPayload
 ): Promise<{ queued: boolean }> {
   if (!env.resendApiKey) {
-    console.warn(
-      `[email] RESEND_API_KEY missing - skip ${payload.kind} → ${payload.to}`
+    // Let the enclosing order-event job fail and retry. Returning success here
+    // would permanently discard a transactional email when production config
+    // is missing or temporarily unavailable.
+    throw new MailConfigError(
+      `RESEND_API_KEY is missing; cannot queue ${payload.kind} email.`
     );
-    return { queued: false };
   }
 
   try {

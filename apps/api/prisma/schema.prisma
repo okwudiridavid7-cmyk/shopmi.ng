@@ -176,6 +176,7 @@ model User {
   favorites             Favorite[]
   reviews               Review[]
   reviewedVerifications VerificationRequest[] @relation("VerificationReviewer")
+  notificationReads    UserNotificationRead[]
 
   @@map("users")
 }
@@ -225,6 +226,33 @@ model PlatformSetting {
   value String @db.Text
 
   @@map("platform_settings")
+}
+
+model PlatformNotification {
+  id          String   @id @default(cuid())
+  title       String
+  body        String   @db.Text
+  audience    String   @default("all")
+  href        String?
+  kind        String   @default("announcement")
+  seeded      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  reads       UserNotificationRead[]
+
+  @@index([createdAt])
+  @@map("platform_notifications")
+}
+
+model UserNotificationRead {
+  userId         String   @map("user_id")
+  notificationId String   @map("notification_id")
+  readAt         DateTime @default(now()) @map("read_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification   PlatformNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, notificationId])
+  @@index([notificationId])
+  @@map("user_notification_reads")
 }
 
 model RefreshToken {
@@ -322,6 +350,7 @@ model Product {
   reviews      Review[]
 
   @@index([tenantId])
+  @@index([tenantId, status, createdAt])
   @@index([status])
   @@index([categoryId])
   @@index([shopCategoryId])
@@ -460,6 +489,7 @@ model Order {
   contactInquiries ContactInquiry[]
 
   @@index([tenantId])
+  @@index([tenantId, createdAt])
   @@index([buyerId])
   @@index([status])
   @@index([status, createdAt])

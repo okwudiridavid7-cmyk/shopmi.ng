@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BadgeCheck,
   Bell,
+  ClipboardCheck,
   CreditCard,
   Earth,
   Globe,
@@ -79,6 +80,13 @@ export const BUYER_NAV_GROUPS: NavGroup[] = [
         label: "Account",
         icon: User,
         keywords: ["profile", "settings"],
+      },
+      {
+        id: "notifications-inbox",
+        href: "/notifications",
+        label: "Notifications",
+        icon: Bell,
+        keywords: ["updates", "orders", "alerts"],
       },
     ],
   },
@@ -179,6 +187,13 @@ export const SELLER_NAV_GROUPS: NavGroup[] = [
     id: "business",
     label: "Business",
     items: [
+      {
+        id: "setup",
+        href: "/seller/setup",
+        label: "Business profile",
+        icon: ClipboardCheck,
+        keywords: ["onboarding", "setup", "experience", "fulfillment"],
+      },
       {
         id: "verification",
         href: "/seller/verification",
@@ -301,6 +316,15 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         icon: Earth,
         keywords: ["registrar", "com.ng", "domain prices"],
       },
+    ],
+  },
+  {
+    id: "communications",
+    label: "Communications",
+    items: [
+      { id: "announcements", href: "/admin/announcements", label: "Announcements", icon: Megaphone, keywords: ["notifications", "platform"] },
+      { id: "notifications-inbox", href: "/notifications", label: "Notification inbox", icon: Bell, keywords: ["updates", "orders", "alerts"] },
+      { id: "email-broadcast", href: "/admin/email", label: "Email users", icon: Mail, keywords: ["broadcast", "campaign"] },
     ],
   },
 ];

@@ -36,10 +36,10 @@ export const env = {
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   emailFrom: process.env.EMAIL_FROM ?? "Vendors <onboarding@resend.dev>",
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
   /** Photoroom background removal for the image enhancer. Enhancer is hidden without it. */
   photoroomApiKey: process.env.PHOTOROOM_API_KEY ?? "",
-  anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+  geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   shopBaseDomain: process.env.SHOP_BASE_DOMAIN ?? "localhost:3000",
   /** Comma-separated absolute origins for preview / staging (prod CORS). */

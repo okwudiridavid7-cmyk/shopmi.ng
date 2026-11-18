@@ -61,7 +61,16 @@ export function PayoutAccountCard({ shop }: { shop: SellerShop }) {
     setBankCode(shop.settlementBankCode ?? "");
   }, [shop.settlementBankCode]);
 
-  const banks = banksQ.data?.banks ?? [];
+  const banks = useMemo(() => {
+    const unique = new Map<string, Bank>();
+    for (const bank of banksQ.data?.banks ?? []) {
+      const code = bank.code.trim();
+      if (code && bank.name.trim() && !unique.has(code)) {
+        unique.set(code, { code, name: bank.name.trim() });
+      }
+    }
+    return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
+  }, [banksQ.data?.banks]);
   const currentBank = useMemo(
     () => banks.find((b) => b.code === shop.settlementBankCode)?.name ?? shop.settlementBankCode,
     [banks, shop.settlementBankCode]

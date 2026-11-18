@@ -14,12 +14,12 @@ async function get<T>(path: string, revalidate: number): Promise<T | null> {
 
 export const PLATFORM_CONFIG_TAG = "platform-config";
 
-/** Admin-chosen site palette. Short timeout: every page renders through this, so a slow API must not block it. */
+/** Admin-chosen palette is cached at the Next fetch layer; keep the root render fallback quick if the API is unavailable. */
 export async function getPalette(): Promise<Palette | null> {
   try {
     const res = await fetch(`${API_URL}/api/tenants/config`, {
-      next: { revalidate: 60, tags: [PLATFORM_CONFIG_TAG] },
-      signal: AbortSignal.timeout(2500),
+      next: { revalidate: 300, tags: [PLATFORM_CONFIG_TAG] },
+      signal: AbortSignal.timeout(1000),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { palette?: unknown };

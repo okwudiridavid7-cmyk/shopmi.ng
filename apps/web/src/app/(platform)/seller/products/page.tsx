@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Package, Tag } from "lucide-react";
 import type {
   ProductImageAsset,
@@ -24,7 +25,9 @@ import {
   type SellerProductFilters,
 } from "@/components/seller-filters";
 import { ShopCategoriesManager } from "@/components/shop-categories-manager";
+import { useToast } from "@/components/ui/toast";
 import {
+  ApiClientError,
   apiFetch,
   formatMoney,
   productImageUrl,
@@ -58,6 +61,8 @@ function matchesStock(qty: number, stock: SellerProductFilters["stock"]) {
 }
 
 export default function SellerProductsPage() {
+  const router = useRouter();
+  const { toast } = useToast();
   const { data: products = [], isLoading, error } = useSellerProducts();
   const catalog = useSellerCatalogOptions();
   const invalidate = useInvalidateSeller();
@@ -102,7 +107,9 @@ export default function SellerProductsPage() {
     afterWatermarked: string | null;
   } | null>(null);
   const [watermarkBusy, setWatermarkBusy] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  function setFormError(message: string | null) {
+    if (message) toast({ title: "Could not complete that", description: message, tone: "danger" });
+  }
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -319,8 +326,22 @@ export default function SellerProductsPage() {
       setShowForm(false);
       setEditing(null);
       await invalidate();
+      toast({ title: editing ? "Product updated" : "Product added", tone: "success" });
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Save failed");
+      if (err instanceof ApiClientError && (err.body as { code?: string } | null)?.code === "SELLER_SETUP_INCOMPLETE") {
+        const missing = (err.body as { missing?: string[] }).missing ?? [];
+        const nextStep = missing[0];
+        const destinations: Record<string, string> = {
+          "Shop details": "/seller/settings#shop",
+          "Business profile": "/seller/setup",
+          "Shop logo": "/seller/website?tab=branding",
+        };
+        const href = nextStep ? destinations[nextStep] : "/seller/setup";
+        toast({ title: "Finish shop setup first", description: `Add ${nextStep?.toLowerCase() ?? "your shop details"} to list your first product.`, tone: "warning", duration: 3000 });
+        window.setTimeout(() => router.push(href), 3000);
+      } else {
+        setFormError(err instanceof Error ? err.message : "Could not save product. Try again.");
+      }
     } finally {
       setBusy(false);
     }
@@ -672,11 +693,6 @@ export default function SellerProductsPage() {
                   </div>
                 </div>
               ) : null}
-              {formError && (
-                <p className="text-sm text-red-700 dark:text-red-400">
-                  {formError}
-                </p>
-              )}
               <div className="flex gap-2">
                 <Button type="submit" disabled={busy} variant="primary">
                   {busy ? "Saving…" : editing ? "Update" : "Create"}

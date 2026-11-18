@@ -10,11 +10,13 @@ import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { TextLink } from "@/components/ui/text-link";
 import { AuthSplitLayout } from "@/components/auth-split";
+import { useToast } from "@/components/ui/toast";
 
 function ResetForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refresh } = useAuth();
+  const { toast } = useToast();
   const token = searchParams.get("token") ?? "";
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,11 +30,12 @@ function ResetForm() {
     const confirm = String(form.get("confirm") ?? "");
     if (password !== confirm) {
       setErr("Passwords don’t match.");
+      toast({ title: "Passwords don’t match", description: "Enter the same password in both fields.", tone: "danger" });
       setLoading(false);
       return;
     }
     try {
-      const res = await apiFetch<{ user: { role: string } }>(
+      const res = await apiFetch<{ user: { role: string; email: string; emailVerifiedAt: string | null } }>(
         "/api/auth/reset-password",
         {
           method: "POST",
@@ -40,10 +43,18 @@ function ResetForm() {
         }
       );
       await refresh();
+      if (!res.user.emailVerifiedAt) {
+        toast({ title: "Verify your email", description: "We sent a fresh code to complete account verification.", tone: "success" });
+        router.push(`/verify-email?email=${encodeURIComponent(res.user.email)}&next=${encodeURIComponent(res.user.role === "seller" ? "/seller" : "/buyer")}`);
+        return;
+      }
       const role = res.user?.role;
+      toast({ title: "Password updated", description: "Your password has been changed.", tone: "success" });
       router.push(role && role !== "buyer" ? defaultDashboardForRole(role) : "/explore");
     } catch (error) {
-      setErr(error instanceof Error ? error.message : "Reset failed.");
+      const message = error instanceof Error ? error.message : "We couldn’t reset your password.";
+      setErr(message);
+      toast({ title: "Password reset failed", description: message, tone: "danger" });
     } finally {
       setLoading(false);
     }

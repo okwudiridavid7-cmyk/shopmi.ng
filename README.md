@@ -139,14 +139,14 @@ Seller **Website** sub-routes use query tabs: `/seller/website?tab=branding|page
 
 | Feature | How |
 |---|---|
-| AI product descriptions | Seller **Products** → **Generate description** (Claude via BullMQ; `pnpm worker`) |
+| AI product descriptions | Seller **Products** → **Generate description** (Gemini via BullMQ; `pnpm worker`) |
 | Logo builder | Seller **Website** → Branding tab — icon + color + font → square + horizontal PNG |
 | Image watermarking | Automatic on upload (sharp + BullMQ); toggle per product without re-upload |
 | Website builder | Seller **Website** — Branding, Pages (terms/privacy/FAQ), Contact & Socials, Banners (stub) |
 
 ```
-ANTHROPIC_API_KEY=...          # optional; without it, worker uses a template description
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
+GEMINI_API_KEY=...             # optional; without it, AI descriptions are hidden
+GEMINI_MODEL=gemini-2.5-flash
 REDIS_URL=redis://localhost:6379
 pnpm worker                    # required for AI + watermark jobs
 ```

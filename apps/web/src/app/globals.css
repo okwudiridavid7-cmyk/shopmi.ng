@@ -2,6 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes lsv-spark-turn {
+  to { transform: rotate(1turn); }
+}
+
+@keyframes lsv-spark-flare {
+  0%, 100% {
+    transform: scaleY(0.707);
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  25% {
+    transform: scaleY(1.414);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  }
+}
+
+@keyframes lsv-spark-breathe {
+  to { opacity: 0.35; }
+}
+
+.lsv-spark {
+  position: relative;
+  display: inline-block;
+  width: var(--lsv-size, 20px);
+  height: var(--lsv-size, 20px);
+  flex: none;
+  color: currentColor;
+}
+
+.lsv-spark-turn {
+  position: absolute;
+  inset: 0;
+  animation: lsv-spark-turn var(--_duration, 1400ms) linear infinite;
+  animation-play-state: var(--_play-state, running);
+}
+
+.lsv-spark-arm {
+  position: absolute;
+  inset: 0;
+  transform: rotate(calc(var(--i) * 45deg));
+}
+
+.lsv-spark-petal {
+  position: absolute;
+  left: 44%;
+  bottom: 65%;
+  width: 12%;
+  height: calc(var(--length) * 4%);
+  border-radius: 999px;
+  background: currentColor;
+  transform: scaleY(0.707);
+  transform-origin: 50% 100%;
+  animation:
+    lsv-spark-flare var(--_duration, 1400ms) infinite,
+    lsv-spark-breathe var(--_duration, 1400ms) linear infinite;
+  animation-delay: calc(var(--_duration, 1400ms) * var(--i) * -0.125);
+  animation-play-state: var(--_play-state, running);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lsv-spark-turn,
+  .lsv-spark-petal { animation: none; }
+  .lsv-spark-petal { transform: scaleY(0.9); }
+}
+
 /*
   Design tokens - Shopmi.ng
   Brand orange: #ff822e. Light + dark fintech palettes.

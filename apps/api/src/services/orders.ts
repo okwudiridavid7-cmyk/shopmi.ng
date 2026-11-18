@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { env } from "../config/env";
 import { prisma } from "../db/prisma";
 import { decimalToNumber } from "../lib/serialize";
+import { readPublicByUrl } from "../lib/storage";
 import { escapeHtml } from "../lib/htmlEscape";
 import { enqueueTransactionalMail } from "../queue/transactionalMail";
 import { getOrderEventsQueue, type OrderEventPayload } from "../queue/connection";
@@ -31,40 +32,82 @@ export async function renderInvoicePdf(orderId: string): Promise<Buffer | null> 
   });
   if (!order) return null;
 
+  const theme = (order.tenant.themeSettings as Record<string, unknown> | null) ?? {};
+  const logoUrl = typeof theme.logoRectUrl === "string"
+    ? theme.logoRectUrl
+    : typeof theme.logoUrl === "string" ? theme.logoUrl : null;
+  const logo = await readPublicByUrl(logoUrl).catch(() => null);
+
   return new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({ size: "A4", margin: 42, info: { Title: `Invoice ${order.id}`, Author: order.tenant.name } });
     const chunks: Buffer[] = [];
     doc.on("data", (c: Buffer) => chunks.push(c));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    doc.fontSize(20).text("Invoice", { align: "left" });
-    doc.moveDown();
-    doc.fontSize(10).fillColor("#444");
-    doc.text(`Order: ${order.id}`);
-    doc.text(`Reference: ${order.paystackReference ?? "-"}`);
-    doc.text(`Date: ${order.createdAt.toISOString()}`);
-    doc.text(`Shop: ${order.tenant.name}`);
-    doc.text(`Buyer: ${order.buyer.email}`);
-    doc.moveDown();
-
-    doc.fillColor("#000").fontSize(12).text("Items");
-    doc.moveDown(0.5);
-    for (const item of order.items) {
-      const lineTotal = decimalToNumber(item.unitPrice) * item.qty;
-      doc
-        .fontSize(10)
-        .text(
-          `${item.product.title} × ${item.qty} @ ${order.currency} ${decimalToNumber(item.unitPrice).toFixed(2)} = ${order.currency} ${lineTotal.toFixed(2)}`
-        );
+    const left = 42;
+    const right = doc.page.width - 42;
+    const width = right - left;
+    const accent = "#0b7285";
+    const ink = "#17212b";
+    const muted = "#667085";
+    doc.roundedRect(left, 34, width, 86, 12).fill("#f1f6f8");
+    if (logo) {
+      try { doc.image(logo, left + 18, 52, { fit: [160, 46] }); } catch { /* keep invoice available if an old logo file is invalid */ }
     }
-    doc.moveDown();
-    doc
-      .fontSize(12)
-      .text(
-        `Total: ${order.currency} ${decimalToNumber(order.total).toFixed(2)}`,
-        { underline: true }
-      );
+    doc.fillColor(ink).font("Helvetica-Bold").fontSize(9).text(order.tenant.name, left + (logo ? 190 : 18), 58, { width: width - 220 });
+    doc.fillColor(accent).font("Helvetica-Bold").fontSize(25).text("INVOICE", left + width - 160, 48, { width: 142, align: "right" });
+    doc.fillColor(muted).font("Helvetica").fontSize(9).text(`INVOICE # ${order.id.slice(-10).toUpperCase()}`, left + width - 220, 82, { width: 202, align: "right" });
+
+    const infoY = 145;
+    doc.fillColor(accent).font("Helvetica-Bold").fontSize(9).text("BILLED TO", left, infoY);
+    doc.fillColor(ink).font("Helvetica-Bold").fontSize(12).text(order.buyer.name || order.buyer.email, left, infoY + 17, { width: width * 0.52 });
+    doc.fillColor(muted).font("Helvetica").fontSize(9).text(order.buyer.email, left, infoY + 34, { width: width * 0.52 });
+    if (order.buyerPhone) doc.text(order.buyerPhone, left, infoY + 49);
+    doc.fillColor(accent).font("Helvetica-Bold").fontSize(9).text("ISSUED BY", left + width * 0.57, infoY);
+    doc.fillColor(ink).font("Helvetica-Bold").fontSize(11).text(order.tenant.name, left + width * 0.57, infoY + 17, { width: width * 0.43 });
+    doc.fillColor(muted).font("Helvetica").fontSize(9).text(`Date: ${order.createdAt.toLocaleDateString("en-NG", { day: "2-digit", month: "long", year: "numeric" })}`, left + width * 0.57, infoY + 37);
+    doc.text(`Payment reference: ${order.paystackReference ?? "—"}`, left + width * 0.57, infoY + 52, { width: width * 0.43 });
+
+    const tableY = 225;
+    const cols = { item: left + 10, qty: left + width - 142, unit: left + width - 100, total: right - 4 };
+    doc.roundedRect(left, tableY, width, 32, 7).fill(accent);
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(8.5)
+      .text("ITEM DESCRIPTION", cols.item, tableY + 11, { width: width - 180 })
+      .text("QTY", cols.qty, tableY + 11, { width: 32, align: "right" })
+      .text("UNIT PRICE", cols.unit - 50, tableY + 11, { width: 74, align: "right" })
+      .text("TOTAL", cols.total - 65, tableY + 11, { width: 60, align: "right" });
+
+    let rowY = tableY + 40;
+    for (const [index, item] of order.items.entries()) {
+      const lineTotal = decimalToNumber(item.unitPrice) * item.qty;
+      const rowHeight = 43;
+      if (index % 2 === 0) doc.roundedRect(left, rowY - 5, width, rowHeight, 5).fill("#f8fafb");
+      doc.fillColor(ink).font("Helvetica-Bold").fontSize(9.5).text(item.product.title, cols.item, rowY + 1, { width: width - 185, ellipsis: true });
+      doc.fillColor(muted).font("Helvetica").fontSize(8.5).text(`Item ${index + 1}`, cols.item, rowY + 17);
+      doc.fillColor(ink).font("Helvetica").fontSize(9).text(String(item.qty), cols.qty, rowY + 6, { width: 32, align: "right" });
+      doc.text(`${order.currency} ${decimalToNumber(item.unitPrice).toFixed(2)}`, cols.unit - 50, rowY + 6, { width: 74, align: "right" });
+      doc.font("Helvetica-Bold").text(`${order.currency} ${lineTotal.toFixed(2)}`, cols.total - 78, rowY + 6, { width: 73, align: "right" });
+      rowY += rowHeight + 4;
+    }
+
+    rowY += 12;
+    const totalsX = left + width - 245;
+    doc.moveTo(totalsX, rowY).lineTo(right, rowY).strokeColor("#dce4e8").lineWidth(1).stroke();
+    rowY += 16;
+    doc.fillColor(muted).font("Helvetica").fontSize(10).text("Subtotal", totalsX, rowY);
+    const subtotal = order.items.reduce((sum, item) => sum + decimalToNumber(item.unitPrice) * item.qty, 0);
+    doc.fillColor(ink).text(`${order.currency} ${subtotal.toFixed(2)}`, totalsX, rowY, { width: 245, align: "right" });
+    rowY += 22;
+    doc.roundedRect(totalsX - 10, rowY - 5, 255, 40, 7).fill(accent);
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(11).text("GRAND TOTAL", totalsX, rowY + 8);
+    doc.text(`${order.currency} ${decimalToNumber(order.total).toFixed(2)}`, totalsX, rowY + 8, { width: 225, align: "right" });
+
+    const footerY = Math.max(rowY + 95, doc.page.height - 95);
+    doc.moveTo(left, footerY - 20).lineTo(right, footerY - 20).strokeColor("#dce4e8").stroke();
+    doc.fillColor(ink).font("Helvetica-Bold").fontSize(12).text("Thank you for your order.", left, footerY);
+    doc.fillColor(muted).font("Helvetica").fontSize(8.5).text("This invoice confirms your payment. Keep it for your records.", left, footerY + 18);
+    doc.fillColor(accent).font("Helvetica-Bold").fontSize(8).text("POWERED BY SHOPMI.NG", right - 150, footerY + 8, { width: 150, align: "right" });
 
     doc.end();
   });
@@ -90,7 +133,6 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
 
   const prefs =
     (order.buyer.notificationPrefs as { orderEmails?: boolean } | null) ?? {};
-  if (prefs.orderEmails === false) return;
 
   const itemsHtml = `<table style="width:100%;border-collapse:collapse;font-size:14px;">
     <thead><tr>
@@ -114,21 +156,23 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
   const orderUrl = `${env.webUrl}/buyer/orders/${order.id}`;
   const deliveryHtml = formatDeliveryHtml(order);
 
-  await enqueueTransactionalMail({
-    kind: "order_buyer",
-    to: order.buyer.email,
-    data: {
-      name: order.buyer.name,
-      shopName: order.tenant.name,
-      totalLabel,
-      reference: order.paystackReference,
-      orderId: order.id,
-      itemsHtml,
-      deliveryHtml,
-      orderUrl,
-    },
-    idempotencyKey: `order-buyer:${order.id}`,
-  });
+  if (prefs.orderEmails !== false) {
+    await enqueueTransactionalMail({
+      kind: "order_buyer",
+      to: order.buyer.email,
+      data: {
+        name: order.buyer.name,
+        shopName: order.tenant.name,
+        totalLabel,
+        reference: order.paystackReference,
+        orderId: order.id,
+        itemsHtml,
+        deliveryHtml,
+        orderUrl,
+      },
+      idempotencyKey: `order-buyer:${order.id}`,
+    });
+  }
 
   const sellerEmail = order.tenant.owner.email;
   if (sellerEmail) {

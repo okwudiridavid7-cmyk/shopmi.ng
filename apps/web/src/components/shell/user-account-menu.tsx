@@ -85,12 +85,7 @@ export function UserAccountMenu({
   const role = user.role;
 
   const workspaces: Workspace[] = [];
-  if (
-    role === "buyer" ||
-    role === "seller" ||
-    role === "tenant_admin" ||
-    role === "super_admin"
-  ) {
+  if (role === "buyer" || role === "super_admin") {
     workspaces.push({
       id: "buyer",
       label: "Buyer",

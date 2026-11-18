@@ -33,7 +33,7 @@ export default function SignupRolePage() {
           </span>
         </Link>
         <Link
-          href="/onboarding"
+          href="/signup/account?role=seller"
           className={cn(
             "flex items-start gap-4 rounded-2xl border border-border bg-card p-5 text-left transition",
             "hover:border-accent hover:bg-accent/5"

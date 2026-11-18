@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { useToast } from "@/components/ui/toast";
 
 declare global {
   interface Window {
@@ -61,7 +62,7 @@ export function TurnstileField({
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!siteKey || !hostRef.current) {
@@ -86,14 +87,13 @@ export function TurnstileField({
           "expired-callback": () => onToken(null),
           "error-callback": () => {
             onToken(null);
-            setError("Captcha failed to load. Refresh and try again.");
+            toast({ title: "Captcha unavailable", description: "Refresh the page and try again.", tone: "danger" });
           },
         });
-        setError(null);
       })
       .catch(() => {
         if (!cancelled) {
-          setError("Captcha failed to load. Refresh and try again.");
+          toast({ title: "Captcha unavailable", description: "Refresh the page and try again.", tone: "danger" });
           onToken(null);
         }
       });
@@ -111,16 +111,11 @@ export function TurnstileField({
     };
     // onToken intentionally omitted - parent should pass stable setter
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [siteKey, theme]);
+  }, [siteKey, theme, toast]);
 
   if (!siteKey) return null;
 
-  return (
-    <div className="space-y-token-2">
-      <div ref={hostRef} />
-      {error && <p className="text-sm text-danger">{error}</p>}
-    </div>
-  );
+  return <div ref={hostRef} />;
 }
 
 export function resetTurnstile(): void {

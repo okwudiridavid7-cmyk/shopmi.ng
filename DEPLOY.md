@@ -178,8 +178,8 @@ Rebuild web after changing any `NEXT_PUBLIC_*` value.
 | `R2_PUBLIC_BUCKET` | e.g. `shopmi-media` (served at `media.shopmi.ng`) |
 | `R2_PRIVATE_BUCKET` | e.g. `shopmi-private` (invoices, KYC). Never give it a public domain |
 | `MEDIA_URL` | `https://media.shopmi.ng` |
-| `ANTHROPIC_API_KEY` | AI product descriptions. Without it the Generate description button is hidden |
-| `ANTHROPIC_MODEL` | optional, defaults to `claude-sonnet-4-20250514` |
+| `GEMINI_API_KEY` | AI product descriptions. Without it the Generate description button is hidden |
+| `GEMINI_MODEL` | optional, defaults to `gemini-2.5-flash` |
 | `PHOTOROOM_API_KEY` | Photoroom background removal. Without it the Enhance button is hidden |
 | `WHATSAPP_TOKEN` | Meta system user token with `whatsapp_business_messaging` |
 | `WHATSAPP_PHONE_NUMBER_ID` | From WhatsApp Manager → API setup |
@@ -197,7 +197,7 @@ Without the two `RENDER_*` keys, sellers can still verify DNS, but each domain h
 
 Without the two `GO54_*` keys, the Buy domain page shows as unavailable in production (connecting an existing domain still works). Registrations are paid from the GO54 reseller wallet, so keep it funded, and whitelist the API and worker outbound IPs in the GO54 reseller settings. Retail prices per domain ending are set in Admin → Domains.
 
-Worker must share `DATABASE_URL`, `REDIS_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `GO54_*`, `PAYSTACK_SECRET_KEY` (it issues refunds when a paid domain registration fails), `R2_*`, `MEDIA_URL`, `ANTHROPIC_API_KEY`, `PHOTOROOM_API_KEY`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_*`, `ADMIN_ALERT_EMAIL`, and the same JWT/app URLs. The API also needs the AI and Photoroom keys, because it decides whether to show those buttons.
+Worker must share `DATABASE_URL`, `REDIS_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `GO54_*`, `PAYSTACK_SECRET_KEY` (it issues refunds when a paid domain registration fails), `R2_*`, `MEDIA_URL`, `GEMINI_API_KEY`, `PHOTOROOM_API_KEY`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_*`, `ADMIN_ALERT_EMAIL`, and the same JWT/app URLs. The API also needs the AI and Photoroom keys, because it decides whether to show those buttons.
 
 ---
 
@@ -323,7 +323,7 @@ The E2E suite creates its own test accounts (`e2e.seller@example.com`, `e2e.buye
 - [ ] Turnstile keys set (auth is fail-closed in production), Resend domain verified
 - [ ] Paystack webhook URL and the four events set for the mode you are in
 - [ ] `ADMIN_ALERT_EMAIL` set to an inbox someone reads
-- [ ] `ANTHROPIC_API_KEY` and `PHOTOROOM_API_KEY` on API and worker
+- [ ] `GEMINI_API_KEY` and `PHOTOROOM_API_KEY` on API and worker
 - [ ] WhatsApp: template approved, webhook verified, token and phone number id set
 - [ ] Worker JWT secrets match API (`JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`)
 - [ ] Optional: `SENTRY_DSN` on API + worker; UptimeRobot probes for web/API/media

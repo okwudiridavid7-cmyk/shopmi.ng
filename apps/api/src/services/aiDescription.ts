@@ -18,7 +18,7 @@ export const MAX_DESCRIPTION_CHARS = 1500;
 const TIMEOUT_MS = 30_000;
 
 export function aiDescriptionConfigured(): boolean {
-  return Boolean(env.anthropicApiKey);
+  return Boolean(env.geminiApiKey);
 }
 
 const SYSTEM_PROMPT = [
@@ -77,7 +77,7 @@ export function cleanDescription(raw: string): string {
   return text;
 }
 
-/** Generates listing copy with Claude. Errors are worded for the seller; details go to the log. */
+/** Generates listing copy with Gemini. Errors are worded for the seller; details go to the log. */
 export async function generateProductDescription(input: DescriptionInput): Promise<string> {
   if (!aiDescriptionConfigured()) {
     throw new AiUnavailableError("AI descriptions aren't set up on this platform yet.");
@@ -85,19 +85,16 @@ export async function generateProductDescription(input: DescriptionInput): Promi
 
   let res: Response;
   try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.geminiModel)}:generateContent`, {
       method: "POST",
       headers: {
-        "x-api-key": env.anthropicApiKey,
-        "anthropic-version": "2023-06-01",
+        "x-goog-api-key": env.geminiApiKey,
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: env.anthropicModel,
-        max_tokens: 500,
-        temperature: 0.6,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: buildPrompt(input) }],
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        generationConfig: { maxOutputTokens: 500, temperature: 0.6 },
+        contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -108,17 +105,16 @@ export async function generateProductDescription(input: DescriptionInput): Promi
 
   if (!res.ok) {
     const detail = (await res.text().catch(() => "")).slice(0, 300);
-    console.error(`[ai] Claude API ${res.status}: ${detail}`);
+    console.error(`[ai] Gemini API ${res.status}: ${detail}`);
     if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 404) {
       throw new AiUnavailableError("AI descriptions are unavailable right now.");
     }
     throw new Error("The AI service is busy. Try again in a minute.");
   }
 
-  const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
   const text = cleanDescription(
-    (data.content ?? [])
-      .filter((c) => c.type === "text")
+    (data.candidates?.[0]?.content?.parts ?? [])
       .map((c) => c.text ?? "")
       .join("")
   );

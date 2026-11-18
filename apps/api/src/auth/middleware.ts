@@ -22,6 +22,28 @@ export async function requireAuth(
     if (!user) {
       return res.status(401).json({ error: "Authentication required" });
     }
+    if (!user.emailVerifiedAt) {
+      return res.status(403).json({
+        error: "Verify your email before accessing your account.",
+        code: "EMAIL_NOT_VERIFIED",
+      });
+    }
+    req.user = user;
+    return next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired access token" });
+  }
+}
+
+/** Session lookup for limited auth endpoints available before email verification. */
+export async function requireSession(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const user = await loadUserFromRequest(req);
+    if (!user) return res.status(401).json({ error: "Authentication required" });
     req.user = user;
     return next();
   } catch {
@@ -37,7 +59,7 @@ export async function optionalAuth(
 ) {
   try {
     const user = await loadUserFromRequest(req);
-    if (user) req.user = user;
+    if (user?.emailVerifiedAt) req.user = user;
   } catch {
     // ignore invalid tokens for optional auth
   }

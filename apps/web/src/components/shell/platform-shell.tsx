@@ -11,6 +11,7 @@ import { usePlatformBranding } from "@/hooks/use-branding";
 import { isUnderPath } from "@/lib/utils";
 
 function dashboardMode(pathname: string): "buyer" | "seller" | "admin" | null {
+  if (pathname === "/notifications") return "buyer";
   if (isUnderPath(pathname, "/seller")) return "seller";
   if (isUnderPath(pathname, "/buyer")) return "buyer";
   if (isUnderPath(pathname, "/admin")) return "admin";
@@ -22,6 +23,8 @@ const AUTH_PREFIXES = [
   "/signup",
   "/forgot-password",
   "/reset-password",
+  "/verify-email",
+  "/invite",
 ];
 
 /** Marketplace / auth / dashboard shell - never used for shop storefronts. */
@@ -50,7 +53,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
 
   if (isAuth) {
     return (
-      <div data-shell="auth" className="min-h-screen">
+      <div data-shell="auth" className="min-h-dvh h-dvh overflow-y-auto">
         <FaviconSync />
         {children}
       </div>
@@ -76,7 +79,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
           storageKey="platform-ticker"
         />
       )}
-      <SiteHeader />
+      {!isDashboard && <SiteHeader />}
       {isExplore && <MobileMarketplaceSearch />}
       {isDashboard ? (
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

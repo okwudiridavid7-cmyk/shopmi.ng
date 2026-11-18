@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { CartPublic } from "@vendors/shared-types";
 import {
@@ -41,6 +41,7 @@ import {
 import { CART_IMPORT_NOTES_KEY, shopReturnKey } from "@/lib/cart-handoff";
 import { useAuthTransition } from "@/stores/auth-transition";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
 
 function currencyPrefix(currency: string) {
   if (currency === "NGN") return "₦";
@@ -48,11 +49,13 @@ function currencyPrefix(currency: string) {
   return `${currency} `;
 }
 
-function CartInner() {
+function CartInner({ checkoutMode = false }: { checkoutMode?: boolean }) {
   const search = useSearchParams();
+  const router = useRouter();
   const shopFilter = search.get("shop") ?? "";
   const qc = useQueryClient();
   const { user, loading: authLoading, isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const branding = usePlatformBranding();
   const show = useAuthTransition((s) => s.show);
   const summaryQ = useCartSummary();
@@ -231,6 +234,11 @@ function CartInner() {
       redirectToLogin(returnPath);
       return;
     }
+    if (!user.emailVerifiedAt) {
+      router.push(`/verify-email?email=${encodeURIComponent(user.email)}&next=${encodeURIComponent(returnPath)}`);
+      toast({ title: "Verify your email first", description: "Confirm your email address to continue to checkout.", tone: "warning" });
+      return;
+    }
 
     const slugs = shopSlugs.filter(Boolean);
     if (slugs.length === 0) return;
@@ -292,9 +300,9 @@ function CartInner() {
   const shopCount = buyable.length;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="Your cart"
+        title={checkoutMode ? "Checkout" : "Your cart"}
         description={
           itemCount === 0
             ? undefined
@@ -304,7 +312,9 @@ function CartInner() {
         }
         icon={ShoppingBag}
         actions={
-          shopReturn ? (
+          checkoutMode ? (
+            <TextLink href="/cart" arrow="left" tone="muted">Back to cart</TextLink>
+          ) : shopReturn ? (
             <TextLink href={shopReturn} arrow="left" tone="muted">
               Back to {new URL(shopReturn).host}
             </TextLink>
@@ -348,6 +358,7 @@ function CartInner() {
         </div>
       ) : (
         <>
+          <div className={checkoutMode ? "space-y-4" : "grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]"}>
           <div className="space-y-4">
             {carts.map((cart) => (
               <ShopCartBlock
@@ -357,23 +368,23 @@ function CartInner() {
                 onUpdateQty={updateQty}
                 onRemove={removeItem}
                 onCheckoutShop={() =>
-                  void startCheckout(
-                    cart.shopSlug ? [cart.shopSlug] : []
-                  )
+                  checkoutMode
+                    ? void startCheckout(cart.shopSlug ? [cart.shopSlug] : [])
+                    : router.push(`/checkout?shop=${encodeURIComponent(cart.shopSlug ?? "")}`)
                 }
                 checkoutBusy={busy}
               />
             ))}
           </div>
 
-          <div className="sticky bottom-4 z-10 rounded-2xl border border-border bg-card p-5 shadow-lg">
+          <div className={checkoutMode ? "rounded-2xl border border-border bg-card p-5 shadow-sm" : "h-fit rounded-2xl border border-border bg-card p-5 shadow-sm lg:sticky lg:top-5"}>
             {mixedCurrency ? (
               <p className="mb-3 text-sm text-amber-700 dark:text-amber-400">
                 Mixed currencies. Check out each shop separately.
               </p>
             ) : null}
 
-            {buyable.length > 0 ? (
+            {checkoutMode && buyable.length > 0 ? (
               <div className="mb-4 space-y-3 border-b border-border pb-4">
                 <p className="text-sm font-semibold text-foreground">Delivery</p>
                 {allOfferPickup ? (
@@ -513,15 +524,17 @@ function CartInner() {
               disabled={
                 busy || authLoading || buyable.length === 0 || mixedCurrency
               }
-              onClick={() =>
-                void startCheckout(
+                onClick={() => checkoutMode
+                  ? void startCheckout(
                   buyable
                     .map((c) => c.shopSlug)
                     .filter((s): s is string => Boolean(s))
-                )
-              }
+                  )
+                  : router.push(`/checkout${shopFilter ? `?shop=${encodeURIComponent(shopFilter)}` : ""}`)}
             >
-              {authLoading
+              {!checkoutMode
+                ? "Continue to checkout"
+                : authLoading
                 ? "Checking session…"
                 : busy
                 ? shopCount > 1
@@ -531,6 +544,7 @@ function CartInner() {
                   ? `Checkout all shops (${shopCount})`
                   : "Checkout with Paystack"}
             </Button>
+          </div>
           </div>
         </>
       )}
@@ -679,6 +693,14 @@ function ShopCartBlock({
         </div>
       )}
     </section>
+  );
+}
+
+export function CartCheckoutPage() {
+  return (
+    <Suspense fallback={<SkeletonLines count={5} />}>
+      <CartInner checkoutMode />
+    </Suspense>
   );
 }
 

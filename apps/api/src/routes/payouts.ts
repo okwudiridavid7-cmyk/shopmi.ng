@@ -32,10 +32,15 @@ async function listBanks(): Promise<Bank[]> {
   const data = await paystackRequest<{ code: string; name: string; active?: boolean }[]>(
     "/bank?country=nigeria&currency=NGN&perPage=200"
   );
-  const banks = data
-    .filter((b) => b.active !== false && b.code)
-    .map((b) => ({ code: b.code, name: b.name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const banksByCode = new Map<string, Bank>();
+  for (const bank of data) {
+    const code = bank.code?.trim();
+    const name = bank.name?.trim();
+    if (bank.active === false || !code || !name || banksByCode.has(code)) continue;
+    banksByCode.set(code, { code, name });
+  }
+  const banks = [...banksByCode.values()]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
   bankCache = { at: Date.now(), banks };
   return banks;
 }

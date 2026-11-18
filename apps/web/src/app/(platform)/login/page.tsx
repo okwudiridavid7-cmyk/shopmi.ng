@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { Lock, Mail } from "lucide-react";
 import type { AuthTokensResponse } from "@vendors/shared-types";
-import { useAuthCaptcha } from "@/components/auth-captcha";
+import { useAuthHoneypot } from "@/components/auth-honeypot";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -21,6 +21,8 @@ import { TextLink } from "@/components/ui/text-link";
 import { SettingsCard } from "@/components/ui/settings-card";
 import { AuthSplitLayout } from "@/components/auth-split";
 import { GoogleContinueButton } from "@/components/google-button";
+import { useToast } from "@/components/ui/toast";
+import { ApiClientError } from "@/lib/api";
 
 const GOOGLE_ERRORS: Record<string, string> = {
   google_state: "That Google sign-in link expired. Please try again.",
@@ -33,16 +35,21 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const { user, loading: authLoading, refresh } = useAuth();
   const show = useAuthTransition((s) => s.show);
+  const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
-  const captcha = useAuthCaptcha();
+  const honeypot = useAuthHoneypot();
 
   const returnTo =
     safeReturnTo(searchParams.get("returnTo")) ??
     safeReturnTo(searchParams.get("next"));
   const prefillEmail = (searchParams.get("email") ?? "").trim();
   const googleError = GOOGLE_ERRORS[searchParams.get("error") ?? ""] ?? null;
+
+  useEffect(() => {
+    if (googleError) toast({ title: "Google sign-in", description: googleError, tone: "danger" });
+  }, [googleError, toast]);
 
   useEffect(() => {
     if (prefillEmail) setEmailMode(true);
@@ -67,19 +74,27 @@ function LoginForm() {
         body: JSON.stringify({
           email: form.get("email"),
           password: form.get("password"),
-          captchaToken: captcha.token,
+          faxNumber: honeypot.value,
         }),
       });
       await refresh();
       const dest = returnTo ?? defaultDashboardForRole(res.user.role);
+      toast({ title: "Signed in", description: "Welcome back.", tone: "success" });
       show("welcome", {
         name: firstNameFromUser(res.user.name, res.user.email),
         nextHref: dest,
       });
     } catch (err) {
       useAuthTransition.getState().clear();
-      captcha.reset();
-      setError(err instanceof Error ? err.message : "Login failed");
+      const message = err instanceof ApiClientError && err.status === 401
+        ? "The email or password isn’t correct. Check both and try again."
+        : err instanceof Error ? err.message : "We couldn’t sign you in. Please try again.";
+      setError(message);
+      toast({ title: "Sign-in failed", description: message, tone: "danger" });
+      if (err instanceof ApiClientError && (err.body as { code?: string } | null)?.code === "EMAIL_NOT_VERIFIED") {
+        const submittedEmail = String(form.get("email") ?? "");
+        router.push(`/verify-email?email=${encodeURIComponent(submittedEmail)}&next=${encodeURIComponent(returnTo ?? defaultDashboardForRole(user?.role ?? "buyer"))}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -137,11 +152,11 @@ function LoginForm() {
                 />
               </div>
             </Label>
-            {captcha.field}
+            {honeypot.field}
             {error && <p className="text-sm text-danger">{error}</p>}
             <Button
               type="submit"
-              disabled={loading || captcha.waiting}
+              disabled={loading}
               className="h-12 w-full"
               size="lg"
             >

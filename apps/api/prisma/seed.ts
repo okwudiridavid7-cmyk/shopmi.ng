@@ -189,6 +189,15 @@ async function main() {
 
   await seedCategoryTree(MARKETPLACE_TAXONOMY, null);
 
+  await prisma.platformNotification.createMany({
+    data: [
+      { id: "seed-welcome-shopmi", title: "Welcome to Shopmi.ng", body: "Your dashboard is ready. Explore your account and discover what you can do next.", audience: "all", href: "/explore", kind: "platform", seeded: true },
+      { id: "seed-account-security", title: "Keep your account secure", body: "Add a recovery phone number and use a strong password to protect your account.", audience: "all", kind: "platform", seeded: true },
+      { id: "seed-marketplace-growth", title: "Your marketplace is growing", body: "New products and shops are being added regularly. Visit the marketplace to see what is new.", audience: "all", href: "/explore", kind: "platform", seeded: true },
+    ],
+    skipDuplicates: true,
+  });
+
   // Remap legacy flat categories onto the new tree so existing products keep working.
   const legacyMap: Record<string, string> = {
     electronics: "electronics-gadgets",

@@ -9,6 +9,27 @@ export const sellerAnalyticsRouter = Router();
 
 sellerAnalyticsRouter.use(requireAuth, requireTenantFromMembership());
 
+sellerAnalyticsRouter.get("/today-summary", async (req, res, next) => {
+  try {
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    const where = { tenantId: req.tenant!.tenantId, createdAt: { gte: since } };
+    const [paid, pendingOrderCount, currencyOrder] = await Promise.all([
+      prisma.order.aggregate({ where: { ...where, status: { in: ["paid", "fulfilled"] } }, _sum: { total: true }, _count: { _all: true } }),
+      prisma.order.count({ where: { ...where, status: "pending_payment" } }),
+      prisma.order.findFirst({ where, select: { currency: true } }),
+    ]);
+    return res.json({ summary: {
+      revenue: Number(paid._sum.total ?? 0),
+      orderCount: paid._count._all,
+      pendingOrderCount,
+      currency: currencyOrder?.currency ?? "NGN",
+    } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 type Period = "today" | "week" | "month";
 
 function periodStart(period: Period): { since: Date; days: number } {
@@ -56,16 +77,22 @@ sellerAnalyticsRouter.get("/", async (req, res, next) => {
       days = bounds.days;
     }
 
-    const orders = await prisma.order.findMany({
-      where: {
-        tenantId,
-        createdAt: until ? { gte: since, lte: until } : { gte: since },
-      },
-      include: {
-        items: { include: { product: { select: { id: true, title: true } } } },
-      },
-      orderBy: { createdAt: "asc" },
-    });
+    const orderPeriod = {
+      tenantId,
+      createdAt: until ? { gte: since, lte: until } : { gte: since },
+    };
+    const [orders, paidItems, productCount] = await Promise.all([
+      prisma.order.findMany({
+        where: orderPeriod,
+        select: { status: true, total: true, currency: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.orderItem.findMany({
+        where: { order: { ...orderPeriod, status: { in: ["paid", "fulfilled"] } } },
+        select: { productId: true, qty: true, unitPrice: true, product: { select: { title: true } } },
+      }),
+      prisma.product.count({ where: tenantWhere(req.tenant!) }),
+    ]);
 
     const paid = orders.filter(
       (o) => o.status === "paid" || o.status === "fulfilled"
@@ -92,18 +119,16 @@ sellerAnalyticsRouter.get("/", async (req, res, next) => {
       string,
       { productId: string; title: string; qty: number; revenue: number }
     >();
-    for (const o of paid) {
-      for (const item of o.items) {
-        const existing = productSales.get(item.productId) ?? {
-          productId: item.productId,
-          title: item.product.title,
-          qty: 0,
-          revenue: 0,
-        };
-        existing.qty += item.qty;
-        existing.revenue += decimalToNumber(item.unitPrice) * item.qty;
-        productSales.set(item.productId, existing);
-      }
+    for (const item of paidItems) {
+      const existing = productSales.get(item.productId) ?? {
+        productId: item.productId,
+        title: item.product.title,
+        qty: 0,
+        revenue: 0,
+      };
+      existing.qty += item.qty;
+      existing.revenue += decimalToNumber(item.unitPrice) * item.qty;
+      productSales.set(item.productId, existing);
     }
     const topProducts = Array.from(productSales.values())
       .sort((a, b) => b.revenue - a.revenue)
@@ -114,10 +139,6 @@ sellerAnalyticsRouter.get("/", async (req, res, next) => {
       checkoutAttempts === 0
         ? 0
         : Math.round((paid.length / checkoutAttempts) * 1000) / 10;
-
-    const productCount = await prisma.product.count({
-      where: tenantWhere(req.tenant!),
-    });
 
     return res.json({
       analytics: {
